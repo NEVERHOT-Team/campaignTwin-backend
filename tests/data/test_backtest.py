@@ -13,7 +13,7 @@ def control_inputs():
     rows = [
         (product_id, week, baseline if week < 45 else campaign)
         for product_id, (baseline, campaign) in enumerate(
-            [(100, 110), (10, 12), (20, 18), (40, 40)]
+            [(100, 110), (10, 12), (20, 14), (40, 40)]
         )
         for week in range(37, 53)
     ]
@@ -61,13 +61,16 @@ def test_category_sales_include_nonrecipients_and_returns_and_deduplicate_redemp
         }
     )
     controls = _control_changes(*control_inputs, pd.Series([100]))
-    assert [control["change_pct"] for control in controls] == pytest.approx([10, 20, -10, 0])
+    assert [control["change_pct"] for control in controls] == pytest.approx([10, 20, -30, 0])
     backtest = _score(tx, coupons, redemptions, pd.Index([7, 8]), pd.Index(range(1, 45)), controls)
     assert backtest["treated_households"] == 2
     assert backtest["actual"] == {
         "lift_pct_raw": 100.0,
-        "control_change_pct": 5.0,
-        "lift_pct": 95.0,
+        "control_change_pct": 0.0,
+        "control_change_pct_median": 5.0,
+        "lift_pct": 100.0,
+        "lift_pct_median": 95.0,
+        "lift_range_pct": [95.0, 100.0],
         "incremental_sales": 80 * DEFAULTS["usd_thb"],
         "redemption_rate": 0.5,
     }
@@ -92,6 +95,14 @@ def test_published_actuals_and_training_window():
     control_mean = sum(changes) / len(changes)
     assert actual["control_change_pct"] == round(control_mean, 2) == 6.86
     assert actual["lift_pct"] == round(100 * (5669.07 / 5221.50 - 1) - control_mean, 2) == 1.71
+    control_median = sum(sorted(changes)[1:3]) / 2
+    assert actual["control_change_pct_median"] == round(control_median, 2) == 2.33
+    assert (
+        actual["lift_pct_median"]
+        == round(100 * (5669.07 / 5221.50 - 1) - control_median, 2)
+        == 6.24
+    )
+    assert actual["lift_range_pct"] == [1.71, 6.24]
     assert backtest["actual"]["incremental_sales"] == round(
         (5669.07 - 5221.50) * DEFAULTS["usd_thb"], 2
     )

@@ -1,6 +1,6 @@
 """Score the fixed toilet-tissue campaign against the preceding eight weeks."""
 
-from statistics import mean
+from statistics import mean, median
 
 import pandas as pd
 
@@ -69,7 +69,11 @@ def _score(
     if len(calibration_weeks) == 0 or calibration_weeks.max() >= BACKTEST_START_WEEK:
         raise ValueError("Backtest requires calibration weeks strictly before campaign 18")
     baseline_total, actual_sales, raw_change = _period_sales(transactions, "toilet tissue")
-    control_change = mean(item["change_pct"] for item in controls)
+    changes = [item["change_pct"] for item in controls]
+    control_change = mean(changes)
+    control_median = median(changes)
+    lift = round(raw_change - control_change, 2)
+    lift_median = round(raw_change - control_median, 2)
     if recipients.empty:
         raise ValueError("Backtest requires assigned households")
 
@@ -135,9 +139,12 @@ def _score(
         "target_segments": [],  # The campaign assignments contain no archetype targeting rule.
         "treated_households": len(recipients),
         "actual": {
-            "lift_pct": round(raw_change - control_change, 2),
+            "lift_pct": lift,
             "lift_pct_raw": round(raw_change, 2),
             "control_change_pct": round(control_change, 2),
+            "control_change_pct_median": round(control_median, 2),
+            "lift_pct_median": lift_median,
+            "lift_range_pct": sorted([lift, lift_median]),
             "redemption_rate": round(offer["household_id"].nunique() / len(recipients), 8),
             "incremental_sales": round((actual_sales - baseline_total) * DEFAULTS["usd_thb"], 2),
         },
@@ -145,7 +152,8 @@ def _score(
             "method": (
                 "Difference-in-differences in percentage points. Subtract the unweighted mean "
                 "control-category sales change from the toilet-tissue sales change. Each change "
-                "compares total retailer sales including returns in the same eight-week windows."
+                "compares total retailer sales including returns in the same eight-week windows. "
+                "The reported range spans the mean-adjusted and median-adjusted lifts."
             ),
             "selection": (
                 "Household paper and hygiene product types in GROCERY with zero "

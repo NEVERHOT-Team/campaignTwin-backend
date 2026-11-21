@@ -10,11 +10,17 @@
     "lift_pct": 1.71,
     "lift_pct_raw": 8.57,
     "control_change_pct": 6.86,
+    "control_change_pct_median": 2.33,
+    "lift_pct_median": 6.24,
+    "lift_range_pct": [
+      1.71,
+      6.24
+    ],
     "redemption_rate": 0.0070609,
     "incremental_sales": 15709.71
   },
   "seasonality_control": {
-    "method": "Difference-in-differences in percentage points. Subtract the unweighted mean control-category sales change from the toilet-tissue sales change. Each change compares total retailer sales including returns in the same eight-week windows.",
+    "method": "Difference-in-differences in percentage points. Subtract the unweighted mean control-category sales change from the toilet-tissue sales change. Each change compares total retailer sales including returns in the same eight-week windows. The reported range spans the mean-adjusted and median-adjusted lifts.",
     "selection": "Household paper and hygiene product types in GROCERY with zero campaign-18 coupon-eligible products.",
     "categories": [
       {

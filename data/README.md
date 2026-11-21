@@ -120,6 +120,11 @@ Each change uses all households' retailer `sales_value`, including returns.
 `actual.control_change_pct` is the equal-weight mean of the four unrounded
 percentage changes (+6.86%). Mic reads `actual.lift_pct`, the difference
 between raw tissue growth and control growth **(+1.71 percentage points)**.
+Paper napkins (+27.89%) are a holiday outlier. The median change across the
+four controls was +2.33%, giving a median-adjusted lift of +6.24 percentage
+points. Report both estimates as the range `actual.lift_range_pct`, **[1.71,
+6.24] percentage points**. The backtest passes when the simulated lift falls
+inside this range, including either endpoint.
 `seasonality_control.categories` in the JSON records each category's sales
 and change. `actual.incremental_sales` is the raw sales increase of USD 447.57
 converted to THB 15,709.71 at the configured default rate of 35.1.
@@ -319,10 +324,9 @@ weekly_sample = load_breakfast_table(
 )
 ```
 
-The existing `load_personas()`, `load_segments()`, `load_library()`, and
-`load_unit_econ()` still return the original synthetic engine fixtures. Downloading
-source files does not fit segments, create a data-grounded persona bank, estimate
-rival likelihood, or validate simulation lift. Those are separate ETL/model steps.
+`load_personas()`, `load_segments()`, and `load_unit_econ()` read the processed
+tissue inputs built above. `load_library()` reads the demo campaign library.
+The public-source download and validation commands prepare local source files.
 
 Important source limitations:
 
