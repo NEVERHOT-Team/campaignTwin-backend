@@ -10,18 +10,21 @@ import pandas as pd
 
 from data import loaders
 from data.etl.config import income_group
-from data.etl.selection_bias import ks_similarity as _ks_similarity
+from data.etl.selection_bias import BEHAVIOUR_ATTRIBUTES, ks_similarity
+from data.quality_history import HISTORICAL_KS, HISTORICAL_SOURCES
+from engine import shopper
 
-ATTRIBUTES = (
+ENGINE_BEHAVIOUR = (
     "weekly_buy_rate",
     "purchase_cycle_weeks",
-    "avg_price_paid",
+    "avg_units",
     "promo_share",
-    "coupon_rate",
     "brand_loyalty",
 )
-# Keep the six original jitter draws and correlation pairs comparable to the 60-profile run.
-MARGINAL_ATTRIBUTES = (*ATTRIBUTES, "avg_units")
+PROFILE_ONLY = {
+    "coupon_rate": "not used by engine",
+    "avg_price_paid": "the engine uses a single market reference price",
+}
 TARGETS = {
     "ks_similarity_min": 0.85,
     "brand_loyalty_ks_min": 0.75,
@@ -30,15 +33,13 @@ TARGETS = {
 }
 AGENT_COUNT = 5_000
 AGENT_SEED = 42
-JITTER_FRACTION = 0.10
-RATE_ATTRIBUTES = ["weekly_buy_rate", "promo_share", "coupon_rate", "brand_loyalty"]
 MISSING_PANEL = (
     "Household reference checks skipped: local data/calib/household_behavior.parquet is missing. "
     "Run python -m data.etl.build_tissue with local raw data to enable them."
 )
 MISSING_LOYALTY = (
     "This panel stores only the leading weekly brand. Rebuild with python -m data.etl.build_tissue "
-    "for exact top-manufacturer unit share and the six-attribute correlation."
+    "for exact top-manufacturer unit share and the five-attribute engine correlation."
 )
 
 
@@ -80,21 +81,26 @@ def household_attributes(panel: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def _expand_population(personas: pd.DataFrame) -> pd.DataFrame:
-    """Draw equally weighted agents and independently jitter the measured attributes."""
-    rng = np.random.default_rng(AGENT_SEED)
-    weights = personas["weight"].to_numpy(dtype=float)
-    draws = rng.choice(len(personas), size=AGENT_COUNT, replace=True, p=weights / weights.sum())
-    values = personas[list(ATTRIBUTES)].to_numpy(dtype=float)[draws]
-    factors = rng.uniform(1 - JITTER_FRACTION, 1 + JITTER_FRACTION, size=values.shape)
-    agents = pd.DataFrame(values * factors, columns=ATTRIBUTES)
-    agents[RATE_ATTRIBUTES] = agents[RATE_ATTRIBUTES].clip(0, 1)
-    agents["purchase_cycle_weeks"] = agents["purchase_cycle_weeks"].clip(lower=1)
-    if "avg_units" in personas:
-        units = personas["avg_units"].to_numpy(dtype=float)[draws]
-        unit_jitter = rng.uniform(1 - JITTER_FRACTION, 1 + JITTER_FRACTION, size=AGENT_COUNT)
-        agents["avg_units"] = np.maximum(1, units * unit_jitter)
-    return agents
+def _engine_agents(personas: pd.DataFrame) -> pd.DataFrame:
+    population = shopper.build_population(n_agents=AGENT_COUNT, seed=AGENT_SEED)
+    agents = pd.DataFrame(
+        {
+            "weekly_buy_rate": population.weekly_buy_rate,
+            "purchase_cycle_weeks": population.cycle_weeks,
+            "avg_units": population.avg_units,
+            "promo_share": population.promo_share,
+            "brand_loyalty": population.loyalty,
+            "price_elasticity": population.elasticity,
+        }
+    )
+    if len(agents) != AGENT_COUNT or not np.isfinite(agents.to_numpy()).all():
+        raise ValueError("Expected a 5,000-agent engine population with finite attributes")
+    persona_ids = np.asarray(population.persona_ids)[population.persona_idx]
+    profiles = personas.set_index("persona_id")
+    if not profiles.index.is_unique:
+        raise ValueError("Engine population evaluation requires unique persona IDs")
+    groups = profiles.loc[persona_ids, ["archetype", "income_band"]]
+    return agents.join(groups.reset_index(drop=True))
 
 
 def _mean_abs_correlation(frame, weights=None):
@@ -116,31 +122,56 @@ def _status(value, threshold, *, maximum=False):
     return "pass" if passes else "fail"
 
 
-def _reference_checks(personas, households):
+def _reference_checks(personas, households, agents):
     weights = personas["weight"].to_numpy()
-    agents = _expand_population(personas)
     unit_weights = np.ones(len(agents))
     marginal = {}
-    for field in MARGINAL_ATTRIBUTES:
-        profile_score = population_score = None
-        if households is not None and field in households and field in agents:
+    for field in BEHAVIOUR_ATTRIBUTES:
+        profile_score = engine_score = target = None
+        if field in ENGINE_BEHAVIOUR:
+            key = "brand_loyalty_ks_min" if field == "brand_loyalty" else "ks_similarity_min"
+            target = TARGETS[key]
+        if households is not None and field in households:
             reference = households[field].to_numpy()
-            profile_score = _ks_similarity(personas[field].to_numpy(), weights, reference)
-            population_score = _ks_similarity(agents[field].to_numpy(), unit_weights, reference)
-        target_key = "brand_loyalty_ks_min" if field == "brand_loyalty" else "ks_similarity_min"
-        marginal[field] = {
+            profile_score = ks_similarity(personas[field].to_numpy(), weights, reference)
+            if target is not None:
+                engine_score = ks_similarity(agents[field].to_numpy(), unit_weights, reference)
+        row = {
+            **HISTORICAL_KS[field],
             "profile_value": profile_score,
-            "value": population_score,
-            "status": _status(population_score, TARGETS[target_key]),
+            "value": engine_score,
+            "target": target,
         }
+        if field in PROFILE_ONLY:
+            row.update(status="profile_only", note=PROFILE_ONLY[field])
+        else:
+            row["status"] = _status(engine_score, target)
+        marginal[field] = row
+
+    # KS is symmetric. Its weighted argument is the configured persona prior.
+    elasticity = agents["price_elasticity"].to_numpy()
+    marginal["price_elasticity"] = {
+        "averaged_60": None,
+        "own_jitter_150": None,
+        "profile_value": None,
+        "value": ks_similarity(personas["price_elasticity"].to_numpy(), weights, elasticity),
+        "target": None,
+        "status": "diagnostic",
+        "reference": "weighted_persona_prior",
+        "engine_mean": float(elasticity.mean()),
+        "engine_median": float(np.median(elasticity)),
+        "note": "KS against the configured prior. Household-level slopes are unavailable.",
+    }
 
     rates = personas["weekly_buy_rate"].to_numpy()
     center = np.average(rates, weights=weights)
     persona_sd = float(np.sqrt(np.average((rates - center) ** 2, weights=weights)))
+    engine_sd = float(agents["weekly_buy_rate"].std(ddof=0))
     real_sd = None if households is None else float(households["weekly_buy_rate"].std(ddof=0))
-    ratio = None if real_sd is None or real_sd == 0 else persona_sd / real_sd
+    ratio = None if real_sd is None or real_sd == 0 else engine_sd / real_sd
     variance = {
         "persona_sd": persona_sd,
+        "engine_sd": engine_sd,
         "household_sd": real_sd,
         "value": ratio,
         "status": _status(ratio, TARGETS["sd_ratio_min"]),
@@ -148,62 +179,69 @@ def _reference_checks(personas, households):
     if real_sd == 0:
         variance["note"] = "Household weekly buy rates have zero standard deviation."
 
-    persona_corr = _mean_abs_correlation(personas[list(ATTRIBUTES)], weights)
+    fields = list(ENGINE_BEHAVIOUR)
+    engine_corr = _mean_abs_correlation(agents[fields])
     real_corr = None
-    if households is not None and set(ATTRIBUTES).issubset(households):
-        real_corr = _mean_abs_correlation(households[list(ATTRIBUTES)])
-    gap = None if persona_corr is None or real_corr is None else abs(persona_corr - real_corr)
+    if households is not None and set(fields).issubset(households):
+        real_corr = _mean_abs_correlation(households[fields])
+    gap = None if engine_corr is None or real_corr is None else abs(engine_corr - real_corr)
     correlation = {
-        "persona_mean_abs_corr": persona_corr,
+        "attributes": fields,
+        "persona_mean_abs_corr": _mean_abs_correlation(personas[fields], weights),
+        "engine_mean_abs_corr": engine_corr,
         "household_mean_abs_corr": real_corr,
         "gap": gap,
         "status": _status(gap, TARGETS["correlation_gap_max"], maximum=True),
     }
     if gap is None:
-        correlation["note"] = "All six attributes must be present and nonconstant in both groups."
+        correlation["note"] = "All five attributes must be present and nonconstant in both groups."
     return marginal, variance, correlation
 
 
-def _direction(personas, field, left_name, left, right_name, right):
-    def weighted_mean(mask):
-        selected = personas.loc[mask]
-        if selected.empty:
+def _direction(frame, field, groups, left, right, *, weighted=False):
+    def mean(group):
+        rows = frame.loc[groups.eq(group)]
+        if rows.empty:
             return None
-        return float(np.average(selected[field], weights=selected["weight"]))
+        return float(np.average(rows[field], weights=rows["weight"] if weighted else None))
 
-    a, b = weighted_mean(left), weighted_mean(right)
+    a, b = mean(left), mean(right)
     if a is None or b is None:
         status = "skipped"
     else:
         status = "pass" if round(a, 12) < round(b, 12) else "fail"
-    source = "data" if field == "price_elasticity_observed" else "default"
-    return {"field": field, "source": source, left_name: a, right_name: b, "status": status}
+    return {
+        "field": field,
+        "source": "data" if field == "price_elasticity_observed" else "default",
+        "population": "weighted_profiles" if weighted else "engine_agents",
+        left: a,
+        right: b,
+        "status": status,
+    }
 
 
-def _direction_checks(personas):
-    income = personas["income_band"].map(income_group)
-    low = income.eq("low")
-    high = income.eq("high")
-    archetype = personas["archetype"]
+def _direction_checks(personas, agents):
     return {
         "deal_hunter_vs_loyal": _direction(
-            personas,
-            "price_elasticity",
-            "deal_hunter",
-            archetype.eq("deal_hunter"),
-            "loyal",
-            archetype.eq("loyal"),
+            agents, "price_elasticity", agents["archetype"], "deal_hunter", "loyal"
         ),
         "income_observed": _direction(
-            personas, "price_elasticity_observed", "low", low, "high", high
+            personas,
+            "price_elasticity_observed",
+            personas["income_band"].map(income_group),
+            "low",
+            "high",
+            weighted=True,
         ),
-        "income_prior": _direction(personas, "price_elasticity", "low", low, "high", high),
+        "income_prior": _direction(
+            agents, "price_elasticity", agents["income_band"].map(income_group), "low", "high"
+        ),
     }
 
 
 def build_eval_report() -> dict:
     personas = pd.DataFrame(loaders.load_personas())
-    inputs = [*MARGINAL_ATTRIBUTES, "weight", "price_elasticity", "price_elasticity_observed"]
+    inputs = [*BEHAVIOUR_ATTRIBUTES, "weight", "price_elasticity", "price_elasticity_observed"]
     if personas.empty or not np.isfinite(personas[inputs].to_numpy(dtype=float)).all():
         raise ValueError("Quality evaluation requires finite persona attributes")
     if not personas["weight"].gt(0).all():
@@ -222,8 +260,9 @@ def build_eval_report() -> dict:
         }
         if "brand_loyalty" not in households:
             reference.update(status="partial", note=MISSING_LOYALTY)
-    marginal, variance, correlation = _reference_checks(personas, households)
-    directions = _direction_checks(personas)
+    agents = _engine_agents(personas)
+    marginal, variance, correlation = _reference_checks(personas, households, agents)
+    directions = _direction_checks(personas, agents)
     try:
         selection_bias = loaders.load_selection_bias()
     except FileNotFoundError:
@@ -248,7 +287,12 @@ def build_eval_report() -> dict:
     total = labels.total()
     counts = {label: labels[label] for label in ("data", "default", "llm_estimate")}
     shares = {label: 100 * count / total for label, count in counts.items()}
-    results = [*marginal.values(), variance, correlation, *directions.values()]
+    results = [
+        *(marginal[field] for field in ENGINE_BEHAVIOUR),
+        variance,
+        correlation,
+        *directions.values(),
+    ]
     statuses = Counter(row["status"] for row in results)
     return {
         "status": "fail" if statuses["fail"] else "skipped" if statuses["skipped"] else "pass",
@@ -259,9 +303,12 @@ def build_eval_report() -> dict:
         "ks_population": {
             "agents": AGENT_COUNT,
             "seed": AGENT_SEED,
-            "jitter_fraction": JITTER_FRACTION,
-            "distribution": "independent uniform multiplicative jitter",
+            "builder": "engine.shopper.build_population",
             "source": "default",
+        },
+        "historical_comparisons": {
+            "commits": HISTORICAL_SOURCES.copy(),
+            "method": "Archived 5,000-agent KS with seed 42 and independent uniform ±10% jitter.",
         },
         "targets": TARGETS.copy(),
         "targets_source": "default",
@@ -273,17 +320,17 @@ def build_eval_report() -> dict:
                 "in a local aggregate audit when it builds the personas."
             ),
             "marginal_fit": (
-                "KS similarity at six decimals. profile_value uses weighted profiles. "
-                "value and status apply to equally weighted agents sampled by persona weight. "
-                "Rates are clipped to [0, 1]. Cycles and units are clipped to at least one. "
-                "Units use additional independent jitter draws after the six historical fields."
+                "One minus KS at six decimal places. Five engine arrays are compared with the "
+                "household reference. profile_value uses weighted profiles. Coupon rate and "
+                "average price paid are profile diagnostics. Elasticity is compared with the "
+                "configured prior. Only rows with numeric targets count towards empirical fit."
             ),
-            "variance_ratio": "Population SD of persona buy rate over household population SD.",
-            "over_correlation": "Absolute gap in mean absolute Pearson r over 15 distinct pairs.",
+            "variance_ratio": "Population SD of engine buy rate over household population SD.",
+            "over_correlation": "Gap in mean absolute Pearson r over ten shared behaviour pairs.",
             "direction_checks": (
-                "Weighted persona means. A more negative slope means greater price sensitivity. "
-                "Annual income groups are below USD 35k and at least USD 75k. Observed slopes "
-                "were fitted by archetype and assigned to personas."
+                "Prior directions use the engine agents' elasticities grouped by their sampled "
+                "personas. Observed slopes use weighted profiles and were fitted by archetype. "
+                "Annual income groups are below USD 35k and at least USD 75k."
             ),
             "confidence_inputs": (
                 "Coverage is the percentage of all assumptions labelled data. Rival evidence "
@@ -305,6 +352,10 @@ def build_eval_report() -> dict:
     }
 
 
+def _display_score(value: float | None) -> str:
+    return "—" if value is None else f"{value:.4f}"
+
+
 def main() -> None:
     report = build_eval_report()
     destination = loaders.PROCESSED / "eval_report.json"
@@ -312,12 +363,31 @@ def main() -> None:
         temp = Path(staging) / destination.name
         temp.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         temp.replace(destination)
-    ks = [
-        (field, score["profile_value"], score["value"], score["status"])
-        for field, score in report["marginal_fit"].items()
+    columns = [
+        "KS attribute",
+        "60 averaged",
+        "150 own-jitter",
+        f"{report['persona_count']} engine population",
+        "target",
     ]
-    ks_table = pd.DataFrame(ks, columns=["KS attribute", "Profiles", "Agents", "Agent status"])
-    print(ks_table.to_string(index=False))
+    ks = []
+    for field, score in report["marginal_fit"].items():
+        current = _display_score(score["value"])
+        if field == "price_elasticity":
+            current += " (vs input prior)"
+        ks.append(
+            [
+                field,
+                _display_score(score["averaged_60"]),
+                _display_score(score["own_jitter_150"]),
+                current,
+                _display_score(score["target"]),
+            ]
+        )
+    print(pd.DataFrame(ks, columns=columns).to_string(index=False))
+    for field, note in PROFILE_ONLY.items():
+        value = report["marginal_fit"][field]["profile_value"]
+        print(f"{field} profile KS {_display_score(value)} ({note}).")
     rows = []
     variance = report["variance_ratio"]
     corr = report["over_correlation"]

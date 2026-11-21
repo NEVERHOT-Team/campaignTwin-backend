@@ -1,4 +1,5 @@
 import json
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -6,6 +7,8 @@ import pytest
 
 from data import loaders, quality
 from data.etl.build_tissue import _calibration
+from data.etl.selection_bias import ks_similarity
+from engine import shopper
 
 
 @pytest.fixture
@@ -53,102 +56,159 @@ def test_panel_denominators_singletons_and_exact_mixed_brand_loyalty(panel):
         quality.household_attributes(panel.iloc[1:])
 
 
-def test_weighted_ks_sd_and_correlation_match_replicated_observations():
-    # Repeating the first persona three times gives its 3:1:1 population mass.
-    rows = np.array([[0, 3, 0, 1, 0, 0], [0.5, 1, 3, 0, 0, 1], [1, 4, 1, 1, 1, 0]])
-    personas = pd.DataFrame(rows, columns=quality.ATTRIBUTES).assign(weight=[3.0, 1.0, 1.0])
-    expanded = np.repeat(rows, [3, 1, 1], axis=0)
-    reference = pd.DataFrame(rows, columns=quality.ATTRIBUTES)
-    marginal, variance, corr = quality._reference_checks(personas, reference)
-    assert marginal["weekly_buy_rate"]["profile_value"] == pytest.approx(1 - (3 / 5 - 1 / 3))
-    assert marginal["weekly_buy_rate"]["status"] == "fail"
-    assert variance["value"] == pytest.approx(expanded[:, 0].std() / rows[:, 0].std())
-    for data, key in [(expanded, "persona_mean_abs_corr"), (rows, "household_mean_abs_corr")]:
-        rs = np.corrcoef(data, rowvar=False)
-        assert corr[key] == pytest.approx(np.mean(np.abs(rs[np.triu_indices(6, k=1)])))
+def test_weighted_profile_ks_and_engine_sd_and_correlation():
+    fields = [
+        "weekly_buy_rate",
+        "purchase_cycle_weeks",
+        "avg_units",
+        "promo_share",
+        "brand_loyalty",
+    ]
+    rows = np.array([[0, 3, 2, 1, 0], [0.5, 1, 3, 0, 1], [1, 4, 1, 1, 1]])
+    households = pd.DataFrame(rows, columns=fields).assign(coupon_rate=0.25, avg_price_paid=10)
+    personas = households.assign(weight=[3.0, 1.0, 1.0], price_elasticity=[-0.8, -1.8, -2.8])
+    agents = personas.iloc[[0, 1, 1, 1, 2, 2]].reset_index(drop=True)
+    marginal, variance, corr = quality._reference_checks(personas, households, agents)
+    score = marginal["weekly_buy_rate"]
+    assert score["profile_value"] == pytest.approx(1 - (3 / 5 - 1 / 3))
+    assert score["value"] == pytest.approx(1 - (1 / 3 - 1 / 6))
+    assert score["status"] == "fail"
+    assert variance["value"] == pytest.approx(agents.weekly_buy_rate.std(ddof=0) / rows[:, 0].std())
+    assert variance["persona_sd"] == pytest.approx(np.repeat(rows[:, 0], [3, 1, 1]).std())
+    for data, key in [(agents, "engine_mean_abs_corr"), (households, "household_mean_abs_corr")]:
+        r = np.corrcoef(data[fields], rowvar=False)
+        assert corr[key] == pytest.approx(np.mean(np.abs(r[np.triu_indices(5, k=1)])))
     assert corr["gap"] == pytest.approx(
-        abs(corr["persona_mean_abs_corr"] - corr["household_mean_abs_corr"])
+        abs(corr["engine_mean_abs_corr"] - corr["household_mean_abs_corr"])
     )
-    assert (
-        quality._ks_similarity(
-            np.array([0.1, 0.1, 0.9]), np.array([2, 1, 1]), np.array([0.1, 0.1, 0.1, 0.9])
-        )
-        == 1
-    )
-    constant = reference.assign(weekly_buy_rate=0.5)
-    _, variance, corr = quality._reference_checks(personas, constant)
+    constant = households.assign(weekly_buy_rate=0.5)
+    _, variance, corr = quality._reference_checks(personas, constant, agents)
     assert variance["status"] == corr["status"] == "skipped"
     assert variance["value"] is corr["gap"] is None
 
 
-def test_directions_use_weighted_lower_slopes_and_numeric_income_bands():
-    personas = pd.DataFrame(
+@pytest.fixture
+def audited_population(monkeypatch, panel):
+    profiles = [
         {
-            "archetype": ["deal_hunter", "loyal", "loyal", "loyal", "loyal"],
-            "income_band": ["Under 15K", "25-34K", "35-49K", "75-99K", "250K+"],
-            "weight": [4, 1, 100, 1, 1],
-            "price_elasticity": [-3.0, -0.5, -1, -1, -1],
-            "price_elasticity_observed": [-0.1, -0.4, -5, -0.5, -0.5],
+            "persona_id": name,
+            "archetype": name,
+            "segment": name,
+            "income_band": income,
+            "weight": weight,
+            "weekly_buy_rate": rate,
+            "purchase_cycle_weeks": cycle,
+            "avg_units": units,
+            "promo_share": promo,
+            "brand_loyalty": loyalty,
+            "coupon_rate": 0.25,
+            "avg_price_paid": 10,
+            "price_elasticity": prior,
+            "price_elasticity_observed": observed,
         }
-    )
-    checks = quality._direction_checks(personas)
-    assert checks["deal_hunter_vs_loyal"]["status"] == "pass"
-    assert checks["income_observed"]["status"] == "fail"
-    assert checks["income_observed"]["low"] == pytest.approx(-0.16)
-    assert checks["income_prior"]["status"] == "pass"
-    assert checks["income_prior"]["low"] == pytest.approx(-2.5)
-    assert checks["income_prior"]["high"] == -1
-
-
-def test_population_ks_uses_seeded_weighted_draws_and_bounded_independent_jitter():
-    profiles = pd.DataFrame(
-        [[0.4, 1, 10, 0, 0.6, 1], [0.8, 9, 100, 0.3, 0.6, 0.8]],
-        columns=quality.ATTRIBUTES,
-    ).assign(weight=[8, 2])
-    original = profiles.copy(deep=True)
-    agents = quality._expand_population(profiles)
-    assert len(agents) == 5_000
-    pd.testing.assert_frame_equal(agents, quality._expand_population(profiles))
-    pd.testing.assert_frame_equal(profiles, original)
-    draws = np.random.default_rng(42).choice(2, size=5_000, p=[0.8, 0.2])
-    sampled = profiles.loc[draws, list(quality.ATTRIBUTES)].reset_index(drop=True)
-    assert (agents["avg_price_paid"].gt(50).to_numpy() == (draws == 1)).all()
-    assert (agents >= 0.9 * sampled).all().all() and (agents <= 1.1 * sampled).all().all()
-    assert agents["purchase_cycle_weeks"].min() == 1
-    assert agents["brand_loyalty"].max() == 1
-    assert (agents.loc[draws == 0, "promo_share"] == 0).all()
-    factors = agents[["weekly_buy_rate", "avg_price_paid"]] / sampled[
-        ["weekly_buy_rate", "avg_price_paid"]
+        for name, income, weight, rate, cycle, units, promo, loyalty, prior, observed in [
+            ("deal_hunter", "25-34K", 0.3, 0.31, 1.15, 1, 0.69, 0.23, -3.0, -0.15),
+            ("loyal", "75-99K", 0.6, 0.47, 2.1, 3, 0.11, 0.84, -1.0, -0.25),
+            ("waiter", "Under 15K", 0.1, 0.09, 6, 2, 0.56, 0.47, -2.5, -0.05),
+        ]
     ]
-    assert abs(factors.corr().iloc[0, 1]) < 0.05
-    # The six-decimal profile distribution matches these households exactly.
-    households = profiles.iloc[[0, 0, 0, 0, 1]]
-    marginal, _, _ = quality._reference_checks(profiles, households)
-    assert marginal["coupon_rate"]["profile_value"] == pytest.approx(1)
-    assert marginal["coupon_rate"]["status"] == "fail"
-    # All reference coupon rates are 0.6; the larger CDF gap occurs on one side of this atom.
-    rates = agents["coupon_rate"].round(6)
-    expected = 1 - max((rates < 0.6).mean(), (rates > 0.6).mean())
-    assert marginal["coupon_rate"]["value"] == pytest.approx(expected)
+    monkeypatch.setattr(loaders, "load_personas", lambda: profiles)
+    # The engine's order differs deliberately from the order used by the auditor.
+    monkeypatch.setattr(shopper, "load_personas", lambda: profiles[::-1])
+    monkeypatch.setattr(shopper, "load_market", lambda: {"ref_price": 10})
+    monkeypatch.setattr(shopper, "market_shares", lambda: (0.4, 0.3, 0.3))
+    monkeypatch.setattr(loaders, "load_household_behavior", lambda: panel)
+    original_builder = shopper.build_population
+    expected_population = original_builder(n_agents=5_000, seed=42)
+    builder = Mock(wraps=original_builder)
+    ks = Mock(wraps=quality.ks_similarity)
+    monkeypatch.setattr(shopper, "build_population", builder)
+    monkeypatch.setattr(quality, "ks_similarity", ks)
+    report = quality.build_eval_report()
+    builder.assert_called_once_with(n_agents=5_000, seed=42)
+    return report, expected_population, pd.DataFrame(profiles), ks
 
-    with_units = quality._expand_population(profiles.assign(avg_units=[2.0, 10.0]))
-    pd.testing.assert_frame_equal(with_units[list(quality.ATTRIBUTES)], agents)
-    units = np.where(draws == 0, 2.0, 10.0)
-    assert with_units["avg_units"].between(0.9 * units, 1.1 * units).all()
+
+def test_marginals_receive_exact_engine_arrays(audited_population, panel):
+    report, population, _, ks = audited_population
+    reference = quality.household_attributes(panel)
+    scores = report["marginal_fit"]
+    attrs = {
+        "weekly_buy_rate": population.weekly_buy_rate,
+        "purchase_cycle_weeks": population.cycle_weeks,
+        "avg_units": population.avg_units,
+        "promo_share": population.promo_share,
+        "brand_loyalty": population.loyalty,
+    }
+    for name, values in attrs.items():
+        observed = reference[name].to_numpy()
+        assert any(
+            np.array_equal(call.args[0], values) and np.array_equal(call.args[2], observed)
+            for call in ks.call_args_list
+        ), name
+        expected = ks_similarity(values, np.ones(5_000), observed)
+        assert scores[name]["value"] == pytest.approx(expected)
 
 
-def test_adjusted_priors_pass_both_directions_on_published_personas():
-    checks = quality._direction_checks(pd.DataFrame(loaders.load_personas()))
-    assert checks["income_prior"]["low"] < checks["income_prior"]["high"]
-    assert checks["income_prior"]["status"] == "pass"
-    assert checks["deal_hunter_vs_loyal"]["deal_hunter"] < checks["deal_hunter_vs_loyal"]["loyal"]
-    assert checks["deal_hunter_vs_loyal"]["status"] == "pass"
+def test_profile_only_diagnostics_and_configured_elasticity_reference(audited_population, panel):
+    report, population, profiles, _ = audited_population
+    scores = report["marginal_fit"]
+    reference = quality.household_attributes(panel)
+    for field in ("coupon_rate", "avg_price_paid"):
+        row = scores[field]
+        assert row["status"] == "profile_only" and row["value"] is row["target"] is None
+        expected = ks_similarity(
+            profiles[field].to_numpy(),
+            profiles["weight"].to_numpy(),
+            reference[field].to_numpy(),
+        )
+        assert row["profile_value"] == pytest.approx(expected)
+    assert "not used by engine" in scores["coupon_rate"]["note"].lower()
+    prior = scores["price_elasticity"]
+    assert prior["status"] == "diagnostic" and prior["target"] is prior["profile_value"] is None
+    expected = ks_similarity(
+        profiles["price_elasticity"].to_numpy(),
+        profiles["weight"].to_numpy(),
+        population.elasticity,
+    )
+    assert prior["value"] == pytest.approx(expected)
+    assert prior["engine_mean"] == pytest.approx(population.elasticity.mean())
+    assert prior["engine_median"] == pytest.approx(np.median(population.elasticity))
+    assert "prior" in prior["note"].lower() and "household" in prior["note"].lower()
+
+
+def test_engine_directions_join_sampled_persona_ids_and_observed_slopes_remain_weighted(
+    audited_population,
+):
+    report, population, _, _ = audited_population
+    checks = report["direction_checks"]
+    assert checks["income_observed"]["population"] == "weighted_profiles"
+    assert checks["income_observed"]["source"] == "data"
+    for name in ("income_prior", "deal_hunter_vs_loyal"):
+        assert checks[name]["population"] == "engine_agents" and checks[name]["source"] == "default"
+    ids = np.asarray(population.persona_ids)[population.persona_idx]
+    for role in ("deal_hunter", "loyal"):
+        assert checks["deal_hunter_vs_loyal"][role] == pytest.approx(
+            population.elasticity[ids == role].mean()
+        )
+    assert checks["income_prior"]["low"] == pytest.approx(
+        population.elasticity[ids != "loyal"].mean()
+    )
+    assert checks["income_prior"]["high"] == pytest.approx(
+        population.elasticity[ids == "loyal"].mean()
+    )
+    assert checks["income_observed"]["low"] == pytest.approx((-0.15 * 0.3 - 0.05 * 0.1) / 0.4)
+    assert checks["income_observed"]["status"] == "fail"
+    assert checks["income_prior"]["status"] == checks["deal_hunter_vs_loyal"]["status"] == "pass"
 
 
 def test_missing_panel_preserves_badge_inputs_and_reports_skips(monkeypatch, tmp_path, capsys):
     # Resolve persona data before redirecting the published report to the test directory.
     personas = loaders.load_personas()
     monkeypatch.setattr(loaders, "load_personas", lambda: personas)
+    monkeypatch.setattr(shopper, "load_personas", lambda: personas)
+    monkeypatch.setattr(shopper, "load_market", lambda: {"ref_price": 50})
+    monkeypatch.setattr(shopper, "market_shares", lambda: (0.3, 0.4, 0.3))
     monkeypatch.setattr(loaders, "CALIB", tmp_path)
     monkeypatch.setattr(loaders, "PROCESSED", tmp_path)
     monkeypatch.setattr(
@@ -171,10 +231,21 @@ def test_missing_panel_preserves_badge_inputs_and_reports_skips(monkeypatch, tmp
     report = loaders.load_eval_report()
     assert report["reference"]["status"] == "skipped"
     assert report["selection_bias"]["status"] == "skipped"
-    assert all(
-        m == {"value": None, "profile_value": None, "status": "skipped"}
-        for m in report["marginal_fit"].values()
+    marginal = report["marginal_fit"]
+    engine_fields = (
+        "avg_units",
+        "promo_share",
+        "brand_loyalty",
+        "purchase_cycle_weeks",
+        "weekly_buy_rate",
     )
+    for field in engine_fields:
+        assert marginal[field]["status"] == "skipped"
+        assert marginal[field]["value"] is marginal[field]["profile_value"] is None
+    for field in ("coupon_rate", "avg_price_paid"):
+        assert marginal[field]["profile_value"] is marginal[field]["value"] is None
+    assert marginal["price_elasticity"]["status"] == "diagnostic"
+    assert marginal["price_elasticity"]["value"] is not None
     assert report["variance_ratio"]["status"] == report["over_correlation"]["status"] == "skipped"
     assert all(d["status"] != "skipped" for d in report["direction_checks"].values())
     assert report["rival_evidence"] == {
@@ -211,7 +282,7 @@ def test_published_report_thresholds_and_source_counts():
     # Campaign 18 is held out. Using all 52 weeks would include 646 known households.
     assert audit["counts"] == {"with_demographics": 621, "without_demographics": 796}
     assert audit["threshold"] == 0.9
-    assert set(audit["metrics"]) == set(report["marginal_fit"])
+    assert set(audit["metrics"]) == set(report["marginal_fit"]) - {"price_elasticity"}
     triggered = {
         name for name, row in audit["metrics"].items() if round(row["ks_similarity"], 12) < 0.9
     }
@@ -221,21 +292,43 @@ def test_published_report_thresholds_and_source_counts():
         assert row["mean_difference"] == pytest.approx(
             row["mean_with_demographics"] - row["mean_without_demographics"]
         )
-    assert set(report["marginal_fit"]) == {*quality.ATTRIBUTES, "avg_units"}
-    for field, metric in report["marginal_fit"].items():
-        if metric["value"] is None:
-            assert metric["status"] == "skipped" and report["reference"]["status"] != "available"
+    # Keep the historical comparisons visible beside the engine measurements.
+    historical = {
+        "weekly_buy_rate": (0.6995, 0.8384),
+        "purchase_cycle_weeks": (0.6977, 0.8372),
+        "avg_units": (0.4323, 0.6317),
+        "avg_price_paid": (0.7719, 0.9552),
+        "promo_share": (0.6390, 0.7786),
+        "coupon_rate": (0.6107, 0.9779),
+        "brand_loyalty": (0.5358, 0.7472),
+    }
+    assert set(report["marginal_fit"]) == {*historical, "price_elasticity"}
+    for field, (averaged, own_jitter) in historical.items():
+        row = report["marginal_fit"][field]
+        assert round(row["averaged_60"], 4) == averaged
+        assert round(row["own_jitter_150"], 4) == own_jitter
+        if field in {"avg_price_paid", "coupon_rate"}:
+            assert row["target"] is row["value"] is None and row["status"] == "profile_only"
             continue
-        assert 0 <= metric["value"] <= 1 and 0 <= metric["profile_value"] <= 1
         threshold = 0.75 if field == "brand_loyalty" else 0.85
-        assert metric["status"] == ("pass" if metric["value"] >= threshold else "fail")
+        assert row["target"] == threshold
+        if row["value"] is None:
+            assert row["status"] == "skipped" and report["reference"]["status"] != "available"
+        else:
+            assert 0 <= row["value"] <= 1 and 0 <= row["profile_value"] <= 1
+            assert row["status"] == ("pass" if row["value"] >= threshold else "fail")
+    diagnostic = report["marginal_fit"]["price_elasticity"]
+    assert diagnostic["averaged_60"] is diagnostic["own_jitter_150"] is diagnostic["target"] is None
+    assert (
+        diagnostic["reference"] == "weighted_persona_prior" and diagnostic["status"] == "diagnostic"
+    )
     ratio, gap = report["variance_ratio"], report["over_correlation"]
     if ratio["value"] is not None:
         assert ratio["status"] == ("pass" if ratio["value"] >= 0.8 else "fail")
     if gap["gap"] is not None:
         assert gap["status"] == ("pass" if gap["gap"] <= 0.1 else "fail")
     counts = report["check_counts"]
-    assert sum(counts.values()) == 12
+    assert sum(counts.values()) == 10
     assert report["status"] == (
         "fail" if counts["fail"] else "skipped" if counts["skipped"] else "pass"
     )

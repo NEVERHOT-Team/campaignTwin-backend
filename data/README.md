@@ -128,24 +128,27 @@ cycle is the observation length. Loyalty is the leading manufacturer's share of
 all units across purchase lines. Rebuild older panels with
 `python -m data.etl.build_tissue` to get that exact field.
 
-Persona weights apply to the empirical CDF, population SD, Pearson correlations
-and elasticity comparisons. KS treats ties at the published six-decimal precision.
-Each entry in `marginal_fit` records the weighted profile KS in `profile_value` as a
-diagnostic. The PoC target for `value` is 0.85 for purchase behaviour and 0.75
-for brand loyalty. This is the KS similarity of 5,000 equally weighted
-agents drawn with replacement using the persona weights and seed 42. The evaluator
-multiplies each attribute independently by a uniform draw from 0.9 to
-1.1. It clips rates and shares to [0, 1], cycles to at least one week and
-average units to at least one. This
-data-side evaluation uses bounded jitter across all seven fields. The shopper engine
-uses Gaussian jitter on selected fields. SD and correlation use the weighted profiles.
-The evaluator draws the jitter for average units after the original six fields so their
-results remain comparable. Correlation still uses the 15 pairs of the original six
-attributes. Direction checks compare signed mean
-elasticities using annual income below USD 35,000 and at least USD 75,000.
-The observed elasticity field is fitted by archetype, so the income comparison
-measures differences in the mix of archetypes represented in each income group.
-The benchmark uses the same pre-holdout, simulated grocery panel used for fitting.
+The evaluator calls `engine.shopper.build_population(n_agents=5000, seed=42)`
+once and reads its arrays directly. Each agent and reference household counts
+once for KS (one minus the empirical CDF distance at six-decimal precision).
+The engine adds Gaussian jitter to buy rate, purchase cycle and elasticity.
+It takes units, promo share and loyalty directly from the sampled profiles,
+subject to the engine's bounds. The PoC KS target is 0.85 for purchase
+behaviour and 0.75 for brand loyalty.
+
+In `marginal_fit`, `value` is the engine KS and `profile_value` is the
+persona-weighted KS against households. Coupon rate and average price paid
+appear only at profile level. The engine uses one market reference price.
+The elasticity row compares the engine distribution with its weighted input
+prior. This diagnostic has no target because the panel provides no per-household
+elasticity measurements. Its observed slopes were fitted by archetype.
+
+The buy-rate SD ratio uses the engine population. The correlation gap compares
+the ten pairs of the five behaviours shared by the engine and reference households.
+The prior direction checks group agents by the archetype and income of their
+sampled personas. The observed income check compares weighted profile slopes
+for annual income below USD 35,000 and at least USD 75,000. All household
+comparisons use the same pre-holdout panel from the packaged simulated data.
 
 `selection_bias` compares households with and without observed age and income
 on all seven purchase attributes. Mean differences are with demographics minus
@@ -162,25 +165,23 @@ sampled bin share and its population target fell from 8.57 percentage points
 to below 0.000001 percentage points. Agreement on these bins still leaves
 room for differences within a bin and after jitter.
 
-| Agent KS similarity, seed 42 | 60 averaged profiles | 150 sampled households | PoC target |
-|---|---:|---:|---:|
-| Weekly buy rate | 0.6995 | 0.8384 | 0.85 |
-| Purchase cycle | 0.6977 | 0.8372 | 0.85 |
-| Average units | 0.4323 | 0.6317 | 0.85 |
-| Average price paid | 0.7719 | 0.9552 | 0.85 |
-| Promo share | 0.6390 | 0.7786 | 0.85 |
-| Coupon rate | 0.6107 | 0.9779 | 0.85 |
-| Brand loyalty | 0.5358 | 0.7472 | 0.75 |
+| KS similarity, seed 42 | 60 averaged | 150 own-jitter | 150 engine population | Target |
+|---|---:|---:|---:|---:|
+| Weekly buy rate | 0.6995 | 0.8384 | 0.8352 | 0.85 |
+| Purchase cycle | 0.6977 | 0.8372 | 0.8368 | 0.85 |
+| Average units | 0.4323 | 0.6317 | 0.9280 | 0.85 |
+| Average price paid | 0.7719 | 0.9552 | — | — |
+| Promo share | 0.6390 | 0.7786 | 0.9715 | 0.85 |
+| Coupon rate | 0.6107 | 0.9779 | — | — |
+| Brand loyalty | 0.5358 | 0.7472 | 0.9334 | 0.75 |
+| Elasticity vs. configured prior | — | — | 0.8754 | — |
 
-Both columns use the same 1,417 reference buyers and 5,000-agent protocol.
-The comparison uses the baseline profiles from commit `26e5e96` and includes
-a retrospective score for average units. On the 150 weighted profiles, before expansion, all seven KS
-scores exceed 0.93. Jitter spreads common exact values such as loyalty of 1
-(53.4% of reference buyers) and an average of one unit per purchase week
-(65.2%). In the new sample the buy-rate SD ratio is 1.0561 and the mean
-absolute correlation gap is 0.0008. The prior passes both direction checks.
-The observed low-income elasticity (−0.2143) is less negative than the
-high-income elasticity (−0.2475), so the observed income check fails.
+The first two columns preserve the published uniform-jitter comparisons for
+commits `26e5e96` and `1d58e2a`, including the retrospective average-units
+score for 60 profiles. All three use 5,000 agents. The profile KS is 0.9778
+for coupon rate and 0.9607 for average price paid. The engine buy-rate SD ratio
+is 1.0515 and the correlation gap is 0.0299. Both prior direction checks pass.
+The observed income direction fails (low −0.2143, high −0.2475).
 
 ## Historical backtest
 
