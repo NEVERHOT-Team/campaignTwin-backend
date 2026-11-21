@@ -131,6 +131,65 @@ def call_llm(model: str, messages: list[dict[str, Any]], schema: type[Response])
     return None
 
 
+def _embed_key(model: str, text: str) -> str:
+    identity = {"provider": "openai-embed", "model": model, "text": text}
+    encoded = json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return sha256(encoded.encode()).hexdigest()
+
+
+def embed(texts: list[str], model: str | None = None) -> list[list[float]] | None:
+    """Embedding vectors per text (EMBED_MODEL), cached per text.
+
+    Returns None when no key/model is configured or the provider fails, so callers
+    can fall back. A partial provider failure returns None rather than mixed results.
+    """
+    if not texts:
+        return []
+    resolved = (model or os.getenv("EMBED_MODEL", "")).strip() or None
+    if not resolved:
+        logger.info("llm embed_skipped reason=missing_model")
+        return None
+    results: list[list[float] | None] = [None] * len(texts)
+    missing: list[tuple[int, str, str]] = []
+    for index, text in enumerate(texts):
+        key = _embed_key(resolved, text)
+        try:
+            cached = db.cache_get(key)
+        except Exception as error:
+            logger.warning("llm embed_cache_read_failed error=%s", _safe_error(error))
+            cached = None
+        if isinstance(cached, list) and cached:
+            results[index] = [float(value) for value in cached]
+        else:
+            missing.append((index, key, text))
+    if missing:
+        if not os.getenv("OPENAI_API_KEY", "").strip():
+            logger.info("llm embed_skipped reason=missing_key")
+            return None
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=30.0, max_retries=1)
+        try:
+            response = client.embeddings.create(
+                model=resolved, input=[text for _, _, text in missing]
+            )
+        except Exception as error:
+            logger.warning("llm embed_failed model=%s error=%s", resolved, _safe_error(error))
+            return None
+        finally:
+            client.close()
+        if len(response.data) != len(missing):
+            logger.warning("llm embed_failed model=%s error=count_mismatch", resolved)
+            return None
+        for (index, key, text), item in zip(missing, response.data, strict=True):
+            vector = [float(value) for value in item.embedding]
+            results[index] = vector
+            try:
+                db.cache_put(key, resolved, {"text": text}, vector)
+            except Exception as error:
+                logger.warning("llm embed_cache_write_failed error=%s", _safe_error(error))
+        logger.info("llm path=openai-embed model=%s n=%d", resolved, len(missing))
+    return [vector for vector in results if vector is not None]
+
+
 class _ModelCheck(BaseModel):
     ok: bool
 
