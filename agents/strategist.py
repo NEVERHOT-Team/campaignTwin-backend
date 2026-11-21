@@ -26,12 +26,22 @@ from typing import Any
 
 from contracts.campaign_spec import CampaignSpec
 from contracts.models import ContextPack, Strategy
-from data.loaders import load_unit_econ
+from data.loaders import load_market, load_personas, load_unit_econ
 
 GENERATED = 6
 DEFAULT_BUDGET_FLEX_PCT = 10.0
 DEFAULT_MAX_DISCOUNT_PCT = 50.0
+# Break-even by default. market.json's margin_floor_pct caps *rival* discounts in
+# data/rival.py; a floor for our own plans comes from spec.constraints.margin_floor_pct.
 DEFAULT_MARGIN_FLOOR_PCT = 0.0
+DEFAULT_UNITS_PER_ORDER = 1.1
+# Households the simulated market stands for: engine.shopper.ShopperParams
+# households_per_agent (50) x SimulationPlan.n_agents (5000). Label: default.
+DEFAULT_MARKET_HOUSEHOLDS = 250_000.0
+DEFAULT_COST_PER_REACH = 0.32
+# Paid impressions per targeted household. Two reach about 90% of the target with the
+# engine's reach curve (30% organic); spending beyond that buys almost nothing.
+MEDIA_FREQUENCY = 2.0
 DEFAULT_SPLIT = {"discount": 0.7, "media": 0.25, "fees": 0.05}
 PERCENT_MECHANICS = {"percent_off", "voucher", "flash_sale", "coins_cashback"}
 DEFAULT_EXTRA_MECHANICS = ("percent_off", "voucher", "free_shipping", "bundle", "flash_sale")
@@ -57,9 +67,20 @@ class Bounds:
     segments_locked: bool
     user_segments: tuple[str, ...]
     labels: dict[str, str] = field(default_factory=dict)
+    segment_shares: dict[str, float] = field(default_factory=dict)
+    market_households: float = 0.0
+    cost_per_reach: float = 0.0
 
     def label_note(self) -> str:
         return ", ".join(f"{name}: {label}" for name, label in sorted(self.labels.items()))
+
+    def media_needed(self, target_segments: list[str]) -> float:
+        """THB to show the offer MEDIA_FREQUENCY times to every targeted household."""
+        if not target_segments:
+            share = 1.0
+        else:
+            share = sum(self.segment_shares.get(s, 0.0) for s in set(target_segments))
+        return share * self.market_households * self.cost_per_reach * MEDIA_FREQUENCY
 
 
 # ---------------------------------------------------------------- bounds
@@ -85,28 +106,70 @@ def _user_segments(spec: CampaignSpec, context: ContextPack) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _max_unit_discount(spec: CampaignSpec) -> tuple[float, dict[str, str]]:
-    """Largest discount that keeps unit contribution at or above the margin floor."""
-    econ = load_unit_econ()
-    labels = {}
+def _units_per_order() -> tuple[float, str]:
+    """Weighted mean units per order across personas (spreads shipping over units)."""
+    try:
+        personas = load_personas()
+        weights = [max(float(p.get("weight", 0)), 0.0) for p in personas]
+        units = [max(float(p.get("avg_units", 1.0)), 0.1) for p in personas]
+        if sum(weights) > 0:
+            return sum(w * u for w, u in zip(weights, units, strict=True)) / sum(weights), "data"
+    except Exception:
+        pass
+    return DEFAULT_UNITS_PER_ORDER, "default"
+
+
+def _unit_costs(spec: CampaignSpec) -> tuple[float, float, float, float, dict[str, str]]:
+    """(price, unit cost, fee share, shipping per unit) from the spec, else market data.
+
+    Same unit economics the engine uses in shopper.week_row, so a plan the strategist
+    allows never loses money per unit by construction.
+    """
+    labels: dict[str, str] = {}
+    try:
+        market = load_market()
+        price = float(market["ref_price"])
+        cost = float(market["unit_cost"])
+        fees = (float(market["platform_fee_pct"]) + float(market["payment_fee_pct"])) / 100
+        shipping = float(market["shipping_cost_per_order"])
+        source = "data"
+    except Exception:  # older checkouts without market.json
+        econ = load_unit_econ()
+        price = float(econ["price_thb"])
+        cost = price * (1 - float(econ["margin_pct"]) / 100)
+        fees = (float(econ["shopee_commission_pct"]) + float(econ["shopee_txn_fee_pct"])) / 100
+        shipping = 0.0
+        source = "default"
+    labels.update(price=source, unit_cost=source, fee_pct=source, shipping=source)
     economics = spec.unit_economics
+    if economics and economics.avg_price_thb is not None:
+        price, labels["price"] = float(economics.avg_price_thb), "data"
     if economics and economics.margin_pct is not None:
-        margin, labels["margin_pct"] = economics.margin_pct, "data"
-    else:
-        margin, labels["margin_pct"] = float(econ["margin_pct"]), econ["source"]["margin_pct"]
+        cost, labels["unit_cost"] = price * (1 - economics.margin_pct / 100), "data"
     if economics and economics.fee_pct is not None:
-        fees, labels["fee_pct"] = economics.fee_pct, "data"
-    else:
-        fees = float(econ["shopee_commission_pct"]) + float(econ["shopee_txn_fee_pct"])
-        labels["fee_pct"] = econ["source"]["shopee_commission_pct"]
+        fees, labels["fee_pct"] = economics.fee_pct / 100, "data"
+    units, labels["units_per_order"] = _units_per_order()
+    return price, cost, fees, shipping / max(units, 0.1), labels
+
+
+def _max_unit_discount(spec: CampaignSpec) -> tuple[float, dict[str, str]]:
+    """Largest discount (%) whose unit contribution stays at or above the margin floor.
+
+    contribution = price (1 - d)(1 - fees) - unit_cost - shipping_per_unit
+    and it must be >= floor x price (1 - d), so
+    d <= 1 - (unit_cost + shipping_per_unit) / (price (1 - fees - floor)).
+    """
+    price, cost, fees, shipping, labels = _unit_costs(spec)
     floor = spec.constraints.margin_floor_pct
     if floor is None:
         floor, labels["margin_floor_pct"] = DEFAULT_MARGIN_FLOOR_PCT, "default"
     else:
         labels["margin_floor_pct"] = "data"
-    # contribution = margin - discount - fees * (1 - discount / 100) >= floor
-    limit = (margin - fees - floor) / (1 - fees / 100)
-    return max(0.0, limit), labels
+    keep = price * (1 - fees - floor / 100)
+    if keep <= 0:
+        return 0.0, labels
+    limit = 100 * (1 - (cost + shipping) / keep)
+    return max(0.0, min(100.0, limit)), labels
 
 
 def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
@@ -141,12 +204,18 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         mechanics = tuple(dict.fromkeys(ordered))
         labels["mechanics"] = "default"
 
-    flex = given.budget_flex_pct if given and given.budget_flex_pct else DEFAULT_BUDGET_FLEX_PCT
-    labels["budget_flex_pct"] = "data" if given and given.budget_flex_pct else "default"
+    # An explicit 0 locks the budget; only an unset value falls back to the default.
+    if given and "budget_flex_pct" in given.model_fields_set:
+        flex, labels["budget_flex_pct"] = float(given.budget_flex_pct), "data"
+    else:
+        flex, labels["budget_flex_pct"] = DEFAULT_BUDGET_FLEX_PCT, "default"
     total = float(spec.budget.total_thb)
 
     unit_limit, margin_labels = _max_unit_discount(spec)
     labels.update(margin_labels)
+    shares, labels["segment_shares"] = _segment_shares(context)
+    cost_per_reach, labels["cost_per_reach"] = _cost_per_reach()
+    labels["market_households"] = "default"
     return Bounds(
         discount_min=round(low, 1),
         discount_max=round(high, 1),
@@ -158,7 +227,33 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         segments_locked=bool(given and given.segments_locked),
         user_segments=_user_segments(spec, context),
         labels=labels,
+        segment_shares=shares,
+        market_households=DEFAULT_MARKET_HOUSEHOLDS,
+        cost_per_reach=cost_per_reach,
     )
+
+
+def _segment_shares(context: ContextPack) -> tuple[dict[str, float], str]:
+    """Share of households per segment: market.json (the engine's population), else context."""
+    try:
+        shares = {str(s["name"]): float(s["share"]) for s in load_market()["segments"]}
+        if shares:
+            return shares, "data"
+    except Exception:
+        pass
+    shares = {
+        str(s["segment_id"]): float(s.get("share", 0.0))
+        for s in context.segments if "segment_id" in s
+    }
+    return shares, "default"
+
+
+def _cost_per_reach() -> tuple[float, str]:
+    try:
+        econ = load_unit_econ()
+        return float(econ["media_cost_per_reach_thb"]), econ["source"]["media_cost_per_reach_thb"]
+    except Exception:
+        return DEFAULT_COST_PER_REACH, "default"
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -431,6 +526,17 @@ def enforce(
     if abs(fixed_budget - budget) > 0.5:
         notes.append(f"budget {budget:,.0f}->{fixed_budget:,.0f} THB (flex)")
     base_timing = _timing(spec, fixed_budget, timing.get("flash_days"))
+
+    # Media beyond what reaches the target audience buys almost no extra reach, so cap
+    # it at MEDIA_FREQUENCY impressions per targeted household and move the rest to the
+    # discount pool (which is only spent when shoppers actually redeem).
+    needed = bounds.media_needed(targets)
+    if fixed_budget > 0 and needed > 0 and split.get("media", 0.0) * fixed_budget > needed + 0.5:
+        before = split["media"] * fixed_budget
+        media_share = needed / fixed_budget
+        split["discount"] = split.get("discount", 0.0) + split["media"] - media_share
+        split["media"] = media_share
+        notes.append(f"media {before:,.0f}->{needed:,.0f} THB (enough to reach the target)")
 
     cap = strategy.cap_per_user if strategy.cap_per_user and strategy.cap_per_user >= 1 else None
 

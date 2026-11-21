@@ -3,13 +3,15 @@
 Each simulated shopper is a weighted copy of one persona (data/processed/personas.json)
 with small jitter. Every week a shopper:
 
-1. decides whether to buy the category: weekly_buy_rate x need (weeks since the last
-   purchase relative to the purchase cycle) x price effect (best price ** elasticity)
-   x waiting (shoppers who have seen promotions hold back in weeks without one);
-2. if buying, picks a brand (us / top rival / other) with a logit on price,
+1. picks the brand they would buy (us / top rival / other) with a logit on price,
    loyalty to their usual brand, and the SSR appeal of our message (exposed shoppers only);
-3. buys more units when the price is low, which delays the next purchase (stockpiling),
-   so campaigns pull demand forward and a post-campaign dip appears.
+2. decides whether to buy: weekly_buy_rate x need (weeks since the last purchase relative
+   to the purchase cycle) x waiting (shoppers who have seen a promotion hold back in weeks
+   without one) x the chosen brand's price effect (price ** elasticity), so a rival's
+   discount only adds rival purchases;
+3. buys more units when the chosen brand is cheap, which delays the next purchase
+   (stockpiling), so campaigns pull demand forward and a post-campaign dip appears;
+4. may adopt the brand it bought as its new usual brand (habit x (1 - loyalty)).
 
 No LLM calls happen here. Plan and baseline runs that share a seed draw the same random
 numbers every week (common random numbers), so differences come only from the offer.
@@ -18,16 +20,17 @@ All behavioural parameters in ShopperParams are labelled `default` until calibra
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 
 from contracts.models import RivalScenario, Strategy, WeekRow
-from data.loaders import load_brands, load_market, load_personas
+from data.loaders import load_brands, load_market, load_personas, load_unit_econ
 
 US, RIVAL, OTHER = 0, 1, 2
 DEFAULT_SHARES = (0.2, 0.3, 0.5)
+DEFAULT_COST_PER_REACH = 0.32
 
 
 @dataclass(frozen=True)
@@ -43,10 +46,18 @@ class ShopperParams:
     price_mult_cap: float = 3.0
     max_weekly_prob: float = 0.9
     stockpile: float = 0.5  # extra units per unit of price-driven demand lift
-    wait_per_exposure: float = 0.15
+    wait_per_exposure: float = 0.15  # x promo_share, once a shopper has seen a promotion
     wait_floor: float = 0.4
     jitter: float = 0.1
     holdout_share: float = 0.10
+    # A shopper who buys a brand other than their usual one adopts it with probability
+    # habit x (1 - brand_loyalty), so rival undercuts keep costing us after they end.
+    habit: float = 0.2
+    # Share of targeted shoppers who see the offer with no paid media (platform listing).
+    organic_reach: float = 0.3
+    # Real households per simulated shopper. WeekStats (and so revenue, profit and
+    # buyers) are multiplied by it, so totals are comparable with a real campaign budget.
+    households_per_agent: float = 50.0
     label: str = "default"
 
 
@@ -67,10 +78,20 @@ class Population:
     holdout: np.ndarray
     ref_price: float
     shares: tuple[float, float, float]
+    # Fixed per-shopper draw; the shopper is reached when reach_draw < offer.reach.
+    reach_draw: np.ndarray | None = None
+    # Real households each simulated shopper stands for. WeekStats are scaled by it, so
+    # revenue and profit are market-sized and comparable with a real campaign budget.
+    households_per_agent: float = 1.0
+    scale_label: str = "default"
 
     @property
     def size(self) -> int:
         return int(self.persona_idx.size)
+
+    @property
+    def households(self) -> float:
+        return self.size * self.households_per_agent
 
 
 @dataclass
@@ -80,6 +101,7 @@ class ShopperState:
     redemptions: np.ndarray
     last_brand: np.ndarray
     ever_us: np.ndarray
+    preferred: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +116,7 @@ class WeekOffer:
     message_id: str | None = None
     rival_discount_pct: float = 0.0
     rival_non_price: bool = False
+    reach: float = 1.0  # share of targeted, non-holdout shoppers who see the offer
 
 
 @dataclass(frozen=True)
@@ -137,12 +160,16 @@ def build_population(
     ref_price: float | None = None,
     shares: tuple[float, float, float] | None = None,
 ) -> Population:
+    """Sample n_agents shoppers. Each stands for params.households_per_agent real households
+    (an engine multiplier, label default); personas.json is never rescaled."""
     params = params or ShopperParams()
     personas = personas if personas is not None else load_personas()
     if not personas or n_agents <= 0:
         raise ValueError("A population needs personas and n_agents > 0")
     if ref_price is None:
         ref_price = float(load_market()["ref_price"])
+    households_per_agent = max(float(params.households_per_agent), 1e-9)
+    scale_label = params.label
     shares = shares or market_shares()
     rng = np.random.default_rng([seed, 1])
 
@@ -180,6 +207,9 @@ def build_population(
         holdout=rng.random(n_agents) < params.holdout_share,
         ref_price=float(ref_price),
         shares=tuple(float(s) for s in shares),
+        reach_draw=rng.random(n_agents),  # drawn last so earlier draws stay unchanged
+        households_per_agent=households_per_agent,
+        scale_label=scale_label,
     )
 
 
@@ -192,6 +222,7 @@ def initial_state(population: Population, seed: int = 0) -> ShopperState:
         redemptions=np.zeros(n, dtype=int),
         last_brand=population.preferred.copy(),
         ever_us=np.zeros(n, dtype=bool),
+        preferred=population.preferred.copy(),
     )
 
 
@@ -222,7 +253,10 @@ def _exposure(population: Population, offer: WeekOffer) -> np.ndarray:
             population.persona_segments, population.persona_channels, strict=True
         )
     ])
-    return persona_ok[population.persona_idx] & ~population.holdout
+    exposed = persona_ok[population.persona_idx] & ~population.holdout
+    if offer.reach < 1.0 and population.reach_draw is not None:
+        exposed &= population.reach_draw < offer.reach
+    return exposed
 
 
 def step(
@@ -240,7 +274,9 @@ def step(
     rng = np.random.default_rng([seed, 100 + week])
     u_buy = rng.random(n)
     u_brand = rng.random(n)
+    u_habit = rng.random(n)  # drawn every week so plan and baseline stay paired
     appeal = np.zeros(n) if appeal is None else np.asarray(appeal, dtype=float)
+    preferred = population.preferred if state.preferred is None else state.preferred
 
     exposed = _exposure(population, offer)
     eligible = exposed.copy()
@@ -252,60 +288,75 @@ def step(
     p_rival = 1 - d_rival / 100
 
     need = np.clip(state.weeks_since / population.cycle_weeks, params.need_floor, params.need_cap)
-    best = np.minimum(np.minimum(p_us, p_rival), 1.0)
-    price_mult = np.clip(np.power(np.maximum(best, 1e-6), population.elasticity), 1.0,
-                         params.price_mult_cap)
     promo_now = (d_us > 0) | (d_rival > 0)
+    # Having seen a promotion teaches a shopper to hold back in weeks without one. One
+    # campaign is one lesson: the effect does not grow with each week of the same campaign.
     waiting_factor = np.where(
         ~promo_now & (state.exposures > 0),
-        np.clip(1 - params.wait_per_exposure * population.promo_share * state.exposures,
-                params.wait_floor, 1.0),
+        np.clip(1 - params.wait_per_exposure * population.promo_share, params.wait_floor, 1.0),
         1.0,
     )
-    p_buy = np.clip(
-        population.weekly_buy_rate * need * price_mult * waiting_factor, 0, params.max_weekly_prob
+    p_base = np.clip(
+        population.weekly_buy_rate * need * waiting_factor, 0, params.max_weekly_prob
     )
-    buy = u_buy < p_buy
 
+    # The brand a shopper would pick this week is decided first; the purchase decision
+    # then uses that brand's price. So a rival's discount only adds rival purchases and
+    # never makes anyone buy (or stock up on) more of our product.
     loyal = params.beta_loyalty * population.loyalty
     price = params.beta_price * population.sensitivity
     u_us = (
         -price * p_us
-        + loyal * (population.preferred == US)
+        + loyal * (preferred == US)
         + params.beta_appeal * appeal * exposed
     )
     u_rival = (
         params.asc_rival
         - price * p_rival
-        + loyal * (population.preferred == RIVAL)
+        + loyal * (preferred == RIVAL)
         + params.rival_non_price_boost * offer.rival_non_price
     )
-    u_other = params.asc_other - price * 1.0 + loyal * (population.preferred == OTHER)
+    u_other = params.asc_other - price * 1.0 + loyal * (preferred == OTHER)
     utility = np.stack([u_us, u_rival, u_other], axis=1)
     utility -= utility.max(axis=1, keepdims=True)
     probs = np.exp(utility)
     probs /= probs.sum(axis=1, keepdims=True)
     brand = (u_brand[:, None] > np.cumsum(probs, axis=1)).sum(axis=1).clip(0, 2)
 
-    units = np.where(buy, population.avg_units * (1 + params.stockpile * (price_mult - 1)), 0.0)
+    chosen_price = np.where(brand == US, p_us, np.where(brand == RIVAL, p_rival, 1.0))
+    chosen_mult = np.clip(np.power(np.maximum(chosen_price, 1e-6), population.elasticity), 1.0,
+                          params.price_mult_cap)
+    buy = u_buy < np.clip(p_base * chosen_mult, 0, params.max_weekly_prob)
+    units = np.where(buy, population.avg_units * (1 + params.stockpile * (chosen_mult - 1)), 0.0)
     ours = buy & (brand == US)
     discounted = ours & (d_us > 0)
 
+    scale = population.households_per_agent
+
+    def count(mask: np.ndarray) -> int:
+        return int(round(float(mask.sum()) * scale))
+
     stats = WeekStats(
-        buyers_us=int(ours.sum()),
-        units_us=float(units[ours].sum()),
-        revenue_us=float((units * population.ref_price * p_us)[ours].sum()),
-        discounted_units_us=float(units[discounted].sum()),
-        buyers_rival=int((buy & (brand == RIVAL)).sum()),
-        buyers_other=int((buy & (brand == OTHER)).sum()),
-        from_rival=int((ours & (state.last_brand == RIVAL)).sum()),
-        new_buyers_us=int((ours & ~state.ever_us & (population.preferred != US)).sum()),
-        waiting=int((~buy & (waiting_factor < 1)).sum()),
-        exposed=int(exposed.sum()),
-        holdout_buyers_us=int((ours & population.holdout).sum()),
-        holdout_size=int(population.holdout.sum()),
+        buyers_us=count(ours),
+        units_us=float(units[ours].sum()) * scale,
+        revenue_us=float((units * population.ref_price * p_us)[ours].sum()) * scale,
+        discounted_units_us=float(units[discounted].sum()) * scale,
+        buyers_rival=count(buy & (brand == RIVAL)),
+        buyers_other=count(buy & (brand == OTHER)),
+        from_rival=count(ours & (state.last_brand == RIVAL)),
+        new_buyers_us=count(ours & ~state.ever_us & (population.preferred != US)),
+        waiting=count(~buy & (waiting_factor < 1)),
+        exposed=count(exposed),
+        holdout_buyers_us=count(ours & population.holdout),
+        holdout_size=count(population.holdout),
+        extra={"households_per_agent": scale} if scale != 1.0 else {},
     )
 
+    switch = (
+        buy
+        & (brand != preferred)
+        & (u_habit < params.habit * (1 - population.loyalty))
+    )
     extra_supply = (units / population.avg_units - 1) * population.cycle_weeks
     new_state = ShopperState(
         weeks_since=np.where(buy, -np.maximum(extra_supply, 0.0), state.weeks_since) + 1.0,
@@ -314,6 +365,7 @@ def step(
         redemptions=state.redemptions + discounted.astype(int),
         last_brand=np.where(buy, brand, state.last_brand),
         ever_us=state.ever_us | ours,
+        preferred=np.where(switch, brand, preferred),
     )
     return stats, new_state
 
@@ -333,11 +385,13 @@ def offer_from_strategy(
     week: int,
     campaign_weeks: int,
     rivals: list[RivalScenario] | None = None,
+    reach: float = 1.0,
 ) -> WeekOffer:
     """One week of a plan under one scenario's rival policies (week 1 = campaign start).
 
     Rival depth is in percentage points. When several rivals are active, the deepest
-    discount sets the rival price, as agreed with data/rival.py.
+    discount sets the rival price, as agreed with data/rival.py. `reach` comes from
+    media_reach() and limits how many targeted shoppers see the offer.
     """
     active = not strategy.is_baseline and 1 <= week <= _active_weeks(strategy, campaign_weeks)
     rival_depth = 0.0
@@ -360,7 +414,44 @@ def offer_from_strategy(
         message_id=None if strategy.is_baseline else strategy.id,
         rival_discount_pct=rival_depth,
         rival_non_price=non_price,
+        reach=float(np.clip(reach, 0.0, 1.0)),
     )
+
+
+def _cost_per_reach() -> float:
+    try:
+        return float(load_unit_econ()["media_cost_per_reach_thb"])
+    except Exception:
+        return DEFAULT_COST_PER_REACH
+
+
+def media_reach(
+    population: Population,
+    strategy: Strategy,
+    params: ShopperParams | None = None,
+    cost_per_reach: float | None = None,
+) -> float:
+    """Share of targeted shoppers who see the offer, bought with the plan's media budget.
+
+    reach = 1 - (1 - organic) * exp(-impressions / targeted households), with
+    impressions = media budget / cost per reach (unit_economics.json). Plans without a
+    budget or a media share keep full reach, as before media was modelled.
+    """
+    params = params or ShopperParams()
+    if strategy.is_baseline:
+        return 0.0
+    budget = (strategy.timing or {}).get("budget_thb")
+    share = (strategy.budget_split or {}).get("media")
+    if not isinstance(budget, (int, float)) or budget <= 0 or share is None:
+        return 1.0
+    probe = offer_from_strategy(strategy, 1, 1)
+    targeted = float(_exposure(population, replace(probe, active=True)).sum())
+    targeted *= population.households_per_agent
+    if targeted <= 0:
+        return 0.0
+    cpr = cost_per_reach if cost_per_reach is not None else _cost_per_reach()
+    impressions = float(budget) * float(share) / max(cpr, 1e-9)
+    return float(1 - (1 - params.organic_reach) * math.exp(-impressions / targeted))
 
 
 def simulate(
@@ -377,9 +468,10 @@ def simulate(
     state = initial_state(population, seed)
     message = None if strategy.is_baseline else strategy.id
     vector = appeal_vector(population, appeal, message)
+    reach = media_reach(population, strategy, params)
     stats = []
     for week in range(1, weeks + 1):
-        offer = offer_from_strategy(strategy, week, campaign_weeks, rivals)
+        offer = offer_from_strategy(strategy, week, campaign_weeks, rivals, reach)
         week_stats, state = step(population, state, offer, seed, week, params, vector)
         stats.append(week_stats)
     return stats

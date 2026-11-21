@@ -156,3 +156,57 @@ def test_week_row_profit_is_revenue_minus_costs(population):
     expected = stats.revenue_us * 0.9 - stats.units_us * 100 - stats.buyers_us * 10
     assert row.profit == pytest.approx(expected, abs=0.01)
     assert row.buyers == stats.buyers_us
+
+
+def test_stats_are_scaled_by_households_per_agent():
+    small = shopper.build_population(2000, seed=SEED, params=shopper.ShopperParams(
+        households_per_agent=1.0))
+    big = shopper.build_population(2000, seed=SEED, params=shopper.ShopperParams(
+        households_per_agent=50.0))
+    plan = make_strategy(20)
+    one = shopper.simulate(small, plan, WEEKS, CAMPAIGN, SEED)
+    fifty = shopper.simulate(big, plan, WEEKS, CAMPAIGN, SEED)
+    assert fifty[0].revenue_us == pytest.approx(one[0].revenue_us * 50)
+    assert fifty[0].buyers_us == one[0].buyers_us * 50
+    assert big.households == pytest.approx(2000 * 50)
+    assert shopper.ShopperParams().households_per_agent == 50.0
+
+
+def media_plan(media_share, budget=80_000):
+    return make_strategy(20).model_copy(update={
+        "timing": {"budget_thb": budget},
+        "budget_split": {"discount": 1 - media_share, "media": media_share},
+    })
+
+
+def test_media_budget_buys_reach_with_diminishing_returns(population):
+    none = shopper.media_reach(population, media_plan(0.0))
+    some = shopper.media_reach(population, media_plan(0.2))
+    lots = shopper.media_reach(population, media_plan(0.2, budget=8_000_000))
+    params = shopper.ShopperParams()
+    assert none == pytest.approx(params.organic_reach)
+    assert params.organic_reach < some < lots <= 1.0
+    assert shopper.media_reach(population, make_strategy(20)) == 1.0  # no budget info
+    low = run(population, media_plan(0.0))
+    high = run(population, media_plan(0.2, budget=8_000_000))
+    assert total(low, "exposed", range(1, 2)) < total(high, "exposed", range(1, 2))
+
+
+def test_rival_undercut_keeps_hurting_after_it_ends(population):
+    plan = make_strategy(20)
+    calm = run(population, plan)
+    attacked = run(population, plan, rivals=[undercut(30, delay=0, duration=4)])
+    post = range(CAMPAIGN + 1, WEEKS + 1)
+    # Some shoppers who switched during the undercut keep buying the rival.
+    assert total(attacked, "buyers_us", post) < total(calm, "buyers_us", post)
+
+
+def test_rival_promotion_never_raises_our_full_price_sales(population):
+    # Regression: a rival discount used to pull shoppers into the category and then let
+    # them buy (and stock up on) our full-price product.
+    base = make_strategy(baseline=True)
+    calm = run(population, base)
+    attacked = run(population, base, rivals=[undercut(30, delay=0, duration=4)])
+    campaign = range(1, CAMPAIGN + 1)
+    assert total(attacked, "units_us", campaign) < total(calm, "units_us", campaign)
+    assert total(attacked, "buyers_us", campaign) <= total(calm, "buyers_us", campaign)

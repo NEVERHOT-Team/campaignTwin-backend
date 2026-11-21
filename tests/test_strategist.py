@@ -54,7 +54,7 @@ def test_user_plan_is_kept_as_briefed(spec, context):
     assert user.mechanic == "voucher"
     assert user.cap_per_user == 1
     assert set(user.target_segments) == {"loyal", "deal_hunter", "waiter"}
-    # 40% is above the default margin floor (44% margin, 10% fees), so it carries a warning.
+    # 40% is below break-even after unit cost, fees and shipping, so it carries a warning.
     assert "Warning" in user.rationale
 
 
@@ -161,3 +161,50 @@ def test_spec_without_budget_is_rejected(context):
     spec = CampaignSpec.model_validate(raw)
     with pytest.raises(ValueError, match="budget.total_thb"):
         propose(spec, context)
+
+
+def test_unit_discount_limit_counts_cost_fees_and_shipping(spec, context):
+    from data.loaders import load_market
+
+    bounds = resolve_bounds(spec, context)
+    market = load_market()
+    price, cost = market["ref_price"], market["unit_cost"]
+    fees = (market["platform_fee_pct"] + market["payment_fee_pct"]) / 100
+    shipping = market["shipping_cost_per_order"]
+    # At the limit, contribution per unit is break-even once shipping is spread over
+    # at least one unit per order, so the limit sits below the no-shipping ceiling.
+    no_shipping = 100 * (1 - cost / (price * (1 - fees)))
+    with_one_unit = 100 * (1 - (cost + shipping) / (price * (1 - fees)))
+    assert with_one_unit <= bounds.max_unit_discount < no_shipping
+    for plan in _generated(propose(spec, context)):
+        net = price * (1 - plan.discount_pct / 100)
+        assert net * (1 - fees) - cost - shipping / 1.0 > -shipping  # never far below cost
+
+
+def test_explicit_zero_budget_flex_locks_the_budget(context):
+    raw = deepcopy(load_mock("campaign_spec")["spec"])
+    raw["strategist_bounds"] = {"budget_flex_pct": 0}
+    raw["field_meta"]["strategist_bounds"] = {"source": "user", "confidence": 1}
+    spec = CampaignSpec.model_validate(raw)
+    bounds = resolve_bounds(spec, context)
+    assert bounds.labels["budget_flex_pct"] == "data"
+    assert bounds.budget_min == bounds.budget_max == spec.budget.total_thb
+    for plan in _generated(propose(spec, context)):
+        assert plan.timing["budget_thb"] == pytest.approx(spec.budget.total_thb)
+
+
+def test_media_is_capped_at_what_reaches_the_target(context):
+    raw = deepcopy(load_mock("campaign_spec")["spec"])
+    raw["budget"]["total_thb"] = 500_000
+    spec = CampaignSpec.model_validate(raw)
+    bounds = resolve_bounds(spec, context)
+    plans = {plan.id: plan for plan in _generated(propose(spec, context))}
+    for plan in plans.values():
+        media = plan.budget_split.get("media", 0.0) * plan.timing["budget_thb"]
+        assert media <= bounds.media_needed(plan.target_segments) + 1
+        assert sum(plan.budget_split.values()) == pytest.approx(1)
+    targeted = plans["g0-targeted"]
+    # A plan for a few segments needs far less media than the 25% template share.
+    assert targeted.budget_split["media"] < 0.25
+    assert "media" in targeted.rationale and "enough to reach the target" in targeted.rationale
+    assert bounds.media_needed(["deal_hunter"]) < bounds.media_needed([])
