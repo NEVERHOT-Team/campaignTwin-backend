@@ -198,7 +198,13 @@ def test_demo_brief_validates_and_retrieves_all_reviewed_scenarios():
 def test_rival_data_loaders():
     library = loaders.load_library()
     assert {"campaign_id", "reaction_to_campaign_id", "channel_mix", "source_url"} <= set(library)
-    assert set(library["reaction_type"]) <= {"", "none", "match", "undercut", "non_price"}
+    assert set(library["campaign_id"]) == {f"th{i:02d}" for i in range(1, 10)}
+    brand_ids = {"Cellox": "751", "Scott": "764", "Zilk": "595"}
+    assert set(library["brand_name"]) == set(brand_ids)
+    assert library["brand"].eq(library["brand_name"].map(brand_ids)).all()
+    assert library["category"].eq("toilet_tissue").all()
+    assert library["discount_depth"].between(0, 1).all()
+    assert library["reaction_type"].eq("").all() and library["source_url"].str.strip().ne("").all()
     brands = loaders.load_brands()
     assert set(brands["brand"]) == {"751", "764", "595", "69", "1011", "1315"}
     assert brands.loc[brands["is_ours"], "brand"].tolist() == ["751"]

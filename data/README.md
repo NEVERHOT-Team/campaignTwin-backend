@@ -21,16 +21,16 @@ accounted for at least 5% of category sales. Shares use transaction
 `sales_value`, the amount received by the retailer.
 [Complete Journey transaction and product definitions](https://bradleyboehmke.github.io/completejourney/articles/completejourney.html)
 
-| Manufacturer ID | Demo role | Retailer sales share |
-|---|---|---:|
-| 751 | Our brand | 18.1% |
-| 764 | Leader | 26.9% |
-| 595 | Peer | 19.2% |
-| 69 | Private label | 16.4% |
+| Manufacturer ID | Thai demo mapping (`default`) | Demo role | Retailer sales share |
+|---|---|---|---:|
+| 751 | Cellox (BJC) | Our brand | 18.1% |
+| 764 | Scott (Kimberly-Clark) | Leader | 26.9% |
+| 595 | Zilk | Peer | 19.2% |
+| 69 | Store private label | Private label | 16.4% |
 
 The other material manufacturers are 1011 (13.6%) and 1315 (5.9%). IDs and
-sales shares come from the packaged catalogue and transactions. Demo roles
-come from the team selection.
+sales shares come from the packaged catalogue and transactions. The Thai brand
+mapping approximates the role each manufacturer plays in the demo.
 
 ## Build
 
@@ -338,8 +338,9 @@ segments (20%), channels (15%), and geography (5%). Adjacent tiers receive
 half credit. Set overlap uses intersection divided by union. Market share
 breaks score ties.
 
-For hand-entered rows in `campaign_library.csv`, put the manufacturer's ID in
-`brand`. Set `reaction_to_campaign_id` to the triggering campaign ID when known.
+For hand-entered rows in `campaign_library.csv`, put the mapped manufacturer ID
+from `brands.csv` in `brand` and the observed brand name in `brand_name`.
+Set `reaction_to_campaign_id` to the triggering campaign ID when known.
 The trigger supplies the features and description, and the response row supplies
 the outcome, discount, dates, and delay. Leave `reaction_type` blank for an
 unknown outcome. Use `none` for an observed absence of reaction. Enter
@@ -348,9 +349,17 @@ unknown outcome. Use `none` for an observed absence of reaction. Enter
 The ten nearest campaigns are ranked by an equal mix of structured similarity
 (mechanic, discount depth, duration, season, category) and TF-IDF cosine between
 the brief's goal and the historical description. Retrieval uses a rival's own
-rows when available. The eight checked-in coffee fixtures provide shared
-analogues until brand-specific campaigns are added. Each known outcome votes
-with its similarity as weight. Five prior observations supply Dirichlet smoothing.
+rows when available and searches the whole library otherwise. Each known
+outcome votes with its similarity as weight. Five prior observations supply
+Dirichlet smoothing. All nine reviewed Thai toilet-tissue campaigns have source
+URLs and blank reaction types. With these rows, S1–S3 likelihoods come from
+the category prior and each scenario returns an empty `evidence_ids` list.
+
+`data.rival.similar_campaigns(spec, strategy=None, k=5)` supplies examples
+for Competitive Outlook. It scores the whole library with the same campaign
+similarity and returns up to `k` rows with a source URL and a discount in the
+0–100 percent range. Higher similarity ranks first, with campaign ID breaking
+ties. A campaign with an unknown reaction can appear here.
 
 Undercut risk is calibrated on a one-percentage-point grid. If a deeper offer's
 raw estimate falls, it takes the highest risk at a shallower offer. The other
@@ -372,7 +381,7 @@ scenarios per selected rival.
 
 ## Read
 
-Use `data/loaders.py` to read the generated inputs. The campaign library retains its demo rows.
+Use `data/loaders.py` to read the generated inputs.
 
 The builder also writes `data/calib/household_behavior.parquet`, a local
 calibration panel with one row per pre-campaign category-buying household per fit week.
