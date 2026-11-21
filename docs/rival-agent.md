@@ -3,7 +3,7 @@
 ## Scope and units
 
 S1-S3 come from the evidence model `data.rival.get_rival_scenarios(spec, strategy=None)`.
-It accepts a CampaignSpec v0.1 (legacy flat objects still work) and an optional Strategy
+It reads a CampaignSpec v0.1 through `spec_inputs()` and takes an optional Strategy
 whose offer replaces the brief's offer, so each plan gets its own rival response. The
 baseline strategy yields `none` for every rival. When the evidence model is unavailable,
 `red_team` falls back to the rivals in `mocks/context_pack.json`.

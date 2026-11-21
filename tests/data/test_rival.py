@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import deepcopy
 
 import numpy as np
 import pandas as pd
@@ -18,17 +19,49 @@ from data.etl.build_rival_prior import (
 from mocks import load_mock
 
 
+def make_spec(
+    discount_pct=20,
+    mechanic="voucher",
+    start="2026-11-09",
+    end="2026-11-15",
+    name="11.11 tissue voucher",
+    target_segments=None,
+    channels=None,
+):
+    """Build a CampaignSpec v0.1 from the few fields rival retrieval reads."""
+    raw = deepcopy(load_mock("campaign_spec")["spec"])
+    unit = "pct" if mechanic in ("voucher", "percent_off") else None
+    raw["status"] = "draft"
+    raw["name"] = name
+    raw["brand"]["category"] = "toilet_tissue"
+    raw["audience"]["description"] = None
+    raw["offer"]["mechanics"] = [
+        {
+            "type": mechanic,
+            "value": discount_pct,
+            "value_unit": unit if discount_pct is not None else None,
+            "min_spend_thb": None,
+            "cap_per_user": 1,
+            "eligibility": "all",
+            "duration_days": None,
+        }
+    ]
+    raw["budget"]["max_discount_pct"] = None
+    raw["timing"].update({"start_date": start, "end_date": end, "event": "none"})
+    if target_segments is not None:
+        raw["audience"]["include_hints"] = target_segments
+    if channels is not None:
+        raw["channels"] = channels
+    return CampaignSpec.model_validate(raw)
+
+
+def flat(spec):
+    return rival.spec_inputs(spec)
+
+
 @pytest.fixture
 def spec():
-    return CampaignSpec.model_validate(load_mock("campaign_spec")["spec"]).model_copy(
-        update={
-            "goal": "11.11 tissue voucher",
-            "discount_pct": 20,
-            "mechanic": "voucher",
-            "start": "2026-11-09",
-            "end": "2026-11-15",
-        }
-    )
+    return make_spec()
 
 
 def test_top_three_evidence_intervals_and_plausibility(spec):
@@ -46,7 +79,8 @@ def test_top_three_evidence_intervals_and_plausibility(spec):
     for passive, modal, aggressive in by_rival.values():
         assert [passive.scenario, modal.scenario, aggressive.scenario] == ["S1", "S2", "S3"]
         assert passive.reaction == "none" and passive.depth == 0
-        assert aggressive.reaction == "undercut" and aggressive.depth <= spec.discount_pct + 10
+        assert aggressive.reaction == "undercut"
+        assert aggressive.depth <= flat(spec).discount_pct + 10
         assert modal.likelihood >= aggressive.likelihood
 
 
@@ -59,7 +93,7 @@ def test_positive_discount_selects_most_likely_active_reaction(spec, monkeypatch
     monkeypatch.setattr(rival, "load_rival_prior", lambda: prior)
     monkeypatch.setattr(rival, "load_library", lambda: library)
 
-    rows = rival.get_rival_scenarios(spec.model_copy(update={"discount_pct": discount}))
+    rows = rival.get_rival_scenarios(make_spec(discount_pct=discount))
     for scenario, expected in [("S1", "none"), ("S2", active)]:
         selected = [row for row in rows if row.scenario == scenario]
         assert {row.rival for row in selected} == {"764", "595", "69"}
@@ -70,7 +104,7 @@ def test_positive_discount_selects_most_likely_active_reaction(spec, monkeypatch
 
 @pytest.mark.parametrize("discount", [None, 0])
 def test_no_discount_is_deterministically_passive(spec, discount):
-    results = rival.get_rival_scenarios(spec.model_copy(update={"discount_pct": discount}))
+    results = rival.get_rival_scenarios(make_spec(discount_pct=discount))
     assert len(results) == 9
     for row in results:
         assert row.reaction == "none" and row.depth == row.delay_weeks == row.duration_weeks == 0
@@ -90,8 +124,8 @@ def test_competitor_score_ranks_all_configured_rivals_even_below_threshold(spec)
     catalog.loc[
         catalog["brand"].eq("595"), ["category", "price_tier", "target_segments", "channels", "geo"]
     ] = ["toilet_tissue", "low", "explorer|loyal", "Shopee|LINE", "TH"]
-    targeted = spec.model_copy(update={"target_segments": ["loyal"], "channel": ["LINE"]})
-    _, selected = rival._competitors(targeted, catalog)
+    targeted = make_spec(target_segments=["loyal"], channels=["line"])
+    _, selected = rival._competitors(flat(targeted), catalog)
     assert set(selected["brand"]) == {"764", "595", "69"}
     assert selected.iloc[0].brand == "595"
     assert selected.iloc[1:].score.lt(0.5).all()
@@ -101,7 +135,7 @@ def test_competitor_score_ranks_all_configured_rivals_even_below_threshold(spec)
 def test_deeper_discount_does_not_lower_undercut(spec):
     previous = {}
     for discount in [1, 8, 12, 20, 25.5, 30, 40, 44, 50, 75, 100]:
-        rows = rival.get_rival_scenarios(spec.model_copy(update={"discount_pct": discount}))
+        rows = rival.get_rival_scenarios(make_spec(discount_pct=discount))
         current = {row.rival: row.likelihood for row in rows if row.scenario == "S3"}
         assert all(risk >= previous.get(brand, 0) - 1e-12 for brand, risk in current.items())
         previous = current
@@ -114,14 +148,14 @@ def test_linked_campaign_votes_once_and_uses_responders_terms(spec, monkeypatch)
         "campaign_id": "launch",
         "brand": "751",
         "category": "toilet_tissue",
-        "description": spec.goal,
-        "mechanic": spec.mechanic,
+        "description": flat(spec).text,
+        "mechanic": flat(spec).mechanic,
         "season": "11.11",
         "discount_depth": 0.20,
         "reaction_type": "",
         "reaction_to_campaign_id": "",
-        "start_date": spec.start,
-        "end_date": spec.end,
+        "start_date": flat(spec).start,
+        "end_date": flat(spec).end,
     }
     response = {
         **trigger,
@@ -158,7 +192,7 @@ def test_all_unknown_reactions_use_category_prior(spec, monkeypatch):
         assert row.likelihood == pytest.approx(prior["p"][row.reaction])
         assert row.evidence_ids == []
         if row.scenario == "S3":
-            assert row.depth == pytest.approx(min(prior["depth_p90"], spec.discount_pct + 10))
+            assert row.depth == pytest.approx(min(prior["depth_p90"], flat(spec).discount_pct + 10))
             assert row.delay_weeks == prior["delay_weeks_min"]
 
 
@@ -295,9 +329,9 @@ def test_brand_specific_evidence_can_make_price_response_modal(spec, monkeypatch
                 "season": "11.11",
                 "mechanic": "voucher",
                 "discount_depth": 0.42,
-                "start_date": spec.start,
-                "end_date": spec.end,
-                "description": spec.goal,
+                "start_date": flat(spec).start,
+                "end_date": flat(spec).end,
+                "description": flat(spec).text,
                 "reaction_type": label,
                 "reaction_to_campaign_id": "",
                 "reaction_delay_days": 8,
@@ -318,7 +352,7 @@ def test_brand_specific_evidence_can_make_price_response_modal(spec, monkeypatch
 def test_s3_caps_take_smallest_percent_bound(spec, monkeypatch, discount, response, expected):
     library = rival.load_library().assign(reaction_type="undercut", discount_depth=response)
     monkeypatch.setattr(rival, "load_library", lambda: library)
-    results = rival.get_rival_scenarios(spec.model_copy(update={"discount_pct": discount}))
+    results = rival.get_rival_scenarios(make_spec(discount_pct=discount))
     assert all(row.depth == expected for row in results if row.scenario == "S3")
 
 
@@ -364,10 +398,26 @@ def test_tiers_use_area_and_targets_use_relative_buyer_share():
     ]
 
 
-def _nested_spec(discount=40.0):
-    raw = load_mock("campaign_spec")["spec"]
-    raw["offer"]["mechanics"][0]["value"] = discount
-    return CampaignSpec.model_validate(raw)
+def test_spec_inputs_reads_nested_campaign_spec():
+    nested = make_spec(discount_pct=35, mechanic="percent_off", target_segments=["deal_hunter"])
+    view = rival.spec_inputs(nested)
+    assert view.discount_pct == 35 and view.mechanic == "percent_off"
+    assert (view.start, view.end) == ("2026-11-09", "2026-11-15")
+    assert view.target_segments == ["deal_hunter"] and view.channels == ["shopee", "line"]
+    assert "11.11 tissue voucher" in view.text
+
+
+def test_fixed_baht_mechanic_counts_as_no_price_discount():
+    nested = make_spec(discount_pct=50, mechanic="fixed_off")
+    nested.offer.mechanics[0].value_unit = "thb"
+    assert rival.spec_inputs(nested).discount_pct is None
+    assert all(row.reaction == "none" for row in rival.get_rival_scenarios(nested))
+
+
+def test_timing_event_sets_season():
+    nested = make_spec()
+    nested.timing.event = "12.12"
+    assert rival.spec_inputs(nested).event == "12.12"
 
 
 def _strategy(discount, mechanic="percent_off", baseline=False):
@@ -388,31 +438,23 @@ def _strategy(discount, mechanic="percent_off", baseline=False):
     )
 
 
-def test_nested_campaign_spec_v01_is_accepted():
-    spec = _nested_spec()
-    assert not hasattr(spec, "goal")  # real v0.1 object, no injected legacy fields
-    rows = rival.get_rival_scenarios(spec)
-    assert len(rows) == 9
-    assert {row.scenario for row in rows} == {"S1", "S2", "S3"}
-    for row in rows:
-        assert 0 <= row.depth <= 100  # percent, not fraction
-        assert 0 <= row.ci_low <= row.likelihood <= row.ci_high <= 1
+def test_strategy_inputs_replace_the_brief_offer():
+    spec = make_spec(discount_pct=40)
+    inputs = rival.strategy_inputs(spec, _strategy(15))
+    assert inputs.discount_pct == 15
+    assert inputs.mechanic == "percent_off"
+    assert inputs.target_segments == ["deal_hunter"]
+    assert inputs.channels == ["shopee"]
+    assert inputs.start == flat(spec).start  # timing still comes from the brief
 
 
-def test_legacy_view_maps_v01_fields():
-    view = rival._legacy_view(_nested_spec(35))
-    assert view.discount_pct == 35
-    assert view.mechanic == "voucher"
-    assert view.channel == ["shopee", "line"]
-    assert view.start < view.end
-    assert "11.11" in view.goal
+def test_baseline_strategy_is_passive_for_every_rival():
+    rows = rival.get_rival_scenarios(make_spec(discount_pct=40), _strategy(0, baseline=True))
+    assert rows and all(row.reaction == "none" and row.depth == 0 for row in rows)
 
 
-def test_strategy_overrides_the_brief_offer():
-    spec = _nested_spec()
-    passive = rival.get_rival_scenarios(spec, _strategy(0, baseline=True))
-    assert all(row.reaction == "none" and row.depth == 0 for row in passive)
-    shallow = rival.get_rival_scenarios(spec, _strategy(10))
-    for row in shallow:
+def test_each_strategy_gets_its_own_s3_cap():
+    spec = make_spec(discount_pct=40)
+    for row in rival.get_rival_scenarios(spec, _strategy(10)):
         if row.scenario == "S3":
-            assert row.depth <= 10 + 10  # S3 cap follows the strategy's discount
+            assert 0 <= row.depth <= 10 + 10  # S3 caps at the plan's discount + 10 points

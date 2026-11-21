@@ -1,0 +1,62 @@
+{
+  "brief_text": "โปร 11.11 รอบนี้ ดันกระดาษชำระแบรนด์เรา Cellox-like (751) ตัวราคากลาง ลง Shopee + LINE นะ\nอยากให้ยอดขายโต แต่กำไรต้องไม่หาย งบสัก 500,000 บาท\nลดแรงไปเลย 40% ให้ทุกคน ไม่ต้องแยกกลุ่ม\nเริ่ม 7 พ.ย. 2026 ลากถึง 4 ธ.ค. 2026",
+  "user_plan_spec": {
+    "spec_version": "0.1",
+    "campaign_id": "demo-751-2026-11-11",
+    "name": "โปร 11.11",
+    "status": "ready",
+    "brand": {
+      "name": "Cellox-like (751)",
+      "category": "toilet_tissue",
+      "price_tier": "mid"
+    },
+    "objective": {
+      "primary": "incremental_profit",
+      "secondary": ["revenue"]
+    },
+    "audience": {
+      "description": "ให้ทุกคน ไม่ต้องแยกกลุ่ม",
+      "include_hints": []
+    },
+    "offer": {
+      "mechanics": [
+        {"type": "percent_off", "value": 40, "value_unit": "pct", "eligibility": "all"}
+      ]
+    },
+    "budget": {"total_thb": 500000},
+    "channels": ["shopee", "line"],
+    "timing": {
+      "event": "11.11",
+      "start_date": "2026-11-07",
+      "end_date": "2026-12-04"
+    },
+    "field_meta": {
+      "campaign_id": {"source": "default", "confidence": 1.0},
+      "name": {"source": "extracted", "confidence": 1.0, "evidence": "โปร 11.11"},
+      "brand.name": {"source": "extracted", "confidence": 1.0, "evidence": "แบรนด์เรา Cellox-like (751)"},
+      "brand.category": {"source": "extracted", "confidence": 1.0, "evidence": "กระดาษชำระ"},
+      "brand.price_tier": {"source": "extracted", "confidence": 1.0, "evidence": "ตัวราคากลาง"},
+      "objective.primary": {"source": "extracted", "confidence": 0.9, "evidence": "อยากให้ยอดขายโต แต่กำไรต้องไม่หาย"},
+      "objective.secondary": {"source": "extracted", "confidence": 1.0, "evidence": "อยากให้ยอดขายโต"},
+      "audience.description": {"source": "extracted", "confidence": 1.0, "evidence": "ให้ทุกคน ไม่ต้องแยกกลุ่ม"},
+      "audience.include_hints": {"source": "extracted", "confidence": 1.0, "evidence": "ไม่ต้องแยกกลุ่ม"},
+      "offer.mechanics.0.type": {"source": "extracted", "confidence": 1.0, "evidence": "ลดแรงไปเลย 40%"},
+      "offer.mechanics.0.value": {"source": "extracted", "confidence": 1.0, "evidence": "40%"},
+      "offer.mechanics.0.value_unit": {"source": "extracted", "confidence": 1.0, "evidence": "40%"},
+      "offer.mechanics.0.eligibility": {"source": "extracted", "confidence": 1.0, "evidence": "ให้ทุกคน"},
+      "budget.total_thb": {"source": "extracted", "confidence": 0.95, "evidence": "งบสัก 500,000 บาท"},
+      "channels": {"source": "extracted", "confidence": 1.0, "evidence": "Shopee + LINE"},
+      "timing.event": {"source": "extracted", "confidence": 1.0, "evidence": "11.11"},
+      "timing.start_date": {"source": "extracted", "confidence": 1.0, "evidence": "7 พ.ย. 2026"},
+      "timing.end_date": {"source": "extracted", "confidence": 1.0, "evidence": "4 ธ.ค. 2026"}
+    }
+  },
+  "approved_plan": {
+    "segments_allowed": ["loyal", "deal_hunter", "waiter", "explorer", "indifferent"],
+    "weeks": {"campaign": 4, "post": 2},
+    "scenarios": ["S1", "S2", "S3"],
+    "seeds": 10
+  },
+  "expected_story": "user plan wins in S1 but breaks under S3 undercut; a targeted ~20% loyalty plan stays positive",
+  "source": "default"
+}

@@ -1,11 +1,14 @@
 import json
 from collections import Counter, defaultdict
+from datetime import date
 
 import pandas as pd
 import pytest
 
+from contracts.campaign_spec import CampaignSpec
 from data import loaders
 from data.etl.personas import BEHAVIOR, TRAITS, _survey_traits
+from data.rival import get_rival_scenarios
 
 
 def test_segments_and_personas():
@@ -148,6 +151,37 @@ def test_economics_anchors_and_backtest():
     assert {"lift_pct", "redemption_rate", "incremental_sales"} <= set(backtest["actual"])
     assert backtest["source"] == "data" and backtest["campaign_id"] == "18"
     assert max(backtest["calibration_weeks"]) < backtest["start_week"]
+
+
+def test_demo_brief_validates_and_retrieves_all_reviewed_scenarios():
+    demo = loaders.load_demo_brief()
+    spec = CampaignSpec.model_validate(demo["user_plan_spec"])
+    assert spec.spec_version == "0.1" and spec.status == "ready"
+    assert spec.brand.category == "toilet_tissue" and spec.brand.price_tier == "mid"
+    assert spec.objective.primary == "incremental_profit"
+    assert spec.budget.total_thb == 500_000
+    assert spec.channels == ["shopee", "line"]
+    assert spec.timing.event == "11.11"
+    assert (spec.timing.start_date, spec.timing.end_date) == (date(2026, 11, 7), date(2026, 12, 4))
+    mechanic, = spec.offer.mechanics
+    assert (mechanic.type, mechanic.percentage, mechanic.eligibility) == ("percent_off", 40, "all")
+    assert spec.audience.include_hints == []
+    for path in (
+        "objective.primary", "offer.mechanics.0.value", "budget.total_thb", "channels",
+        "audience.description", "timing.event", "timing.start_date", "timing.end_date",
+    ):
+        meta = spec.field_meta[path]
+        assert meta.source == "extracted" and meta.evidence in demo["brief_text"]
+
+    plan = demo["approved_plan"]
+    assert set(plan["segments_allowed"]) == set(loaders.load_segments()["archetype"])
+    assert plan["weeks"] == {"campaign": 4, "post": 2}
+    assert plan["seeds"] == 10 and plan["scenarios"] == ["S1", "S2", "S3"]
+    rows = get_rival_scenarios(spec)
+    assert len(rows) == 9
+    assert {(row.rival, row.scenario) for row in rows} == {
+        (rival, scenario) for rival in ("764", "595", "69") for scenario in plan["scenarios"]
+    }
 
 
 def test_rival_data_loaders():

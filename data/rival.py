@@ -1,15 +1,9 @@
-"""Retrieve competitors and estimate scenario probabilities from campaign evidence.
-
-Rival `depth` is in percentage points (0-100), the same unit as a discount_pct.
-`get_rival_scenarios` accepts a CampaignSpec v0.1 (or the legacy flat object used by the
-original tests) and, optionally, a Strategy whose offer replaces the brief's offer.
-"""
+"""Retrieve competitors and estimate scenario probabilities from campaign evidence."""
 
 import math
 import re
+from dataclasses import dataclass, replace
 from datetime import date
-from types import SimpleNamespace
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -26,43 +20,56 @@ PRIOR_STRENGTH = 5
 NEIGHBOURS = 10
 
 
-def _legacy_view(spec: Any, strategy: Strategy | None = None) -> Any:
-    """Expose the flat fields this module reads from a nested CampaignSpec v0.1.
+@dataclass(frozen=True)
+class RivalInput:
+    """The few CampaignSpec v0.1 fields that rival retrieval reads, flattened once."""
 
-    Legacy flat objects (with `goal`) pass through unchanged unless a strategy overrides
-    the offer. A strategy replaces discount, mechanic, target segments and channels.
+    discount_pct: float | None
+    mechanic: str
+    start: str | None
+    end: str | None
+    event: str
+    text: str
+    target_segments: list[str]
+    channels: list[str]
+
+
+def spec_inputs(spec: CampaignSpec) -> RivalInput:
+    """Flatten a nested CampaignSpec v0.1 into the inputs rival retrieval needs.
+
+    The discount is the deepest percentage mechanic (percent_off, or any mechanic with
+    value_unit "pct"). Fixed-baht mechanics carry no percentage, so they count as no
+    price discount for rival reactions.
     """
-    if hasattr(spec, "goal"):
-        view = SimpleNamespace(
-            goal=spec.goal,
-            start=spec.start,
-            end=spec.end,
-            mechanic=getattr(spec, "mechanic", None),
-            discount_pct=getattr(spec, "discount_pct", None),
-            channel=list(getattr(spec, "channel", None) or []),
-            target_segments=list(getattr(spec, "target_segments", None) or []),
+    mechanics = spec.offer.mechanics
+    percentages = [m.percentage for m in mechanics if m.percentage is not None]
+    discount = max(percentages) if percentages else None
+    priced = [m for m in mechanics if m.percentage is not None]
+    mechanic = (priced or mechanics)[0].type if mechanics else ""
+    message = spec.offer.message
+    event = spec.timing.event if spec.timing.event not in (None, "none") else ""
+    text = " ".join(
+        part
+        for part in (
+            spec.name,
+            event,
+            mechanic.replace("_", " "),
+            spec.audience.description,
+            message.headline if message else None,
+            message.key_message if message else None,
         )
-    else:
-        first = spec.offer.mechanics[0] if spec.offer.mechanics else None
-        event = spec.timing.event if spec.timing.event not in (None, "none") else None
-        words = [spec.name, event, first.type if first else None, spec.audience.description]
-        view = SimpleNamespace(
-            goal=" ".join(word for word in words if word),
-            start=spec.timing.start_date.isoformat() if spec.timing.start_date else None,
-            end=spec.timing.end_date.isoformat() if spec.timing.end_date else None,
-            mechanic=first.type if first else None,
-            discount_pct=first.percentage if first else None,
-            channel=list(spec.channels),
-            target_segments=list(spec.audience.include_hints),
-        )
-    if strategy is not None:
-        view.discount_pct = 0.0 if strategy.is_baseline else float(strategy.discount_pct)
-        view.mechanic = None if strategy.mechanic == "none" else strategy.mechanic
-        if strategy.target_segments:
-            view.target_segments = list(strategy.target_segments)
-        if strategy.channel_mix:
-            view.channel = list(strategy.channel_mix)
-    return view
+        if part
+    )
+    return RivalInput(
+        discount_pct=discount,
+        mechanic=mechanic,
+        start=spec.timing.start_date.isoformat() if spec.timing.start_date else None,
+        end=spec.timing.end_date.isoformat() if spec.timing.end_date else None,
+        event=event,
+        text=text,
+        target_segments=list(spec.audience.include_hints),
+        channels=list(spec.channels),
+    )
 
 
 def _tags(value: str | list[str]) -> set[str]:
@@ -74,11 +81,11 @@ def _overlap(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left | right) if left or right else 0.0
 
 
-def _competitors(spec: CampaignSpec, brands: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
+def _competitors(spec: RivalInput, brands: pd.DataFrame) -> tuple[pd.Series, pd.DataFrame]:
     ours = brands.loc[brands["is_ours"]].iloc[0]
     tiers = {"low": 0, "mid": 1, "high": 2}
     target = _tags(spec.target_segments or ours.target_segments)
-    channels = _tags(spec.channel or ours.channels)
+    channels = _tags(spec.channels or ours.channels)
     rivals = brands.loc[~brands["is_ours"] & brands["brand"].isin(map(str, MANUFACTURERS))].copy()
     scores = []
     for brand in rivals.itertuples():
@@ -95,11 +102,13 @@ def _competitors(spec: CampaignSpec, brands: pd.DataFrame) -> tuple[pd.Series, p
     return ours, ranked
 
 
-def _season(spec: CampaignSpec, start: pd.Timestamp, end: pd.Timestamp) -> str:
-    match = re.search(r"\b(1[0-2]|[1-9])\.\1\b", spec.goal)
+def _season(spec: RivalInput, start: pd.Timestamp, end: pd.Timestamp) -> str:
+    if spec.event:
+        return spec.event
+    match = re.search(r"\b(1[0-2]|[1-9])\.\1\b", spec.text)
     if match:
         return match.group()
-    if "payday" in spec.goal.casefold():
+    if "payday" in spec.text.casefold():
         return "payday"
     if pd.notna(start) and pd.notna(end):
         for year in range(start.year, end.year + 1):
@@ -116,9 +125,19 @@ def _days(rows: pd.DataFrame) -> pd.Series:
     return days.where(days.gt(0))
 
 
+MECHANIC_ALIASES = {
+    "percent_off": "pct_off",
+    "percentage_discount": "pct_off",
+    "free_shipping": "free_ship",
+    "coins_cashback": "cashback",
+}
+
+
 def _mechanic(name: str) -> str:
-    name = name.strip().casefold()
-    return "voucher" if "voucher" in name else name
+    name = str(name).strip().casefold()
+    if "voucher" in name:
+        return "voucher"
+    return MECHANIC_ALIASES.get(name, name)
 
 
 def _text_scores(goal: str, descriptions: pd.Series) -> np.ndarray:
@@ -129,7 +148,7 @@ def _text_scores(goal: str, descriptions: pd.Series) -> np.ndarray:
     return (matrix @ vectorizer.transform([goal]).T).toarray().ravel()
 
 
-def _evidence(spec: CampaignSpec, category: str, library: pd.DataFrame, rival: str) -> pd.DataFrame:
+def _evidence(spec: RivalInput, category: str, library: pd.DataFrame, rival: str) -> pd.DataFrame:
     # Use this rival's campaigns when available. Otherwise use the shared analogues.
     specific = library["brand"].eq(rival)
     outcomes = library.loc[specific].copy() if specific.any() else library.copy()
@@ -155,7 +174,7 @@ def _evidence(spec: CampaignSpec, category: str, library: pd.DataFrame, rival: s
         + triggers["category"].str.casefold().eq(category.casefold())
     )
     outcomes["fixed_score"] = 0.1 * feature_sum + 0.5 * _text_scores(
-        spec.goal, triggers["description"]
+        spec.text, triggers["description"]
     )
     # The hand-edited campaign library stores fractions. All rival depths use percent.
     outcomes["trigger_depth"] = 100 * pd.to_numeric(triggers["discount_depth"], errors="coerce")
@@ -225,11 +244,26 @@ def _interval(alpha: np.ndarray, index: int) -> tuple[float, float]:
     return float(low), float(high)
 
 
+def strategy_inputs(spec: CampaignSpec, strategy: Strategy) -> RivalInput:
+    """The brief's inputs with one strategy's offer, so each plan gets its own S1-S3.
+
+    The baseline (or any zero discount) yields no price discount, so every rival is `none`.
+    """
+    base = spec_inputs(spec)
+    return replace(
+        base,
+        discount_pct=None if strategy.is_baseline else float(strategy.discount_pct),
+        mechanic="" if strategy.mechanic == "none" else strategy.mechanic,
+        target_segments=list(strategy.target_segments) or base.target_segments,
+        channels=list(strategy.channel_mix) or base.channels,
+    )
+
+
 def get_rival_scenarios(
     spec: CampaignSpec, strategy: Strategy | None = None
 ) -> list[RivalScenario]:
     """S1-S3 per top rival. Pass a strategy to price the rival response to that plan."""
-    spec = _legacy_view(spec, strategy)
+    spec = spec_inputs(spec) if strategy is None else strategy_inputs(spec, strategy)
     ours, rivals = _competitors(spec, load_brands())
     prior = load_rival_prior()
     library = load_library()
