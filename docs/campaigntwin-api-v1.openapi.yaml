@@ -358,6 +358,43 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '422': {$ref: '#/components/responses/InvalidRequest'}
 
+  /api/v1/runs/{run_id}/input:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Runs]
+      operationId: getRunInput
+      summary: Inspect the exact approved revision supplied to the evaluator
+      responses:
+        '200':
+          description: Frozen evaluator arguments, including resolved context and field origins.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RunInput'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/runs/{run_id}/evaluation:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Runs]
+      operationId: getBusinessEvaluation
+      summary: Compare simulated plans and inspect the submitted plan's decision checks
+      responses:
+        '200':
+          description: Paired model outcomes and decision evidence from the stored run.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BusinessEvaluation'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: The run has no completed report.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
   /api/v1/runs/{run_id}/report:
     parameters:
       - $ref: '#/components/parameters/RunId'
@@ -396,6 +433,31 @@ paths:
                   value: {code: report_pending, message: The run has no completed report yet.}
                 failed:
                   value: {code: run_failed, message: This run ended before publishing a report.}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/runs/{run_id}/historical-comparison:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      operationId: getHistoricalComparison
+      summary: Read historical evidence associated with a completed rehearsal
+      description: |
+        Join by run, approval and revision. Return the evidence snapshot pinned for this run.
+        For older runs without a pinned reference, return unavailable, reason snapshot_missing.
+        For a newly completed run, an unavailable source or prediction is an evidence outcome
+        (HTTP 200). A failed run has no published report (409).
+      responses:
+        '200':
+          description: Historical observation and, when supported, its held-out evaluation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HistoricalComparison'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Report pending or run failed, using existing v1 error codes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
         '422': {$ref: '#/components/responses/InvalidRequest'}
 
 components:
@@ -470,6 +532,90 @@ components:
               - {field: /fields/offer/unit, message: Supply the unit for this discount.}
 
   schemas:
+    HistoricalCase:
+      type: object
+      additionalProperties: false
+      required: [campaign_id, dataset, evidence_version, source, category, matched_on, limitations,
+        fit_through_week, baseline_weeks, campaign_weeks, metric, unit, observed_range]
+      properties:
+        campaign_id: {type: string, minLength: 1}
+        dataset: {const: complete_journey}
+        evidence_version: {type: string, description: SHA-256 of the canonical loader-returned case JSON, pattern: '^[0-9a-f]{64}$'}
+        source: {const: data}
+        category: {const: toilet_tissue}
+        matched_on: {type: array, minItems: 1, uniqueItems: true, items: {enum: [category, offer_mechanic]}}
+        limitations: {type: array, minItems: 1, items: {type: string, minLength: 1}}
+        fit_through_week: {type: integer, minimum: 1}
+        baseline_weeks: {$ref: '#/components/schemas/WeekWindow'}
+        campaign_weeks: {$ref: '#/components/schemas/WeekWindow'}
+        metric: {const: control_adjusted_category_sales_lift}
+        unit: {const: percentage_points}
+        observed_range:
+          type: object
+          additionalProperties: false
+          required: [low, high, basis]
+          properties:
+            low: {type: number}
+            high: {type: number}
+            basis: {const: mean_and_median_control_adjustment}
+    WeekWindow:
+      type: object
+      additionalProperties: false
+      required: [first, last]
+      description: Inclusive retail week indices from the historical dataset.
+      properties:
+        first: {type: integer, minimum: 1}
+        last: {type: integer, minimum: 1}
+    HistoricalPrediction:
+      description: |
+        Optional future engine-to-adapter evidence. The producer must rehearse the named historical
+        campaign and calculate the same control-adjusted category-sales measure. Protocol v1 binds
+        the metric, aggregate population, baseline and control definitions used by load_backtest.
+        artifact_id identifies an immutable prediction with an auditable fit cutoff.
+      type: object
+      additionalProperties: false
+      required: [artifact_id, campaign_id, evidence_version, protocol, fit_through_week, baseline_weeks,
+        campaign_weeks, metric, unit, value]
+      properties:
+        artifact_id: {type: string, minLength: 1}
+        campaign_id: {type: string, minLength: 1}
+        evidence_version: {type: string, pattern: '^[0-9a-f]{64}$'}
+        protocol: {const: complete_journey_tissue_holdout_v1}
+        fit_through_week: {type: integer, minimum: 1}
+        baseline_weeks: {$ref: '#/components/schemas/WeekWindow'}
+        campaign_weeks: {$ref: '#/components/schemas/WeekWindow'}
+        metric: {const: control_adjusted_category_sales_lift}
+        unit: {const: percentage_points}
+        value: {type: number}
+    HistoricalComparison:
+      type: object
+      additionalProperties: false
+      required: [run_id, approval_id, revision, reference, prediction, status, reason]
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        reference: {oneOf: [{$ref: '#/components/schemas/HistoricalCase'}, {type: 'null'}]}
+        prediction: {oneOf: [{$ref: '#/components/schemas/HistoricalPrediction'}, {type: 'null'}]}
+        status: {enum: [unavailable, reference_only, inside_range, outside_range]}
+        reason: {enum: [snapshot_missing, source_unavailable, no_comparable_case, prediction_missing,
+            incompatible_prediction, null]}
+      oneOf:
+        - properties:
+            status: {const: unavailable}
+            reason: {enum: [snapshot_missing, source_unavailable, no_comparable_case]}
+            reference: {type: 'null'}
+            prediction: {type: 'null'}
+        - properties:
+            status: {const: reference_only}
+            reason: {enum: [prediction_missing, incompatible_prediction]}
+            reference: {type: object}
+            prediction: {type: 'null'}
+        - properties:
+            status: {enum: [inside_range, outside_range]}
+            reason: {type: 'null'}
+            reference: {type: object}
+            prediction: {type: object}
     Uuid:
       type: string
       format: uuid
@@ -1163,6 +1309,60 @@ components:
           type: array
           items: {type: integer}
         contingency_rules: {type: array, maxItems: 0}
+    RunInput:
+      type: object
+      additionalProperties: false
+      required: [run_id, approval_id, review]
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        review: {$ref: '#/components/schemas/Review'}
+    BusinessEvaluation:
+      type: object
+      additionalProperties: false
+      required: [run_id, approval_id, review_id, revision, evaluation_policy, comparator,
+        measurement_window, decision, checks, comparisons, checks_unavailable_reason]
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        review_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        evaluation_policy: {type: string}
+        comparator: {const: paired_no_campaign}
+        measurement_window: {$ref: '#/components/schemas/DateWindow'}
+        decision: {$ref: '#/components/schemas/Decision'}
+        checks_unavailable_reason: {type: [string, 'null']}
+        comparisons:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [role, plan_id, discount_pct, scenario_results]
+            properties:
+              role: {enum: [original, conservative, baseline]}
+              plan_id: {type: [string, 'null']}
+              discount_pct: {type: [number, 'null']}
+              scenario_results:
+                type: array
+                items: {$ref: '#/components/schemas/ScenarioResult'}
+        checks:
+          type: array
+          description: Original-plan gates. An unavailable leakage metric prevents a decision.
+          items:
+            type: object
+            additionalProperties: false
+            required: [scenario, metric, statistic, unit, observed, condition, threshold,
+              status, unavailable_reason]
+            properties:
+              scenario: {$ref: '#/components/schemas/ScenarioId'}
+              metric: {enum: [incremental_profit, probability_loss, subsidy_leakage]}
+              statistic: {enum: [p50, value]}
+              unit: {enum: [THB, fraction]}
+              observed: {type: [number, 'null']}
+              condition: {enum: [available, at_least, at_most]}
+              threshold: {type: [number, 'null']}
+              status: {enum: [pass, fail, unavailable]}
+              unavailable_reason: {type: [string, 'null']}
     RunReport:
       type: object
       additionalProperties: false

@@ -5,6 +5,7 @@ import json
 from datetime import date, timedelta
 from decimal import Decimal
 
+from data.etl.config import CATEGORY, MIN_SEGMENT_HOUSEHOLDS
 from data.loaders import load_market
 from engine.synthetic import POLICY
 
@@ -36,6 +37,36 @@ def assumed_cost(value, unit):
     }
 
 
+def released_segments():
+    """Expose only aggregate rows the current evaluator can consume."""
+    segments = []
+    seen = set()
+    try:
+        for row in load_market()["segments"]:
+            count = row["households"]
+            if type(count) is not int or count < 0:
+                return []
+            if count < MIN_SEGMENT_HOUSEHOLDS:
+                continue
+            name = row["name"]
+            share = row["share"]
+            rate = row["weekly_buy_rate"]
+            if (not isinstance(name, str) or not name.strip() or name in seen
+                    or type(share) not in (int, float) or not 0 <= share <= 1
+                    or type(rate) not in (int, float) or not 0 <= rate <= 1):
+                return []
+            seen.add(name)
+            segments.append({
+                "segment_id": name, "name": name, "households": count,
+                "share": float(share), "weekly_purchase_probability": float(rate), "source": "data",
+            })
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    if sum(segment["households"] for segment in segments) > 100_000:
+        return []
+    return segments
+
+
 def resolve(facts):
     blockers = []
 
@@ -60,17 +91,7 @@ def resolve(facts):
                 block("unsupported_choice", "/facts/" + field,
                       f"The synthetic example supports {', '.join(sorted(supported))}.")
 
-    segments = []
-    try:
-        for row in load_market()["segments"]:
-            if row["households"] >= 50:
-                segments.append({
-                    "segment_id": str(row["name"]), "name": str(row["name"]),
-                    "households": int(row["households"]), "share": float(row["share"]),
-                    "weekly_purchase_probability": float(row["weekly_buy_rate"]), "source": "data",
-                })
-    except (OSError, ValueError):
-        segments.clear()
+    segments = released_segments()
     if not segments:
         block("evaluation_unsupported", "/segments", "Released aggregate segments unavailable.")
     fingerprint = hashlib.sha256(json.dumps(segments, sort_keys=True).encode()).hexdigest()
@@ -113,7 +134,7 @@ def resolve(facts):
             block("evaluation_unsupported", "/facts/end_date",
                   "Select 1 to 42 campaign days with room for 14 post-campaign days.")
     return {
-        "category": "toilet_tissue" if demo else None, "supported_product_choices": [PRODUCT],
+        "category": CATEGORY if demo else None, "supported_product_choices": [PRODUCT],
         "resolved_product": PRODUCT if demo else None, "resolved_offer": resolved_offer,
         "data_versions": {"catalog": POLICY if demo else None, "market": POLICY if demo else None,
                           "segments": fingerprint if segments else None,
