@@ -119,13 +119,13 @@ def _history(spec: CampaignSpec, rival: str, library: pd.DataFrame) -> list[dict
     return sorted(records, key=lambda row: str(row["campaign_id"]))
 
 
-def _s3(rival: RivalScenario, policies: list[dict], prior: dict) -> dict:
+def _s3(rival: RivalScenario, policies: list[dict], prior: dict, prior_depth: float) -> dict:
     candidates = [row for row in policies if row["scenario"] == "S3"]
     if candidates:
         return sorted(candidates, key=lambda row: (-float(row["depth"]), row["reaction"]))[0]
     return {
         "reaction": "undercut",
-        "depth": prior["depth_p90"],
+        "depth": prior_depth,
         "delay_weeks": prior["delay_weeks_min"],
         "duration_weeks": prior["duration_weeks"],
         "rival": rival.rival,
@@ -152,6 +152,8 @@ def red_team(
     policies.sort(key=lambda row: (row["scenario"], str(row.get("evidence_ids", []))))
     library = load_library()
     prior = load_rival_prior()
+    # Rival priors use percentage points; S4's fallback and cap use fractions.
+    prior_depth = float(prior["depth_p90"]) / 100
     history = _history(spec, rival.rival, library)
     depths = [
         value
@@ -159,7 +161,7 @@ def red_team(
         if (value := _number(row.get("discount_depth"))) is not None and 0 <= value <= 1
     ]
     bound_source = "library" if depths else "prior"
-    observed_max = max(depths) if depths else max(0.0, min(1.0, float(prior["depth_p90"])))
+    observed_max = max(depths) if depths else max(0.0, min(1.0, prior_depth))
     depth_bound = min(1.0, observed_max * 1.1, _margin_cap(history + policies))
     valid_ids = {
         str(row["campaign_id"])
@@ -173,7 +175,7 @@ def red_team(
         if history and all(row.get("confidence") in {"high", "med", "low"} for row in history)
         else "default"
     )
-    fallback = _s3(rival, policies, prior)
+    fallback = _s3(rival, policies, prior, prior_depth)
     selected = []
     seen = set()
     for strategy in strategies:

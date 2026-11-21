@@ -149,8 +149,8 @@ def test_empty_library_uses_prior_bound_and_no_llm(
     prior = loaders.load_rival_prior()
     for row in first:
         assert row.label == "default" and row.bound_source == "prior"
-        assert row.depth == prior["depth_p90"]
-        assert row.depth_bound == pytest.approx(prior["depth_p90"] * 1.1)
+        assert row.depth == pytest.approx(prior["depth_p90"] / 100)
+        assert row.depth_bound == pytest.approx(min(1.0, prior["depth_p90"] / 100 * 1.1))
         assert row.delay_weeks == prior["delay_weeks_min"]
         assert row.duration_weeks == prior["duration_weeks"]
         assert row.evidence_ids == []
