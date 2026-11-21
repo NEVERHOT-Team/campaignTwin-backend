@@ -148,11 +148,10 @@ def _text_scores(goal: str, descriptions: pd.Series) -> np.ndarray:
     return (matrix @ vectorizer.transform([goal]).T).toarray().ravel()
 
 
-def _evidence(spec: RivalInput, category: str, library: pd.DataFrame, rival: str) -> pd.DataFrame:
-    # Use this rival's campaigns when available. Otherwise use the shared analogues.
-    specific = library["brand"].eq(rival)
-    outcomes = library.loc[specific].copy() if specific.any() else library.copy()
-    outcomes = outcomes.sort_values("campaign_id").reset_index(drop=True)
+def _campaign_features(
+    spec: RivalInput, category: str, library: pd.DataFrame, candidates: pd.DataFrame
+) -> pd.DataFrame:
+    outcomes = candidates.sort_values("campaign_id").reset_index(drop=True)
     if outcomes.empty:
         return outcomes
     by_id = library.set_index("campaign_id")
@@ -183,6 +182,15 @@ def _evidence(spec: RivalInput, category: str, library: pd.DataFrame, rival: str
     return outcomes
 
 
+def _discount_level(percent: float) -> int:
+    return max(1, int(np.floor(np.clip(percent, 0, 100) + 0.5)))
+
+
+def _similarity(fixed: np.ndarray, depth: np.ndarray, percent: float) -> np.ndarray:
+    depth_sim = np.where(np.isfinite(depth), np.maximum(0, 1 - np.abs(percent - depth) / 100), 0)
+    return fixed + 0.1 * depth_sim
+
+
 def _posterior(
     evidence: pd.DataFrame, percent: float, prior: dict
 ) -> tuple[np.ndarray, pd.DataFrame, list[str]]:
@@ -194,12 +202,11 @@ def _posterior(
     labels = evidence["reaction_type"].to_numpy()
     # Evaluate the same neighbours and prior on a percentage-point grid. A shallower
     # offer supplies a lower bound on undercut risk when sparse analogues reverse it.
-    level = max(1, int(np.floor(np.clip(percent, 0, 100) + 0.5)))
+    level = _discount_level(percent)
     peak_risk = -1.0
     peak_rows = []
     for point in range(1, level + 1):
-        depth_sim = np.where(np.isfinite(depth), np.maximum(0, 1 - np.abs(point - depth) / 100), 0)
-        sim = fixed + 0.1 * depth_sim
+        sim = _similarity(fixed, depth, point)
         nearest = np.argsort(-sim, kind="stable")[:NEIGHBOURS]
         known = nearest[(labels[nearest] != "") & (sim[nearest] > 0)]
         counts = np.array([sim[known][labels[known] == label].sum() for label in REACTIONS])
@@ -259,6 +266,33 @@ def strategy_inputs(spec: CampaignSpec, strategy: Strategy) -> RivalInput:
     )
 
 
+def similar_campaigns(
+    spec: CampaignSpec, strategy: Strategy | None = None, k: int = 5
+) -> list[dict]:
+    """Return up to k sourced campaigns for Competitive Outlook, with discounts in percent."""
+    if k <= 0:
+        return []
+    library = load_library()
+    if library.empty:
+        return []
+    inputs = spec_inputs(spec) if strategy is None else strategy_inputs(spec, strategy)
+    campaigns = _campaign_features(inputs, spec.brand.category or "", library, library)
+    percent = _discount_level(inputs.discount_pct) if inputs.discount_pct else 0
+    campaigns["similarity"] = _similarity(
+        campaigns["fixed_score"].to_numpy(), campaigns["trigger_depth"].to_numpy(), percent
+    )
+    campaigns["discount_depth"] = campaigns["response_depth"]
+    sourced = campaigns["source_url"].fillna("").str.strip().ne("")
+    ranked = campaigns.loc[sourced & campaigns["discount_depth"].between(0, 100)]
+    if ranked.empty:
+        return []
+    columns = [
+        "campaign_id", "brand", "brand_name", "platform", "mechanic", "discount_depth",
+        "description", "source_url", "confidence", "similarity",
+    ]
+    return ranked.nlargest(k, "similarity")[columns].to_dict("records")
+
+
 def get_rival_scenarios(
     spec: CampaignSpec, strategy: Strategy | None = None
 ) -> list[RivalScenario]:
@@ -287,7 +321,9 @@ def get_rival_scenarios(
                 for scenario in ("S1", "S2", "S3")
             )
             continue
-        evidence = _evidence(spec, ours.category, library, rival.brand)
+        specific = library["brand"].eq(rival.brand)
+        candidates = library.loc[specific] if specific.any() else library
+        evidence = _campaign_features(spec, ours.category, library, candidates)
         alpha, neighbours, ids = _posterior(evidence, spec.discount_pct, prior)
         modal_active_index = 1 + int(alpha[1:].argmax())
         for scenario, index in (("S1", 0), ("S2", modal_active_index), ("S3", UNDERCUT)):

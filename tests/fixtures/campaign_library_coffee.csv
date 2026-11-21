@@ -1,0 +1,9 @@
+campaign_id,brand,platform,category,price_tier,start_date,end_date,season,mechanic,discount_depth,voucher_type,min_spend,target_segment,channel_mix,reaction_to_campaign_id,reaction_type,reaction_delay_days,reported_outcome,description,source_url,confidence
+c01,Morning Vale,Shopee,instant_coffee,mid,2025-11-07,2025-11-13,11.11,voucher,0.4,seller,299,deal_hunter,"{""Shopee"": 1.0}",,none,,,Fictional 11.11 voucher example.,,default
+c02,Daily Peak,Shopee,instant_coffee,mid,2025-11-10,2025-11-13,11.11,voucher,0.44,seller,299,deal_hunter,"{""Shopee"": 1.0}",c01,undercut,3,,Fictional 11.11 voucher example.,,default
+c03,Brew Lane,Shopee,instant_coffee,mid,2025-11-11,2025-11-13,11.11,bundle,0.25,,0,deal_hunter,"{""Shopee"": 1.0}",c01,non_price,4,,Fictional 11.11 bundle example.,,default
+c04,Morning Vale,Shopee,instant_coffee,mid,2025-12-08,2025-12-13,12.12,voucher,0.25,seller,299,deal_hunter,"{""Shopee"": 1.0}",,none,,,Fictional 12.12 voucher example.,,default
+c05,Daily Peak,Shopee,instant_coffee,mid,2025-12-10,2025-12-13,12.12,voucher,0.25,seller,299,deal_hunter,"{""Shopee"": 1.0}",c04,match,2,,Fictional 12.12 voucher example.,,default
+c06,Brew Lane,Shopee,instant_coffee,mid,2026-09-07,2026-09-10,9.9,free_shipping,0.08,,0,deal_hunter,"{""Shopee"": 1.0}",,none,,,Fictional 9.9 free shipping example.,,default
+c07,Morning Vale,Shopee,instant_coffee,mid,2026-10-06,2026-10-12,10.10,voucher,0.3,seller,299,deal_hunter,"{""Shopee"": 1.0}",,none,,,Fictional 10.10 voucher example.,,default
+c08,Brew Lane,Shopee,instant_coffee,mid,2026-10-09,2026-10-12,10.10,voucher,0.3,seller,299,deal_hunter,"{""Shopee"": 1.0}",c07,match,3,,Fictional 10.10 voucher example.,,default

@@ -132,12 +132,25 @@ def test_competitor_score_ranks_all_configured_rivals_even_below_threshold(spec)
     assert selected.iloc[0].score == pytest.approx(0.35 + 0.125 + 0.10 + 0.075 + 0.05)
 
 
-def test_deeper_discount_does_not_lower_undercut(spec):
+def test_deeper_discount_does_not_lower_undercut(monkeypatch):
+    library = pd.DataFrame(
+        [
+            ("shallow-match", 0.10, "match"),
+            ("deep-undercut", 0.40, "undercut"),
+        ],
+        columns=["campaign_id", "discount_depth", "reaction_type"],
+    ).assign(
+        brand="764", category="toilet_tissue", description="", mechanic="voucher", season="",
+        start_date="", end_date="", reaction_to_campaign_id="", reaction_delay_days=7,
+    )
+    monkeypatch.setattr(rival, "load_library", lambda: library)
     previous = {}
     for discount in [1, 8, 12, 20, 25.5, 30, 40, 44, 50, 75, 100]:
         rows = rival.get_rival_scenarios(make_spec(discount_pct=discount))
         current = {row.rival: row.likelihood for row in rows if row.scenario == "S3"}
         assert all(risk >= previous.get(brand, 0) - 1e-12 for brand, risk in current.items())
+        if discount == 40:
+            assert current["764"] > previous["764"]
         previous = current
 
 
@@ -194,6 +207,56 @@ def test_all_unknown_reactions_use_category_prior(spec, monkeypatch):
         if row.scenario == "S3":
             assert row.depth == pytest.approx(min(prior["depth_p90"], flat(spec).discount_pct + 10))
             assert row.delay_weeks == prior["delay_weeks_min"]
+
+
+def test_similar_campaigns_return_sourced_display_rows_without_changing_scenarios(spec):
+    library = rival.load_library().set_index("campaign_id")
+    scenarios = rival.get_rival_scenarios(spec)
+    rows = rival.similar_campaigns(spec)
+    assert len(rows) == 5
+    assert rival.similar_campaigns(spec, k=2) == rows[:2]
+    assert rival.similar_campaigns(spec, k=0) == []
+    scores = [row["similarity"] for row in rows]
+    assert scores == sorted(scores, reverse=True)
+    fields = {
+        "brand", "brand_name", "platform", "mechanic", "description", "source_url", "confidence"
+    }
+    for row in rows:
+        original = library.loc[row["campaign_id"]]
+        assert set(row) == fields | {"campaign_id", "similarity", "discount_depth"}
+        assert all(row[key] == original[key] for key in fields)
+        assert row["source_url"].strip()
+        assert row["discount_depth"] == pytest.approx(100 * original["discount_depth"])
+    assert rival.get_rival_scenarios(spec) == scenarios
+    assert all(row.evidence_ids == [] for row in scenarios)
+
+
+def test_similar_campaigns_score_linked_triggers_and_apply_strategy(spec, monkeypatch):
+    template = rival.load_library().iloc[0].to_dict()
+    trigger = {
+        **template,
+        "campaign_id": "launch", "mechanic": "voucher", "discount_depth": 0.20,
+        "description": flat(spec).text, "source_url": "  ", "reaction_to_campaign_id": "",
+        "start_date": flat(spec).start, "end_date": flat(spec).end, "season": "11.11",
+    }
+    response = {
+        **template,
+        "campaign_id": "response", "reaction_to_campaign_id": "launch", "mechanic": "bundle",
+        "discount_depth": 0.05, "description": "Response bundle", "source_url": "https://a.test/r",
+    }
+    alternative = {
+        **trigger,
+        "campaign_id": "sale", "mechanic": "pct_off", "discount_depth": 0.45,
+        "source_url": "https://a.test/s",
+    }
+    library = pd.DataFrame([trigger, response, alternative])
+    monkeypatch.setattr(rival, "load_library", lambda: library)
+    first, second = rival.similar_campaigns(spec, k=5)
+    assert (first["campaign_id"], second["campaign_id"]) == ("response", "sale")
+    assert first["similarity"] == pytest.approx(1)
+    assert first["discount_depth"] == 5 and first["description"] == "Response bundle"
+    ranked = rival.similar_campaigns(spec, strategy=_strategy(45), k=1)
+    assert [row["campaign_id"] for row in ranked] == ["sale"]
 
 
 def test_reaction_onsets_require_washout_and_positive_lag():

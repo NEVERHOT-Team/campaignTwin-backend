@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,6 +10,14 @@ from agents import llm, rival_policy
 from contracts.models import ContextPack, RivalScenario, Strategy
 from data import loaders
 from mocks import load_mock
+
+
+@pytest.fixture(autouse=True)
+def coffee_library(monkeypatch):
+    path = Path(__file__).resolve().parents[1] / "fixtures" / "campaign_library_coffee.csv"
+    library = pd.read_csv(path, keep_default_na=False, dtype={"season": str})
+    monkeypatch.setattr(rival_policy, "load_library", lambda: library)
+    return library
 
 
 @pytest.fixture
@@ -83,13 +92,14 @@ def test_fixture_s1_s3_probability_intervals_remain_valid(rivals):
         assert 0 <= row.ci_low <= row.likelihood <= row.ci_high <= 1
 
 
-def test_s4_shortlist_depth_evidence_and_unweighted_outputs(spec, strategies, rivals, offline_llm):
+def test_s4_shortlist_depth_evidence_and_unweighted_outputs(
+    spec, strategies, rivals, offline_llm, coffee_library
+):
     before = [row.model_dump() for row in rivals]
     rows = rival_policy.red_team(spec, strategies, rivals)
     assert len(rows) == 3
     assert [row.strategy_id for row in rows] == ["plan-a", "plan-b", "plan-c"]
-    library = loaders.load_library()
-    top_history = library[library["brand"] == "Daily Peak"]
+    top_history = coffee_library[coffee_library["brand"] == "Daily Peak"]
     cap = top_history["discount_depth"].max() * 100 * 1.1  # library fraction -> percent
     for row in rows:
         assert isinstance(row, RivalScenario)
@@ -126,10 +136,8 @@ def test_bad_evidence_ids_are_dropped(spec, strategies, rivals):
         ("max_discount_depth", 0.2),  # explicit ceiling as a fraction
     ],
 )
-def test_known_rival_margin_cap_is_enforced(spec, strategies, rivals, monkeypatch, field, value):
-    library = loaders.load_library().copy()
-    library[field] = value
-    monkeypatch.setattr(rival_policy, "load_library", lambda: library)
+def test_known_rival_margin_cap_is_enforced(spec, strategies, rivals, coffee_library, field, value):
+    coffee_library[field] = value
     result = rival_policy.red_team(spec, strategies[:2], rivals)[0]
     assert result.depth == result.depth_bound == pytest.approx(20)
 
