@@ -1,5 +1,4 @@
-"""Load synthetic engine fixtures and isolated public-source ETL data."""
-"""Read local source tables and validate the engine inputs."""
+"""Load registered public sources, local calibration data and validated engine inputs."""
 
 import json
 from functools import lru_cache
@@ -11,9 +10,8 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+from data.etl.config import BACKTEST_START_WEEK, CATEGORY, PRODUCT_PATH
 from data.sources import ASSETS, CJ_TABLES
-
-from data.etl.config import CATEGORY
 
 DATA_DIR = Path(__file__).resolve().parent
 PROCESSED = DATA_DIR / "processed"
@@ -46,6 +44,14 @@ def load_raw_table(
         raise FileNotFoundError(
             f"{path} is missing. Run python -m data.etl.download_raw first."
         ) from error
+
+
+def load_category_products() -> pd.DataFrame:
+    fields = ("department", "product_category", "product_type")
+    return load_raw_table(
+        "products",
+        filters=[(field, "==", value) for field, value in zip(fields, PRODUCT_PATH, strict=True)],
+    )
 
 
 def load_twin_responses(columns: list[str]) -> pd.DataFrame | None:
@@ -174,6 +180,10 @@ def load_household_behavior() -> pd.DataFrame:
         "discount_pct coupon_used in_mailer on_display brand",
         path.name,
     )
+    if panel["week"].ge(BACKTEST_START_WEEK).any():
+        raise ValueError(
+            f"{path.name} contains post-cutoff weeks. Run python -m data.etl.build_tissue."
+        )
     return panel
 
 
@@ -245,10 +255,20 @@ def load_rival_prior() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def load_anchors() -> dict[str, list[list[str]]]:
+def load_anchors() -> dict[str, list[dict[str, Any]]]:
     filename = "ssr_anchors.json"
     record = _read_json(filename)
-    _require_keys(record, "th en", filename)
+    _require_keys(record, "sets test_responses", filename)
+    for group in record["sets"]:
+        _require_keys(group, "lang anchors", filename)
+        if len(group["anchors"]) != 5 or not all(
+            isinstance(a, str) and a.strip() for a in group["anchors"]
+        ):
+            raise ValueError(f"{filename} requires five nonempty anchors per set")
+    for response in record["test_responses"]:
+        _require_keys(response, "text expected", filename)
+        if type(response["expected"]) is not int or not 1 <= response["expected"] <= 5:
+            raise ValueError(f"{filename} expected scores must be integers from 1 to 5")
     return record
 
 

@@ -18,7 +18,7 @@ from data.etl.config import (
     ROLE_PRICE_TIERS,
     SEED,
 )
-from data.loaders import PROCESSED, load_raw_table
+from data.loaders import PROCESSED, load_category_products, load_raw_table
 
 BRANDS = (751, 764, 595, 69, 1011, 1315)
 DEFAULT_PROBABILITY = {"none": 0.45, "match": 0.30, "undercut": 0.15, "non_price": 0.10}
@@ -111,18 +111,13 @@ def brand_catalog(
 
 def weekly_signals(lines: pd.DataFrame, weeks: pd.Index) -> pd.DataFrame:
     keys = ["brand", "week"]
-    products = load_raw_table("products")
-    criteria = (
-        products["department"].eq(PRODUCT_PATH[0])
-        & products["product_category"].eq(PRODUCT_PATH[1])
-        & products["product_type"].eq(PRODUCT_PATH[2])
-        & products["manufacturer_id"].isin(BRANDS)
-    )
+    products = load_category_products()
+    criteria = products["manufacturer_id"].isin(BRANDS)
     catalog = products.loc[criteria].set_index("product_id")["manufacturer_id"]
     promo = load_raw_table(
         "promotions",
         columns=["product_id", "week", "mailer_location", "display_location"],
-        filters=[("product_id", "in", catalog.index.tolist())],
+        filters=[("product_id", "in", catalog.index.tolist()), ("week", "in", weeks.tolist())],
     )
     promo["brand"] = promo["product_id"].map(catalog)
     featured = promo[["mailer_location", "display_location"]].fillna("0").ne("0").any(axis=1)

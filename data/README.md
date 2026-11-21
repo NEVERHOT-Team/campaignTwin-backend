@@ -13,7 +13,7 @@ are short templates with `llm_estimate` as a placeholder for Big's later integra
 
 ## Selected category
 
-The catalogue path is `GROCERY / BATH TISSUES / TOILET TISSUE`. The shortlist
+The catalogue path is `GROCERY / BATH TISSUES / TOILET TISSUE`. The original full-panel shortlist
 found 1,514 buying households, 28 redemptions matched to same-day eligible
 coupon purchases, a median repeat interval of 4 weeks, and 74.0% of retailer
 sales on lines with a retail or coupon discount. Six manufacturers each
@@ -45,7 +45,7 @@ python -m data.etl.build_rival_prior
 ```
 
 The builder regenerates `personas.json`, `market.json`, `knob_ranges.json`,
-`segments.parquet`, and `unit_economics.json` under `data/processed/`. Use
+`segments.parquet`, `unit_economics.json`, and `backtest_campaign.json` under `data/processed/`. Use
 `data/etl/config.py` to set the USD-to-THB rate and the shipping, cost, margin,
 and marketplace fee assumptions. The current reference price is the median
 regular shelf price per purchased unit for manufacturer 751, converted at the
@@ -58,7 +58,7 @@ Shares, probabilities, and trait values use fractions.
 
 The 60 personas represent five fixed-seed KMeans archetypes derived from
 recency, purchase-week frequency, spend, coupon usage, and promo share. The
-observed joint age–income distribution comes from the 646 buying households
+observed joint age–income distribution comes from the 621 pre-campaign buying households
 with demographic coverage. Each cell with at least 2% share appears, and each
 archetype has at least ten profiles. Behavior profiles resample averages from
 groups of households. Six `tt-edge-` profiles use the empirical tails of their
@@ -87,6 +87,48 @@ preference for a sure payout (QID250). These are proxies for the three
 traits. The checked-in personas use archetype defaults.
 [Twin-2K-500 question catalog and numeric CSV](https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/tree/main/question_catalog_and_human_response_csv)
 
+## Historical backtest
+
+Complete Journey campaign 18 (Type A) ran from October 30 through December 24,
+2017, covering retail weeks 45–52. Two of its coupon UPCs included ten
+toilet-tissue products. We selected it for its eligible coupons and two
+complete eight-week comparison windows. All model fitting uses weeks 1–44.
+The cutoff applies before computing visits, clustering, elasticity, personas,
+price and discount summaries, and rival priors. The local calibration panel
+contains 1,417 households and 62,348 household-weeks. Rebuild it with
+`python -m data.etl.build_tissue` when upgrading an existing checkout.
+
+| Category measure | Baseline, weeks 37–44 | Campaign, weeks 45–52 | Change |
+|---|---:|---:|---:|
+| Retailer sales across all households (USD) | 5,221.50 | 5,669.07 | +447.57 (+8.57%) |
+| Matched category coupon redemptions across campaigns | 2 | 8 | +6 (+300%) |
+
+`actual.lift_pct` compares the total category `sales_value` including returns
+across the two periods. `actual.incremental_sales` expresses the difference
+as THB 15,709.71 at the configured default exchange rate of 35.1. Campaign
+assignment was observational. Seasonality and concurrent promotions can
+contribute to these measured changes.
+
+Each redemption must match a coupon-discounted purchase by the same household
+on the same recorded date for a product eligible under that campaign and UPC.
+Multiple eligible lines count as one redemption event. `treated_households`
+is the number of assigned households (1,133). `actual.redemption_rate` is the
+share of those households with a matched campaign-18 tissue redemption
+(8/1,133, or 0.71%). Individual coupon receipt is unobserved.
+`discount_depth` is the median realized shelf-to-paid discount on the matched
+campaign lines, expressed as a fraction (0.222469). `target_segments` is empty
+because the assignments do not record a design-archetype targeting rule.
+`calibration_weeks` lists the entire fit period. `source` is `data` for the
+observations from the packaged simulated panel.
+
+## Purchase-intent anchors
+
+`load_anchors()` returns two Thai sets and one English set about buying toilet
+tissue. Each set has five strings in ascending order of purchase intent, from
+1 (definitely skip) to 5 (definitely buy). The ten labeled test responses give
+one independent example per score in each language. These are authored
+reference examples with `default` provenance.
+
 ## Rival data
 
 `build_rival_prior` writes four aggregate files under `data/processed/`.
@@ -95,8 +137,8 @@ price is THB paid per purchased pack. Price tiers use paid THB per square foot
 on packs with a measured area. Each brand receives a low, mid, or high tier
 from its midpoint in the cumulative sales distribution ordered by this price.
 Packs labeled only in rolls, sheets, or counts have no measured area. Coverage
-among the three configured rivals is 40.3% of purchased units for 764, 99.8%
-for 595, and 74.6% for 69. These give tiers high, low, and low respectively.
+among the three configured rivals is 40.1% of purchased units for 764, 99.8%
+for 595, and 73.9% for 69. These give tiers high, low, and low respectively.
 A brand without usable area gets its configured role tier, labeled `default`.
 `brands_sources.json` records the comparable price, unit coverage, tier and
 source for each brand.
@@ -132,19 +174,19 @@ and the inactivity checks. Manufacturers 69 and 595 had no eligible non-event
 week as triggering brands. Their trigger rows have empty background fields.
 Both can still contribute as responding rivals.
 
-Of 268 trigger weeks, 172 had same-manufacturer controls, yielding 860 paired
-comparisons from 19 distinct sampled control brand-weeks. Fifteen matched
+Of 219 pre-campaign trigger weeks, 141 had same-manufacturer controls, yielding
+705 paired comparisons from 15 distinct sampled control brand-weeks. Nine matched
 trigger weeks had at least one rival with a clear two-week history
-(`n_events`). The event arm contained three matches and six undercuts. The
+(`n_events`). The event arm contained one match and two undercuts. The
 background arm had no qualifying responses. Each reaction's lift is its
 event rate minus its background rate, floored at zero. The remaining
 probability goes to `none`. When that probability is below 0.20 or fewer
 than 20 informative trigger weeks remain, the builder averages the adjusted
 rates with the defaults (45% none, 30% match, 15% undercut, 10% non-price).
 
-The resulting `data+default` prior is 71.98% none, 15.17% match, 7.85%
-undercut, and 5.00% non-price. Among observed matches and undercuts, the P50
-depth is 12.85% and the P90 is 30.16%. The median observed delay is two
+The resulting `data+default` prior is 72.29% none, 15.07% match, 7.64%
+undercut, and 5.00% non-price. Among observed matches and undercuts, both the P50
+and P90 depth are 30.16%. The median observed delay is three
 weeks. `load_rival_prior()` exposes the final probabilities under `p`, along
 with both measured rates, the unblended lifts, and the sample counts.
 
@@ -191,11 +233,10 @@ scenarios per selected rival.
 
 ## Read
 
-Use `data/loaders.py` to read the generated inputs. The campaign library,
-purchase-intent anchors, and example back-test remain demo fixtures.
+Use `data/loaders.py` to read the generated inputs. The campaign library retains its demo rows.
 
 The builder also writes `data/calib/household_behavior.parquet`, a local
-calibration panel with one row per category-buying household per study week.
+calibration panel with one row per pre-campaign category-buying household per fit week.
 The price columns are per-unit THB amounts. The brand field is the manufacturer
 with the most purchased units in that household-week. Zero-purchase weeks
 have zero units and null prices, discount, and brand. Mailer and display flags

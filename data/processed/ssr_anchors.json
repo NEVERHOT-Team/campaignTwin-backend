@@ -1,20 +1,46 @@
 {
-  "th": [
-    [
-      "ไม่ซื้อแน่นอน",
-      "ไม่น่าจะซื้อ",
-      "ยังไม่แน่ใจว่าจะซื้อไหม",
-      "น่าจะซื้อ",
-      "ซื้อแน่นอน"
-    ]
+  "sets": [
+    {
+      "lang": "th",
+      "anchors": [
+        "ฉันจะไม่ซื้อกระดาษชำระแพ็กนี้แน่นอน",
+        "ฉันคงจะไม่ซื้อกระดาษชำระแพ็กนี้",
+        "ฉันยังไม่แน่ใจว่าจะซื้อกระดาษชำระแพ็กนี้ไหม",
+        "ฉันคิดว่าน่าจะซื้อกระดาษชำระแพ็กนี้",
+        "ฉันตัดสินใจแล้วว่าจะซื้อกระดาษชำระแพ็กนี้แน่นอน"
+      ]
+    },
+    {
+      "lang": "th",
+      "anchors": [
+        "ต่อให้มีโปรนี้ ฉันก็จะข้ามกระดาษชำระห่อนี้แน่ ๆ",
+        "เห็นโปรกระดาษชำระแล้ว แต่ฉันเอนเอียงไปทางไม่ซื้อ",
+        "สำหรับโปรกระดาษชำระนี้ ฉันยังลังเลพอ ๆ กันระหว่างซื้อกับไม่ซื้อ",
+        "ถ้าเจอโปรกระดาษชำระนี้ตอนซื้อของ ฉันคงหยิบสักห่อ",
+        "ถ้าเจอโปรกระดาษชำระนี้ ฉันจะหยิบใส่ตะกร้าแน่ ๆ"
+      ]
+    },
+    {
+      "lang": "en",
+      "anchors": [
+        "I definitely would skip this pack of toilet tissue.",
+        "I probably would leave this pack of toilet tissue on the shelf.",
+        "I am undecided about buying this pack of toilet tissue.",
+        "I would probably buy this pack of toilet tissue.",
+        "I would definitely buy this pack of toilet tissue."
+      ]
+    }
   ],
-  "en": [
-    [
-      "I definitely would not buy it.",
-      "I probably would not buy it.",
-      "I am unsure whether I would buy it.",
-      "I probably would buy it.",
-      "I definitely would buy it."
-    ]
+  "test_responses": [
+    {"text": "ที่บ้านมีกระดาษชำระเต็มตู้แล้ว ยังไงรอบนี้ก็ไม่ซื้อเพิ่ม", "expected": 1},
+    {"text": "กระดาษชำระห่อนี้แพงไปหน่อย คิดว่าคงเดินผ่าน", "expected": 2},
+    {"text": "ราคากระดาษชำระก็น่าสน แต่ยังตัดสินใจไม่ได้ว่าจะเอาดีไหม", "expected": 3},
+    {"text": "กระดาษชำระที่บ้านใกล้หมดแล้ว รอบนี้น่าจะเอาแพ็กนี้", "expected": 4},
+    {"text": "กระดาษชำระยี่ห้อนี้ใช้ประจำ ราคานี้เอาหนึ่งแพ็กแน่นอน", "expected": 5},
+    {"text": "There's no room for more toilet tissue at home. I'm leaving it here for sure.", "expected": 1},
+    {"text": "I think I'll pass on the toilet tissue this time, though I might reconsider.", "expected": 2},
+    {"text": "I could go either way on this toilet tissue offer.", "expected": 3},
+    {"text": "I'm leaning toward getting a pack of toilet tissue with this offer.", "expected": 4},
+    {"text": "We're on our last roll. This toilet tissue is going straight into my cart.", "expected": 5}
   ]
 }
