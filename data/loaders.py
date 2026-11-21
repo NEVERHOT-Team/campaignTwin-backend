@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from data.etl.config import CATEGORY
+
 DATA_DIR = Path(__file__).resolve().parent
 PROCESSED = DATA_DIR / "processed"
 RAW = DATA_DIR / "raw"
@@ -172,28 +174,68 @@ def load_household_behavior() -> pd.DataFrame:
 @lru_cache(maxsize=1)
 def load_library() -> pd.DataFrame:
     filename = "campaign_library.csv"
-    frame = pd.read_csv(PROCESSED / filename, keep_default_na=False)
+    frame = pd.read_csv(
+        PROCESSED / filename,
+        keep_default_na=False,
+        dtype={"campaign_id": str, "reaction_to_campaign_id": str, "brand": str, "season": str},
+    )
     _require_keys(
         frame.columns,
         "campaign_id brand platform category price_tier start_date end_date season mechanic "
-        "discount_depth voucher_type min_spend target_segment channel_mix reaction_to "
+        "discount_depth voucher_type min_spend target_segment channel_mix reaction_to_campaign_id "
         "reaction_type reaction_delay_days reported_outcome description source_url confidence",
         filename,
     )
+    if frame["campaign_id"].eq("").any() or frame["campaign_id"].duplicated().any():
+        raise ValueError("campaign_library.csv requires a unique nonempty campaign_id per row")
+    if not frame["reaction_type"].isin(["", "none", "match", "undercut", "non_price"]).all():
+        raise ValueError("campaign_library.csv contains an unknown reaction_type")
+    return frame
+
+
+@lru_cache(maxsize=1)
+def load_brands() -> pd.DataFrame:
+    filename = "brands.csv"
+    frame = pd.read_csv(PROCESSED / filename, dtype={"brand": str}, keep_default_na=False)
+    _require_keys(
+        frame.columns,
+        "brand is_ours category sub_category price_tier avg_price target_segments "
+        "channels geo market_share typical_discount_pct margin_floor_pct",
+        filename,
+    )
+    if frame["is_ours"].dtype != bool or frame["is_ours"].sum() != 1:
+        raise ValueError("brands.csv requires exactly one is_ours brand")
     return frame
 
 
 @lru_cache(maxsize=1)
 def load_rival_prior() -> dict[str, Any]:
-    filename = "rival_prior.json"
-    record = _read_json(filename)
+    filename = "reaction_base_rate.json"
+    record = _read_json(filename)[CATEGORY]
     _require_keys(
         record,
-        "p depth_p50 depth_p90 delay_weeks_p50 delay_weeks_min duration_weeks n_events source",
+        "none match undercut non_price depth_p50 depth_p90 delay_median n_events source "
+        "event_rates background_rates lift n_trigger_weeks n_matched_trigger_weeks "
+        "n_background_weeks n_comparisons",
         filename,
     )
-    _require_keys(record["p"], "none match undercut non_price", f"{filename}.p")
-    return record
+    return {
+        "p": {name: record[name] for name in ("none", "match", "undercut", "non_price")},
+        "event_rates": record["event_rates"],
+        "background_rates": record["background_rates"],
+        "lift": record["lift"],
+        "n_trigger_weeks": record["n_trigger_weeks"],
+        "n_matched_trigger_weeks": record["n_matched_trigger_weeks"],
+        "n_background_weeks": record["n_background_weeks"],
+        "n_comparisons": record["n_comparisons"],
+        "depth_p50": record["depth_p50"],
+        "depth_p90": record["depth_p90"],
+        "delay_weeks_p50": record["delay_median"],
+        "delay_weeks_min": record.get("delay_min", record["delay_median"]),
+        "duration_weeks": record.get("duration_weeks", 2),
+        "n_events": record["n_events"],
+        "source": record["source"],
+    }
 
 
 @lru_cache(maxsize=1)
