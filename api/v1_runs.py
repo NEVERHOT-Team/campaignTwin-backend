@@ -3,19 +3,25 @@
 import logging
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 import db
+from api import v1_arena
 from api.historical_prediction import compare_prediction
 from api.historical_reference import pin_reference
-from api.v1_catalog import resolve
+from api.v1_catalog import ARENA_POLICY, resolve
 from api.v1_contract import V1Error, validate_request
 from api.v1_evaluation import business_evaluation
 from engine.synthetic import evaluate
 
 router = APIRouter(prefix="/api/v1/runs", tags=["Runs"])
 logger = logging.getLogger(__name__)
+INVALID_INPUT = {"code": "invalid_approved_input", "retryable": False,
+                 "message": "Approved inputs are incompatible with the evaluator."}
+EVALUATION_FAILED = {"code": "evaluation_failed", "retryable": True,
+                     "message": "The evaluator failed before publishing a report."}
+POLL_SECONDS = 2
 
 
 def _accepted(run_id, status):
@@ -31,7 +37,7 @@ def _existing_run(state, run_id):
 
 
 @router.post("", operation_id="submitRun", status_code=202)
-def submit_run(payload: dict):
+def submit_run(payload: dict, background_tasks: BackgroundTasks):
     validate_request("SubmitRun", payload)
     inputs = {key: str(UUID(value)) for key, value in payload.items()}
     approval_id = inputs["approval_id"]
@@ -68,19 +74,54 @@ def submit_run(payload: dict):
 
         run = {"request": inputs, "review": review, "report": None, "failure": None,
                "historical_snapshot": pin_reference(review)}
-        try:
-            run["report"] = evaluate(run_id, approval_id, review)
-        except (KeyError, TypeError, ValueError):
-            logger.exception("Invalid approved simulation input for %s", run_id)
-            run["failure"] = {"code": "invalid_approved_input", "retryable": False,
-                              "message": "Approved inputs are incompatible with the evaluator."}
-        except Exception:
-            logger.exception("Evaluation failed for %s", run_id)
-            run["failure"] = {"code": "evaluation_failed", "retryable": True,
-                              "message": "The evaluator failed before publishing a report."}
+        # The arena takes tens of seconds, so it runs after admission and reports progress.
+        arena_run = review["data_versions"].get("evaluation_policy") == ARENA_POLICY
+        if arena_run:
+            run["status"], run["progress"] = "queued", 0
+        else:
+            try:
+                run["report"] = evaluate(run_id, approval_id, review)
+            except (KeyError, TypeError, ValueError):
+                logger.exception("Invalid approved simulation input for %s", run_id)
+                run["failure"] = dict(INVALID_INPUT)
+            except Exception:
+                logger.exception("Evaluation failed for %s", run_id)
+                run["failure"] = dict(EVALUATION_FAILED)
         state["runs"][run_id] = run
         state["submissions"][submission_id] = run_id
+    if arena_run:
+        background_tasks.add_task(run_arena, run_id)
     return _accepted(run_id, 202)
+
+
+def _update(run_id, **fields):
+    with db.v1_transaction() as state:
+        state["runs"][run_id].update(fields)
+
+
+def run_arena(run_id):
+    """Evaluate an admitted arena run, publishing progress, then the report or a failure."""
+    with db.v1_transaction() as state:
+        run = state["runs"][run_id]
+        review, approval_id = run["review"], run["request"]["approval_id"]
+        run["status"], run["progress"] = "running", 0
+    last = [0.0]
+
+    def progress(value):
+        if value - last[0] >= 0.05:
+            last[0] = value
+            _update(run_id, progress=round(value, 3))
+
+    try:
+        report = v1_arena.evaluate(run_id, approval_id, review, progress)
+    except (KeyError, TypeError, ValueError):
+        logger.exception("Invalid approved arena input for %s", run_id)
+        _update(run_id, status="error", failure=dict(INVALID_INPUT))
+    except Exception:
+        logger.exception("Arena evaluation failed for %s", run_id)
+        _update(run_id, status="error", failure=dict(EVALUATION_FAILED))
+    else:
+        _update(run_id, status="done", progress=1, report=report)
 
 
 @router.get("/{run_id}", operation_id="getRunStatus")
@@ -88,9 +129,17 @@ def run_status(run_id: UUID):
     with db.v1_transaction() as state:
         run = _existing_run(state, str(run_id))
         failed = run["failure"] is not None
+        status = "error" if failed else run.get("status", "done")
+        if status in {"queued", "running"}:
+            progress = 0 if status == "queued" else min(float(run.get("progress", 0)), 0.99)
+            return {
+                "run_id": str(run_id), "status": status, "progress": progress,
+                "poll_after_seconds": POLL_SECONDS, "report_url": None, "failure": None,
+            }
         return {
-            "run_id": str(run_id), "status": "error" if failed else "done",
-            "progress": 0 if failed else 1, "poll_after_seconds": None,
+            "run_id": str(run_id), "status": status,
+            "progress": float(run.get("progress", 0)) if failed else 1,
+            "poll_after_seconds": None,
             "report_url": None if failed else f"/api/v1/runs/{run_id}/report",
             "failure": run["failure"],
         }
@@ -102,6 +151,8 @@ def run_report(run_id: UUID):
         run = _existing_run(state, str(run_id))
         if run["failure"]:
             raise V1Error(409, "run_failed", "This run ended before publishing a report.")
+        if run["report"] is None:
+            raise V1Error(409, "report_pending", "The run has no completed report yet.")
         return run["report"]
 
 

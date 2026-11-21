@@ -6,9 +6,13 @@ Inputs are frozen before the weekly loop (AGENTS.md rule 8):
   S4 from agents.rival_policy.red_team; depth is in percentage points;
 - message appeal: SSR results if supplied, otherwise data/processed/appeal_fallback.csv.
 
-Then engine.shopper simulates each run and engine.evaluator turns paired runs into
-SimResult rows. The baseline never faces a rival reaction (rivals react to our campaign),
-and it shares every seed with the plans, so differences come only from the offer.
+Then engine.shopper simulates each run as a weekly closed loop: at the start of every
+week our plan's contingency rules (engine.rules) react to last week's observations and
+each rival (engine.rival) reacts to our posted offer, so both sides adapt during the
+campaign. engine.evaluator turns paired runs into SimResult rows. The baseline never
+faces a rival reaction (rivals react to our campaign) and has no rules, and it shares
+every seed with the plans, so differences come only from the offer and its consequences.
+ArenaResult.events records who did what each week in the middle seed.
 
 Run `python -m engine.arena` for the demo brief with fixture context and offline fallbacks.
 """
@@ -17,7 +21,7 @@ import json
 import logging
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from contracts.campaign_spec import CampaignSpec
@@ -44,6 +48,10 @@ class ArenaResult:
     weeks: int
     seeds: list[int]
     appeal_source: str
+    # strategy_id -> scenario -> weekly decisions in the middle seed: our rules firing and
+    # rival reactions ({"week", "side": "us"|"rival", "action", "detail"}).
+    events: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
+    adaptive: bool = True
 
 
 # ---------------------------------------------------------------- inputs
@@ -154,7 +162,10 @@ def run(
     evidence_fn: EvidenceFn | None = None,
     red_team_fn: RedTeamFn | None = None,
     progress: ProgressFn | None = None,
+    adaptive: bool = True,
 ) -> ArenaResult:
+    """adaptive=True: weekly closed loop (our contingency rules and reactive rivals).
+    adaptive=False: the earlier scheduled-rival, fixed-plan arena, kept for comparison."""
     spec, context = plan.spec, plan.context
     evidence_fn = evidence_fn or _default_evidence
     red_team_fn = red_team_fn or _default_red_team
@@ -195,23 +206,38 @@ def run(
 
     jobs = [(s, sc) for s in candidates for sc in scenarios if rivals[s.id].get(sc) is not None]
     results: list[SimResult] = []
+    events: dict[str, dict[str, list[dict[str, Any]]]] = {}
     target = _target_profit(spec)
+    trace_seed = seeds[len(seeds) // 2]
     for done, (strategy, scenario) in enumerate(jobs, start=1):
         rows = rivals[strategy.id][scenario]
+        runs = {
+            seed: shopper.simulate(
+                population, strategy, weeks, campaign_weeks, seed, rows, appeal, params,
+                adaptive=adaptive, reference=baselines[seed], market=market,
+            )
+            for seed in seeds
+        }
         outcomes = [
             evaluator.seed_outcome(
-                strategy,
-                shopper.simulate(population, strategy, weeks, campaign_weeks, seed, rows, appeal,
-                                 params),
-                baselines[seed],
-                campaign_weeks,
-                population.size,
-                population.ref_price,
-                market,
+                strategy, runs[seed], baselines[seed], campaign_weeks, population.size,
+                population.ref_price, market,
             )
             for seed in seeds
         ]
-        result = evaluator.sim_result(strategy, scenario, outcomes, campaign_weeks, rows, target)
+        trace = runs[trace_seed]
+        rival_weeks = None
+        if adaptive:
+            rival_weeks = {
+                week for week, stats in enumerate(trace, 1)
+                if stats.extra.get("rival_discount_pct", 0) > 0
+                or stats.extra.get("rival_non_price")
+            }
+            events.setdefault(strategy.id, {})[scenario] = [
+                event for stats in trace for event in stats.extra.get("events", [])
+            ]
+        result = evaluator.sim_result(strategy, scenario, outcomes, campaign_weeks, rows, target,
+                                      rival_weeks=rival_weeks)
         results.append(result)
         if progress is not None:
             progress(done, len(jobs), result)
@@ -225,6 +251,8 @@ def run(
         weeks=weeks,
         seeds=seeds,
         appeal_source=appeal_source,
+        events=events,
+        adaptive=adaptive,
     )
 
 
@@ -260,6 +288,7 @@ def main() -> int:
                     "strategy": r.strategy_id, "scenario": r.scenario,
                     "incr_profit_p50": r.kpi.incr_profit.p50, "p_loss": r.kpi.p_loss,
                     "breakpoint": r.breakpoint.model_dump(),
+                    "events": outcome.events.get(r.strategy_id, {}).get(r.scenario, []),
                 }
                 for r in outcome.results
             ],

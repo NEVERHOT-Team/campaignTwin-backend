@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 import db
 from agents.review import affirmative, extract, order_questions
-from api.v1_catalog import PRODUCT, resolve
+from api.v1_catalog import CHOICES, PRODUCT, resolve
 from api.v1_contract import V1Error, validate_request
 
 router = APIRouter(prefix="/api/v1/campaign-reviews")
@@ -24,9 +24,10 @@ def build_review(review_id, revision, facts, origins, candidates, agent):
     if origins.get(channel_key) == "data":
         facts.pop("channel", None)
         origins.pop(channel_key)
-    if (facts.get("product_choice_id") == PRODUCT["choice_id"] and "channel" not in facts
+    choice = CHOICES.get(facts.get("product_choice_id"))
+    if (choice and "channel" not in facts
             and not any(c["field"] == channel_key for c in candidates)):
-        facts["channel"] = PRODUCT["channel"]
+        facts["channel"] = choice["channel"]
         origins[channel_key] = "data"
     offer = facts.get("offer")
     eligibility_key = "/facts/offer/eligibility"
