@@ -210,3 +210,42 @@ def test_rival_promotion_never_raises_our_full_price_sales(population):
     campaign = range(1, CAMPAIGN + 1)
     assert total(attacked, "units_us", campaign) < total(calm, "units_us", campaign)
     assert total(attacked, "buyers_us", campaign) <= total(calm, "buyers_us", campaign)
+
+
+def test_new_buyer_voucher_skips_our_existing_buyers(population):
+    everyone = make_strategy(20, sid="all")
+    new_only = everyone.model_copy(update={"id": "new", "timing": {"eligibility": "new_only"}})
+    assert shopper.offer_from_strategy(new_only, 1, CAMPAIGN).new_only
+    state = shopper.initial_state(population, SEED)
+    offer = shopper.offer_from_strategy(new_only, 1, CAMPAIGN)
+    stats, _ = shopper.step(population, state, offer, SEED, 1)
+    full = shopper.step(population, state, shopper.offer_from_strategy(everyone, 1, CAMPAIGN),
+                        SEED, 1)[0]
+    assert 0 < stats.exposed < full.exposed
+    # Leakage: discounted units bought by shoppers who would have bought us anyway.
+    assert stats.extra["discounted_units_would_buy"] <= full.extra["discounted_units_would_buy"]
+    assert 0 <= full.extra["discounted_units_would_buy"] <= full.discounted_units_us
+
+
+def test_category_revenue_and_coupons_are_reported(population):
+    state = shopper.initial_state(population, SEED)
+    offer = shopper.WeekOffer(active=True, our_discount_pct=0.0, coupon_discount_pct=20.0,
+                              coupon_reach=0.5)
+    stats, _ = shopper.step(population, state, offer, SEED, 1)
+    assert stats.revenue_rival > 0 and stats.revenue_other > 0
+    assert 0 < stats.coupon_holders < population.households
+    assert 0 <= stats.coupon_redemptions <= stats.coupon_holders
+
+
+def test_params_load_from_data_when_present(monkeypatch):
+    import data.loaders as loaders
+
+    monkeypatch.setattr(loaders, "load_shopper_params",
+                        lambda: {"beta_price": {"value": 3.0, "label": "calibrated"},
+                                 "unknown": {"value": 1}, "habit": {"value": "x"}},
+                        raising=False)
+    params = shopper.ShopperParams.from_data()
+    assert params.beta_price == 3.0 and params.label == "calibrated"
+    assert params.habit == shopper.ShopperParams().habit
+    monkeypatch.setattr(loaders, "load_shopper_params", lambda: {}, raising=False)
+    assert shopper.ShopperParams.from_data() == shopper.ShopperParams()
