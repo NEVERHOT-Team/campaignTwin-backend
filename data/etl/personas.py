@@ -1,6 +1,4 @@
-"""Generate reproducible synthetic profiles from observed household strata."""
-
-from collections import Counter
+"""Sample reproducible profiles from distinct pre-holdout category buyers."""
 
 import numpy as np
 import pandas as pd
@@ -18,7 +16,6 @@ BEHAVIOR = [
     "coupon_rate",
     "brand_loyalty",
 ]
-STRATUM = ["cluster_label", "age", "income"]
 TRAITS = ("impulsiveness", "risk_aversion", "time_preference")
 DEFAULT_TRAITS = {
     "deal_hunter": (0.45, 0.55, 0.30),
@@ -34,11 +31,10 @@ BACKSTORIES = {
     "occasional": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
     "steady_shopper": "Replenishes toilet tissue when it is needed during a regular shop.",
 }
-PROFILE_COUNT = 60
-EDGE_COUNT = 6
-MIN_PER_ARCHETYPE = 10
-MIN_STRATUM_FOR_BEHAVIOR = 12
-BOOTSTRAP_SIZE = 12
+PROFILE_COUNT = 150
+EDGE_COUNT = 15
+MIN_PER_ARCHETYPE = 20
+SURVEY_DRAW_SIZE = 12
 
 
 def _survey_traits() -> pd.DataFrame | None:
@@ -56,7 +52,7 @@ def _survey_traits() -> pd.DataFrame | None:
         & complete[risk_columns].isin([1, 2]).all(axis=1)
     )
     complete = complete.loc[valid]
-    if len(complete) < BOOTSTRAP_SIZE:
+    if len(complete) < SURVEY_DRAW_SIZE:
         raise ValueError("Twin-2K-500 CSV has too few valid QID32, QID84 and QID250 responses")
     return pd.DataFrame(
         {
@@ -67,129 +63,140 @@ def _survey_traits() -> pd.DataFrame | None:
     )
 
 
-def _draw_stratum(counts: pd.Series, rng: np.random.Generator) -> tuple[str, str, str]:
-    position = rng.choice(len(counts), p=counts.to_numpy() / counts.sum())
-    return counts.index[position]
+def _allocate(total, target, minimum, maximum):
+    """Integer quotas nearest the proportional targets, subject to capacity and floors."""
+    quota = pd.Series(minimum, index=target.index, dtype=int)
+    if (quota > maximum).any() or not quota.sum() <= total <= maximum.sum():
+        raise ValueError("Insufficient households or slots to meet the sampling quotas")
+    for _ in range(int(total - quota.sum())):
+        deficit = (target - quota).where(quota < maximum)
+        quota.loc[deficit.idxmax()] += 1
+    return quota
 
 
-def _sample_strata(counts: pd.Series, rng: np.random.Generator) -> list[tuple[str, str, str]]:
-    # Ensure that common age × income pairs appear before filling archetype quotas.
-    age_income = counts.groupby(level=["age", "income"]).sum()
-    strata = [
-        _draw_stratum(counts.xs(cell, level=["age", "income"], drop_level=False), rng)
-        for cell in age_income.loc[age_income.ge(0.02 * age_income.sum())].index
-    ]
-    for cluster in counts.index.unique("cluster_label"):
-        candidates = counts.xs(cluster, level="cluster_label", drop_level=False)
-        reserved = sum(stratum[0] == cluster for stratum in strata)
-        strata.extend(
-            _draw_stratum(candidates, rng) for _ in range(max(0, MIN_PER_ARCHETYPE - reserved))
-        )
-    if len(strata) > PROFILE_COUNT:
-        raise ValueError("The demographic coverage and archetype quotas exceed 60 personas")
-    strata.extend(_draw_stratum(counts, rng) for _ in range(PROFILE_COUNT - len(strata)))
-    return strata
+def sample_households(households: pd.DataFrame) -> pd.DataFrame:
+    """Local-only stratified sample; the index identifies donors and is never published."""
+    if not households.index.is_unique:
+        raise ValueError("A household can occur only once in the sampling frame")
+    # Stable input order makes seeded draws and distance ties independent of Parquet row order.
+    pool = households.sort_index().copy()
+    archetype = pool["archetype"]
+    sizes = archetype.value_counts().sort_index()
+    quotas = _allocate(PROFILE_COUNT, PROFILE_COUNT * sizes / len(pool), MIN_PER_ARCHETYPE, sizes)
 
+    known = pool[["age", "income"]].notna().all(axis=1)
+    cells = pool.loc[known].groupby(["age", "income"], observed=True).size()
+    common_cells = cells.index[cells >= 0.02 * known.sum()]
+    # Poststratify within archetype. Rare observed cells share one stratum.
+    cell = pd.Series("missing", index=pool.index)
+    cell.loc[known] = "other known"
+    for age, income in common_cells:
+        cell.loc[pool["age"].eq(age) & pool["income"].eq(income)] = f"{age} | {income}"
+    strata = pd.DataFrame({"archetype": archetype, "cell": cell}).groupby(["archetype", "cell"])
+    pool["_weight_stratum"] = strata.ngroup()
+    distances = pool.groupby("archetype")["distance_to_center"].rank(
+        ascending=False, method="first"
+    )
+    pool["_edge"] = distances <= np.ceil(archetype.map(sizes) * 0.10)
 
-def _sample_demographics(
-    cohort: pd.DataFrame,
-    demo: pd.DataFrame,
-    age: str,
-    income: str,
-    rng: np.random.Generator,
-) -> tuple[int, int, bool]:
-    # Preserve the empirical household-size × kids distribution and sample ownership independently.
-    by_cell = demo.loc[demo["age"].eq(age) & demo["income"].eq(income)]
-    pool = by_cell if len(by_cell) >= MIN_STRATUM_FOR_BEHAVIOR else cohort
-    if pool.empty:
-        pool = demo
-    structure = pool.groupby(["household_size", "kids_count"]).size()
-    if structure.empty:
-        structure = demo.groupby(["household_size", "kids_count"]).size()
-    position = rng.choice(len(structure), p=structure.to_numpy() / structure.sum())
-    size, kids = structure.index[position]
-    owners = pool["home_ownership"].dropna()
-    if owners.empty:
-        owners = demo["home_ownership"].dropna()
-    homeowner = rng.random() < owners.isin(["Homeowner", "Probable Homeowner"]).mean()
-    return int(str(size).removesuffix("+")), int(str(kids).removesuffix("+")), bool(homeowner)
+    groups = pool.groupby("_weight_stratum")
+    counts = groups.size()
+    stratum_quota = pd.Series(0, index=counts.index)
+    stratum_archetype = groups["archetype"].first()
+    for name, ids in stratum_archetype.groupby(stratum_archetype).groups.items():
+        population = counts.loc[ids]
+        slots = quotas[name]
+        stratum_quota.loc[ids] = _allocate(slots, slots * population / sizes[name], 1, population)
+    # Constrain the edge count across strata. Small cells may contain only tails.
+    edges = groups["_edge"].sum()
+    edge_min = (stratum_quota - (counts - edges)).clip(lower=0)
+    edge_max = np.minimum(stratum_quota, edges)
+    edge_target = stratum_quota * edges / counts
+    edge_quota = _allocate(EDGE_COUNT, edge_target, edge_min, edge_max)
 
-
-def _behavior_sample(
-    pool: pd.DataFrame, used: set[tuple[float, ...]], rng: np.random.Generator
-) -> dict[str, float]:
-    values = pool[BEHAVIOR].to_numpy()
-    for _ in range(100):
-        indexes = rng.integers(len(values), size=BOOTSTRAP_SIZE)
-        profile = tuple(round(float(value), 6) for value in values[indexes].mean(axis=0))
-        if profile not in used:
-            used.add(profile)
-            return dict(zip(BEHAVIOR, profile, strict=True))
-    raise ValueError("Could not sample a distinct aggregate behavior profile")
-
-
-def build_personas(households: pd.DataFrame) -> list[dict]:
     rng = np.random.default_rng(SEED)
-    demo = households.dropna(subset=["age", "income"])
-    counts = demo.groupby(STRATUM).size()
-    if set(counts.index.unique("cluster_label")) != set(households["cluster_label"]):
-        raise ValueError("Every archetype needs observed age and income to build personas")
+    samples = []
+    for (group, edge), frame in pool.groupby(["_weight_stratum", "_edge"]):
+        slots = edge_quota[group] if edge else stratum_quota[group] - edge_quota[group]
+        if slots:
+            chosen = frame.iloc[rng.choice(len(frame), size=slots, replace=False)].copy()
+            # Archetype share / archetype quota, corrected to each demographic stratum's share.
+            chosen["weight"] = counts[group] / (len(pool) * stratum_quota[group])
+            samples.append(chosen)
+    sample = pd.concat(samples)
+    return sample.iloc[rng.permutation(len(sample))]
 
-    strata = _sample_strata(counts, rng)
-    slot_counts = Counter(strata)
-    represented = counts.reindex(list(slot_counts)).groupby(level="cluster_label").sum()
-    cluster_weights = households["cluster_label"].value_counts(normalize=True)
-    edge_slots = set(rng.choice(PROFILE_COUNT, EDGE_COUNT, replace=False))
+
+STRUCTURE = ["household_size", "kids_count", "home_ownership"]
+DEMOGRAPHIC_FIELDS = {
+    "age": "age_band",
+    "income": "income_band",
+    "household_size": "household_size",
+    "kids_count": "kids",
+    "home_ownership": "homeowner",
+}
+
+
+def _demographics(row, donors, rng):
+    """Keep observed values and fill missing typed fields from a single compatible donor."""
+    values = {field: getattr(row, field) for field in DEMOGRAPHIC_FIELDS}
+    missing = [field for field, value in values.items() if pd.isna(value)]
+    missing_structure = [field for field in STRUCTURE if field in missing]
+    if missing_structure:
+        candidates = donors
+        for field in [*STRUCTURE, "age", "income"]:
+            if field not in missing:
+                matching = candidates[candidates[field].eq(values[field])]
+                if not matching.empty:
+                    candidates = matching
+        if candidates.empty:
+            raise ValueError("No complete household structure is available for imputation")
+        donor = candidates.iloc[rng.integers(len(candidates))]
+        for field in missing_structure:
+            values[field] = donor[field]
+    return {
+        "age_band": "Unknown" if "age" in missing else values["age"],
+        "income_band": "Unknown" if "income" in missing else values["income"],
+        "household_size": int(str(values["household_size"]).removesuffix("+")),
+        "kids": int(str(values["kids_count"]).removesuffix("+")),
+        "homeowner": values["home_ownership"] in ("Homeowner", "Probable Homeowner"),
+    }, {
+        DEMOGRAPHIC_FIELDS[field]: "default" if field in missing else "data"
+        for field in DEMOGRAPHIC_FIELDS
+    }
+
+
+def build_personas(households: pd.DataFrame, sample: pd.DataFrame | None = None) -> list[dict]:
+    if sample is None:
+        from data.etl.selection_bias import calibrate_selection
+
+        sample, _ = calibrate_selection(households, sample_households(households))
+    rng = np.random.default_rng(SEED)
+    donors = households.sort_index().dropna(subset=STRUCTURE)
     survey = _survey_traits()
     surveyed = None if survey is None else survey[list(TRAITS)].to_numpy()
-
-    cohorts = dict(tuple(households.groupby("cluster_label")))
-    cohort_demos = dict(tuple(demo.groupby("cluster_label")))
-    cells = dict(tuple(demo.groupby(STRATUM)))
-    tails = {
-        name: cohort.nlargest(max(BOOTSTRAP_SIZE, int(len(cohort) * 0.10)), "distance_to_center")
-        for name, cohort in cohorts.items()
-    }
     profiles = []
-    used: set[tuple[float, ...]] = set()
-    for slot, stratum in enumerate(strata):
-        cluster, age, income = stratum
-        cohort = cohorts[cluster]
-        cohort_demo = cohort_demos[cluster]
-        age_income_cell = cells[stratum]
-        pool = age_income_cell if len(age_income_cell) >= MIN_STRATUM_FOR_BEHAVIOR else cohort
-        edge = slot in edge_slots
-        if edge:
-            pool = tails[cluster]
-        behavior = _behavior_sample(pool, used, rng)
-        size, kids, homeowner = _sample_demographics(cohort_demo, demo, age, income, rng)
-
+    for slot, (_, row) in enumerate(sample.iterrows(), start=1):
+        demographics, demographic_sources = _demographics(row, donors, rng)
+        cluster = row["cluster_label"]
         trait_source = "default"
         trait_values = DEFAULT_TRAITS[cluster]
         if surveyed is not None:
-            draws = rng.integers(len(surveyed), size=BOOTSTRAP_SIZE)
+            draws = rng.integers(len(surveyed), size=SURVEY_DRAW_SIZE)
             trait_values = tuple(round(float(value), 6) for value in surveyed[draws].mean(axis=0))
             trait_source = "data"
-
-        weight = cluster_weights[cluster] * counts[stratum]
-        weight /= represented[cluster] * slot_counts[stratum]
-        prefix = "tt-edge" if edge else "tt"
-        base_prior = float(cohort["price_elasticity"].iloc[0])
-        income_factor = INCOME_ELASTICITY_FACTORS.get(income_group(income), 1.0)
+        prefix = "tt-edge" if row["_edge"] else "tt"
+        factor = INCOME_ELASTICITY_FACTORS.get(income_group(demographics["income_band"]), 1.0)
         profiles.append(
             {
-                "persona_id": f"{prefix}-{slot + 1:02d}",
-                "segment": str(cohort["segment"].iloc[0]),
-                "archetype": str(cohort["archetype"].iloc[0]),
+                "persona_id": f"{prefix}-{slot:03d}",
+                "segment": str(row["segment"]),
+                "archetype": str(row["archetype"]),
                 "cluster_label": cluster,
-                "weight": float(weight),
-                "age_band": age,
-                "income_band": income,
-                "household_size": size,
-                "kids": kids,
-                "homeowner": homeowner,
-                **behavior,
-                "price_elasticity": round(base_prior * income_factor, 6),
+                "weight": float(row["weight"]),
+                **demographics,
+                **{field: round(float(row[field]), 6) for field in BEHAVIOR},
+                "price_elasticity": round(float(row["price_elasticity"]) * factor, 6),
                 "traits": dict(zip(TRAITS, trait_values, strict=True)),
                 "channels": list(CHANNELS),
                 "backstory": BACKSTORIES[cluster],
@@ -199,6 +206,7 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
                     "price_elasticity_observed": "data",
                     "traits": trait_source,
                     "backstory": "llm_estimate",
+                    **demographic_sources,
                 },
             }
         )

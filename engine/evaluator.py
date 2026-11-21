@@ -3,7 +3,7 @@
 import math
 import warnings
 from collections.abc import Mapping, Sequence
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from fractions import Fraction
 from typing import Any, Literal
 
@@ -45,6 +45,41 @@ class EvaluatedPlan(SimResult):
     is_baseline: bool
     is_user_plan: bool
     post_campaign_profit_p50: float  # median of paired incremental post-campaign totals
+
+
+@dataclass(frozen=True)
+class SeedOutcome:
+    incr_profit: float
+    incr_revenue: float
+    campaign_cost: float
+    iroas: float | None
+    leakage: float | None
+    new_buyers: float
+    weekly_incr_profit: tuple[float, ...]
+    plan_rows: tuple[WeekRow, ...]
+    discount_cost: float | None = None
+    media_cost: float | None = None
+    cumulative_incr_profit: tuple[float, ...] = ()
+    post_campaign_profit: float | None = None
+
+
+def pct(values: list[float]) -> Pct:
+    clean = [float(v) for v in values if v is not None and np.isfinite(v)]
+    if not clean:
+        return Pct(p10=0.0, p50=0.0, p90=0.0)
+    p10, p50, p90 = np.percentile(clean, [10, 50, 90])
+    return Pct(p10=round(float(p10), 4), p50=round(float(p50), 4), p90=round(float(p90), 4))
+
+
+def plan_budget(strategy: Strategy) -> float:
+    value = (strategy.timing or {}).get("budget_thb")
+    return float(value) if isinstance(value, (int, float)) and value > 0 else 0.0
+
+
+def media_cost(strategy: Strategy) -> float:
+    if strategy.is_baseline:
+        return 0.0
+    return plan_budget(strategy) * float((strategy.budget_split or {}).get("media", 0.0))
 
 
 def _paired_runs(a: Runs, b: Runs) -> tuple[list[Sequence[WeekStats]], list[Sequence[WeekStats]]]:
@@ -123,7 +158,9 @@ def _hit_probability(samples: dict[str, np.ndarray], target: float | SmartGoal |
     return float(np.mean(samples[metric] >= minimum))
 
 
-def _median_rows(plan_rows: list[list[WeekRow]]) -> list[WeekRow]:
+def median_rows(outcomes: Sequence[SeedOutcome]) -> list[WeekRow]:
+    """Median gross plan rows in the WeekRow count and currency units."""
+    plan_rows = [outcome.plan_rows for outcome in outcomes]
     columns = {
         name: np.median(_column(plan_rows, name), axis=0)
         for name in ("sales", "profit", "buyers", "from_rival", "waiting")
@@ -167,14 +204,46 @@ def evaluate_plan(
     units in those weeks. Percentiles summarize paired seed metrics, including ratios.
     """
     plan, base = _paired_runs(plan_runs, baseline_runs)
+    campaign_weeks = market.get("weeks", {}).get("campaign", len(plan[0]))
+    outcomes = _seed_outcomes(
+        plan, base, strategy, campaign_weeks, market["ref_price"], market, budget_thb
+    )
+    scenario_id = scenario.scenario if isinstance(scenario, RivalScenario) else scenario
+    return _aggregate(strategy, scenario_id, outcomes, campaign_weeks, target)
+
+
+def seed_outcome(
+    strategy: Strategy,
+    plan: list[WeekStats],
+    base: list[WeekStats],
+    campaign_weeks: int,
+    population_size: int,
+    ref_price: float,
+    market: dict[str, Any],
+) -> SeedOutcome:
+    """Arena entry point for one pair. Its explicit window and shelf price govern the run."""
+    plans, baselines = _paired_runs({0: plan}, {0: base})
+    return _seed_outcomes(
+        plans, baselines, strategy, campaign_weeks, ref_price, market, plan_budget(strategy)
+    )[0]
+
+
+def _seed_outcomes(
+    plan: list[Sequence[WeekStats]],
+    base: list[Sequence[WeekStats]],
+    strategy: Strategy,
+    campaign_weeks: int,
+    ref_price: float,
+    market: dict[str, Any],
+    budget_thb: float,
+) -> list[SeedOutcome]:
     horizon = len(plan[0])
-    campaign_weeks = market.get("weeks", {}).get("campaign", horizon)
     if not isinstance(campaign_weeks, int) or campaign_weeks < 0:
         raise ValueError("Campaign weeks must be a nonnegative integer")
     active = np.array(
         [offer_from_strategy(strategy, w, campaign_weeks).active for w in range(1, horizon + 1)]
     )
-    price = float(market["ref_price"])
+    price = float(ref_price)
     share = strategy.budget_split.get("media", 0.0)
     if not 0 <= share <= 1 or not 0 <= strategy.discount_pct <= 100:
         raise ValueError("Media share must be in [0, 1] and discount_pct in [0, 100]")
@@ -212,27 +281,80 @@ def evaluate_plan(
     discount_cost = redeemed * price * (strategy.discount_pct / 100)
     cost = discount_cost + float(media)
     overlap = np.minimum(discounted, _column(base, "units_us")[:, active]).sum(axis=1)
+    new_buyers = (_column(plan, "new_buyers_us") - _column(base, "new_buyers_us")).sum(axis=1)
+    weekly_net = np.diff(net_curve, axis=1, prepend=0)
+    post_profit = gross_delta_satang[:, ~active].sum(axis=1) / 100
+    return [
+        SeedOutcome(
+            incr_profit=float(profit[i]),
+            incr_revenue=float(revenue[i]),
+            campaign_cost=float(cost[i]),
+            iroas=float(revenue[i] / cost[i]) if cost[i] else None,
+            leakage=float(overlap[i] / redeemed[i]) if redeemed[i] else None,
+            new_buyers=float(new_buyers[i]),
+            weekly_incr_profit=tuple(weekly_net[i]),
+            plan_rows=tuple(plan_rows[i]),
+            discount_cost=float(discount_cost[i]),
+            media_cost=float(media),
+            cumulative_incr_profit=tuple(net_curve[i]),
+            post_campaign_profit=float(post_profit[i]),
+        )
+        for i in range(len(plan))
+    ]
+
+
+def _aggregate(
+    strategy: Strategy,
+    scenario: str,
+    outcomes: Sequence[SeedOutcome],
+    campaign_weeks: int,
+    target: float | SmartGoal | None,
+) -> EvaluatedPlan:
+    if not outcomes:
+        raise ValueError("A SimResult needs at least one seed")
+    profit = np.array([o.incr_profit for o in outcomes], dtype=float)
+    revenue = np.array([o.incr_revenue for o in outcomes], dtype=float)
+    cost = np.array([o.campaign_cost for o in outcomes], dtype=float)
+    # Existing SeedOutcome callers can supply the original combined cost only.
+    media = np.array(
+        [media_cost(strategy) if o.media_cost is None else o.media_cost for o in outcomes]
+    )
+    discount = [
+        o.campaign_cost - m if o.discount_cost is None else o.discount_cost
+        for o, m in zip(outcomes, media, strict=True)
+    ]
     samples = {
         "incr_profit": profit,
         "incr_revenue": revenue,
-        "discount_cost": discount_cost,
-        "media_cost": np.full(len(plan), float(media)),
+        "discount_cost": np.array(discount),
+        "media_cost": media,
         "campaign_cost": cost,
         "iroi": _ratio(profit, cost),
-        "iroas": _ratio(revenue, cost),
-        "leakage": _ratio(overlap, redeemed),
-        "new_buyers": (_column(plan, "new_buyers_us") - _column(base, "new_buyers_us")).sum(axis=1),
+        "iroas": np.array([o.iroas or 0.0 for o in outcomes]),
+        "leakage": np.array([o.leakage or 0.0 for o in outcomes]),
+        "new_buyers": np.array([o.new_buyers for o in outcomes]),
     }
-    median_curve = np.median(net_curve, axis=0)
-    post_p50 = float(np.median(gross_delta_satang[:, ~active].sum(axis=1))) / 100
+    median_curve = np.median(
+        [o.cumulative_incr_profit or np.cumsum(o.weekly_incr_profit) for o in outcomes], axis=0
+    )
+    post_p50 = float(
+        np.median(
+            [
+                sum(o.weekly_incr_profit[campaign_weeks:])
+                if o.post_campaign_profit is None
+                else o.post_campaign_profit
+                for o in outcomes
+            ]
+        )
+    )
     if not np.isfinite(median_curve).all() or not math.isfinite(post_p50):
         raise ValueError("Incremental profit curve must be finite")
     downturns = np.flatnonzero(np.diff(median_curve, prepend=0) < 0)
     week = int(downturns[0] + 1) if median_curve[-1] < 0 and downturns.size else None
     return EvaluatedPlan(
         strategy_id=strategy.id,
-        scenario=scenario.scenario if isinstance(scenario, RivalScenario) else scenario,
-        weekly=_median_rows(plan_rows),
+        scenario=scenario,
+        weekly=median_rows(outcomes),
         kpi=EvaluatedKPI(
             **{name: _pct(values) for name, values in samples.items()},
             p_loss=float(np.mean(profit < 0)),
@@ -244,6 +366,28 @@ def evaluate_plan(
         is_user_plan=strategy.is_user_plan,
         post_campaign_profit_p50=post_p50,
     )
+
+
+def sim_result(
+    strategy: Strategy,
+    scenario: str,
+    outcomes: list[SeedOutcome],
+    campaign_weeks: int,
+    rivals: list[RivalScenario],
+    target_profit: float = 0.0,
+) -> EvaluatedPlan:
+    """Arena aggregation with single-scenario attribution until S1 is available for comparison."""
+    result = _aggregate(strategy, scenario, outcomes, campaign_weeks, target_profit)
+    week = result.breakpoint.week
+    if week is not None:
+        if _rival_attacking(rivals, week):
+            cause = "rival_reaction"
+        elif result.post_campaign_profit_p50 < 0:
+            cause = "post_campaign_dip"
+        else:
+            cause = "discount_cost"
+        result.breakpoint = Breakpoint(week=week, cause=cause, share=result.kpi.p_loss)
+    return result
 
 
 def _group_results(results: Sequence[SimResult]) -> dict[str, dict[str, SimResult]]:
@@ -401,3 +545,78 @@ def rank_plans(
             plan.strategy_id,
         ),
     )
+
+
+def _rival_attacking(rivals: list[RivalScenario], week: int) -> bool:
+    for row in rivals:
+        start = 1 + int(row.delay_weeks)
+        end = start + max(int(row.duration_weeks), 1) - 1
+        if row.reaction in {"match", "undercut"} and row.depth > 0 and start <= week <= end:
+            return True
+    return False
+
+
+def breakpoint(
+    outcomes: list[SeedOutcome], campaign_weeks: int, rivals: list[RivalScenario]
+) -> Breakpoint:
+    p_loss = float(np.mean([o.incr_profit < 0 for o in outcomes])) if outcomes else 0.0
+    cumulative = np.median([np.cumsum(o.weekly_incr_profit) for o in outcomes], axis=0)
+    if cumulative[-1] >= 0:
+        return Breakpoint(week=None, cause=None, share=round(p_loss, 4))
+    week = len(cumulative)
+    while week > 1 and cumulative[week - 2] < 0:
+        week -= 1
+    if _rival_attacking(rivals, week):
+        cause = "rival_reaction"
+    elif week > campaign_weeks:
+        cause = "post_campaign_dip"
+    else:
+        cause = "discount_cost"
+    return Breakpoint(week=week, cause=cause, share=round(p_loss, 4))
+
+
+def scenario_weights(rivals_by_scenario: dict[str, list[RivalScenario]]) -> dict[str, float]:
+    """Normalized S1-S3 weights from the top rival's likelihoods. S4 is unweighted."""
+    raw = {}
+    for scenario in ("S1", "S2", "S3"):
+        rows = rivals_by_scenario.get(scenario) or []
+        if rows:
+            top = max(rows, key=lambda r: r.rival_score)
+            raw[scenario] = max(float(top.likelihood), 0.0)
+    total = sum(raw.values())
+    if total <= 0:
+        return {s: 1 / len(raw) for s in raw} if raw else {}
+    return {s: w / total for s, w in raw.items()}
+
+
+def summarize(
+    results: list[SimResult],
+    weights_by_strategy: dict[str, dict[str, float]],
+) -> list[dict[str, Any]]:
+    """Per strategy: likelihood-weighted EV of median profit, worst case, rank."""
+    by_strategy: dict[str, dict[str, SimResult]] = {}
+    for result in results:
+        by_strategy.setdefault(result.strategy_id, {})[result.scenario] = result
+    rows = []
+    for strategy_id, scenarios in by_strategy.items():
+        weights = weights_by_strategy.get(strategy_id, {})
+        weighted = [
+            weights[s] * scenarios[s].kpi.incr_profit.p50 for s in weights if s in scenarios
+        ]
+        ev = float(sum(weighted)) if weighted else scenarios[min(scenarios)].kpi.incr_profit.p50
+        worst = min(scenarios.values(), key=lambda r: r.kpi.incr_profit.p50)
+        rows.append(
+            {
+                "strategy_id": strategy_id,
+                "ev_incr_profit": round(ev, 2),
+                "worst_scenario": worst.scenario,
+                "worst_incr_profit": worst.kpi.incr_profit.p50,
+                "p10_s1": scenarios["S1"].kpi.incr_profit.p10 if "S1" in scenarios else None,
+                "max_p_loss": max(r.kpi.p_loss for r in scenarios.values()),
+                "weights": weights,
+            }
+        )
+    rows.sort(key=lambda r: (-r["ev_incr_profit"], -(r["p10_s1"] or 0), r["strategy_id"]))
+    for rank, row in enumerate(rows, start=1):
+        row["rank"] = rank
+    return rows

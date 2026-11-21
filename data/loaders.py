@@ -96,6 +96,7 @@ def load_unit_econ() -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def load_personas() -> list[dict[str, Any]]:
+    """Load household-derived profiles for local simulation, outside LLM prompts."""
     filename = "personas.json"
     records = _read_json(filename)
     for index, record in enumerate(records):
@@ -173,6 +174,17 @@ def load_household_behavior() -> pd.DataFrame:
             f"{path.name} contains post-cutoff weeks. Run python -m data.etl.build_tissue."
         )
     return panel
+
+
+def load_selection_bias() -> dict[str, Any]:
+    """Read the aggregate selection audit produced alongside the local calibration panel."""
+    path = CALIB / "selection_bias.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.build_tissue to audit persona selection."
+        ) from error
 
 
 @lru_cache(maxsize=1)

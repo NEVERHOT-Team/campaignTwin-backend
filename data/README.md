@@ -58,15 +58,31 @@ toilet-tissue purchase lines. `discount_pct.raw_max` captures the observed
 discounted purchases from campaign proposals. Fields ending in `_pct` use percentage points.
 Shares, probabilities, and trait values use fractions.
 
-The 60 personas represent five fixed-seed KMeans archetypes derived from
-recency, purchase-week frequency, spend, coupon usage, and promo share. The
-observed joint age–income distribution comes from the 621 pre-campaign buying households
-with demographic coverage. Each cell with at least 2% share appears, and each
-archetype has at least ten profiles. Behavior profiles resample averages from
-groups of households. Six `tt-edge-` profiles use the empirical tails of their
-archetypes. Weights preserve archetype prevalence and the relative
-demographic frequencies of the sampled strata. The legacy segment
-`promo_response` field measures the share of purchase weeks with a price
+The 150 personas come from 150 distinct toilet-tissue buyers in weeks 1–44.
+Each profile copies one buyer's observed purchase behaviour. The five fixed-seed
+KMeans archetypes use recency, purchase-week frequency, spend, coupon usage,
+and promo share. Sampling uses seed 42, with at least 20 profiles per archetype
+and 15 edge profiles. Every age × income cell with at least 2% of buyers with
+known demographics has a profile. All 1,417 buyers are eligible, including
+the 796 who lack demographics. The 646 buyers with demographics across the
+full 52 weeks include 25 who first bought tissue during the holdout.
+
+The draw is without replacement within each archetype, demographic stratum
+and edge group. Edges are the most distant tenth of each archetype from its
+KMeans center. Common age × income cells, pooled rarer cells, and buyers
+with missing demographics have separate base weights within each archetype.
+Each sampled household starts with its stratum's population share divided
+by its number of profiles. Age and income are `Unknown` when absent, which
+gives unknown income a neutral elasticity factor. Missing size, child count,
+and ownership use a seeded draw from a compatible household with complete
+structure. The per-field `source` label distinguishes copied and imputed values.
+
+Use these profiles locally for simulation. Behaviour and available demographics
+come from the same source household, even though published persona IDs are
+synthetic. For messaging scores, `load_appeal_fallback()` supplies an
+archetype-level lookup that can be used without sending a profile to an LLM.
+
+The legacy segment `promo_response` field measures the share of purchase weeks with a price
 promotion. Each design archetype retains its original KMeans name in
 `cluster_label`. The deal hunter leads on promo share plus coupon rate.
 Among the remaining clusters, the loyal group leads on brand loyalty minus
@@ -114,18 +130,57 @@ all units across purchase lines. Rebuild older panels with
 
 Persona weights apply to the empirical CDF, population SD, Pearson correlations
 and elasticity comparisons. KS treats ties at the published six-decimal precision.
-Each entry in `marginal_fit` records the 60-profile KS in `profile_value` as a
-diagnostic. The 0.90 target applies to `value`, the KS of 5,000 equally weighted
+Each entry in `marginal_fit` records the weighted profile KS in `profile_value` as a
+diagnostic. The PoC target for `value` is 0.85 for purchase behaviour and 0.75
+for brand loyalty. This is the KS similarity of 5,000 equally weighted
 agents drawn with replacement using the persona weights and seed 42. The evaluator
-multiplies each of the six attributes independently by a uniform draw from 0.9 to
-1.1. It clips rates and shares to [0, 1] and cycles to at least one week. This
-data-side evaluation uses bounded jitter across all six fields. The shopper engine
+multiplies each attribute independently by a uniform draw from 0.9 to
+1.1. It clips rates and shares to [0, 1], cycles to at least one week and
+average units to at least one. This
+data-side evaluation uses bounded jitter across all seven fields. The shopper engine
 uses Gaussian jitter on selected fields. SD and correlation use the weighted profiles.
-Correlation uses the 15 distinct pairs. Direction checks compare signed mean
+The evaluator draws the jitter for average units after the original six fields so their
+results remain comparable. Correlation still uses the 15 pairs of the original six
+attributes. Direction checks compare signed mean
 elasticities using annual income below USD 35,000 and at least USD 75,000.
 The observed elasticity field is fitted by archetype, so the income comparison
 measures differences in the mix of archetypes represented in each income group.
 The benchmark uses the same pre-holdout, simulated grocery panel used for fitting.
+
+`selection_bias` compares households with and without observed age and income
+on all seven purchase attributes. Mean differences are with demographics minus
+without, in the original units. A KS similarity below 0.90 triggers calibration.
+For each flagged attribute, the builder groups all buyers into bins near quartiles
+while keeping ties together. It fits positive weight multipliers to match the
+population shares and preserves each original demographic stratum's mass within
+its archetype. The audit records the cuts, multipliers, and target, initial and
+achieved shares. The tissue build saves this aggregate audit in `data/calib/`
+and the quality command publishes it in `eval_report.json`.
+
+Five attributes triggered reweighting. The largest absolute gap between a
+sampled bin share and its population target fell from 8.57 percentage points
+to below 0.000001 percentage points. Agreement on these bins still leaves
+room for differences within a bin and after jitter.
+
+| Agent KS similarity, seed 42 | 60 averaged profiles | 150 sampled households | PoC target |
+|---|---:|---:|---:|
+| Weekly buy rate | 0.6995 | 0.8384 | 0.85 |
+| Purchase cycle | 0.6977 | 0.8372 | 0.85 |
+| Average units | 0.4323 | 0.6317 | 0.85 |
+| Average price paid | 0.7719 | 0.9552 | 0.85 |
+| Promo share | 0.6390 | 0.7786 | 0.85 |
+| Coupon rate | 0.6107 | 0.9779 | 0.85 |
+| Brand loyalty | 0.5358 | 0.7472 | 0.75 |
+
+Both columns use the same 1,417 reference buyers and 5,000-agent protocol.
+The comparison uses the baseline profiles from commit `26e5e96` and includes
+a retrospective score for average units. On the 150 weighted profiles, before expansion, all seven KS
+scores exceed 0.93. Jitter spreads common exact values such as loyalty of 1
+(53.4% of reference buyers) and an average of one unit per purchase week
+(65.2%). In the new sample the buy-rate SD ratio is 1.0561 and the mean
+absolute correlation gap is 0.0008. The prior passes both direction checks.
+The observed low-income elasticity (−0.2143) is less negative than the
+high-income elasticity (−0.2475), so the observed income check fails.
 
 ## Historical backtest
 

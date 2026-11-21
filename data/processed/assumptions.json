@@ -295,11 +295,11 @@
   {
     "name": "price_elasticity_by_archetype",
     "value": {
-      "deal_hunter": -2.765,
-      "explorer": -1.258454,
-      "indifferent": -1.853143,
-      "loyal": -0.877949,
-      "waiter": -2.228621
+      "deal_hunter": -2.695,
+      "explorer": -1.259273,
+      "indifferent": -1.822949,
+      "loyal": -0.821695,
+      "waiter": -2.262134
     },
     "unit": "elasticity",
     "label": "default",

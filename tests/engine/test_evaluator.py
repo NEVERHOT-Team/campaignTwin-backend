@@ -30,11 +30,10 @@ def strategy(plan_id="offer", discount=10, **overrides):
         target_segments=[],
         message="",
         channel_mix={},
-        timing={},
         cap_per_user=None,
         contingency_rules=[],
         rationale="",
-        **({"budget_split": {}} | overrides),
+        **({"budget_split": {}, "timing": {}} | overrides),
     )
 
 
@@ -85,6 +84,42 @@ def test_one_seed_costs_and_net_returns():
     assert kpi.p_loss == 1
     assert kpi.p_hit_target == 0
     assert evaluator.EvaluatedPlan.model_validate_json(result.model_dump_json()) == result
+
+
+def test_arena_and_evaluate_plan_publish_the_same_campaign_accounting():
+    plan = strategy(
+        "member-days",
+        is_user_plan=True,
+        timing={"budget_thb": 100},
+        budget_split={"media": 0.2, "discount": 0.8},
+    )
+    stats = [week(16, discounted=16, new=2), week(10, discounted=10, new=1), week(1)]
+    base = [week(8), week(8), week(10)]
+    economics = market(campaign=2, post=1)
+    direct = evaluator.evaluate_plan({7: stats}, {7: base}, plan, "S2", economics, 100, target=-240)
+    seed_result = evaluator.seed_outcome(plan, stats, base, 2, 100, 100, economics)
+    through_arena = evaluator.sim_result(plan, "S2", [seed_result], 2, [], target_profit=-240)
+
+    # The weekly chart reports gross earnings. After the two ฿10 media installments,
+    # cumulative increments are +150, +120, -240; the downturn precedes the crossing.
+    assert through_arena.weekly == direct.weekly
+    assert [row.profit for row in through_arena.weekly] == [480, 300, 40]
+    assert through_arena.breakpoint.week == direct.breakpoint.week == 2
+    assert through_arena.kpi == direct.kpi
+    # Result persistence in api.routes uses this JSON-mode dump.
+    payload = through_arena.model_dump(mode="json")
+    assert payload["strategy_id"] == "member-days"
+    assert payload["is_user_plan"]
+    assert payload["scenario"] == "S2"
+    assert payload["media_cost_label"] == "data"
+    metrics = payload["kpi"]
+    assert metrics["incr_profit"]["p50"] == -240
+    assert metrics["discount_cost"]["p50"] == 260
+    assert metrics["media_cost"]["p50"] == 20
+    assert metrics["campaign_cost"]["p50"] == 280
+    assert metrics["iroi"]["p50"] == pytest.approx(-240 / 280)
+    assert metrics["leakage"]["p50"] == pytest.approx(16 / 26)
+    assert metrics["p_hit_target"] == 1
 
 
 def test_thirty_satang_timing_difference_breaks_even():
