@@ -1,0 +1,59 @@
+# Seller campaign output and SRS coverage
+
+The opt-in v2 API answers three separate questions from one approved run. What orders and receipts does this plan generate for the modeled cohort? How much contribution does it add after seller costs? Which approved plan qualifies under the seller’s goal and guardrails? The v2 Arena report and the v2 business evaluation expose the same saved comparison. The existing frontend consumes v1. The grocery examples use synthetic commercial inputs. Adoption for a seller requires applicable economics, an aggregate audience and a defensible demand-response assumption. SRS §§2, 5–7 (local design dossier) · Initial product brief §§3, 6–7 (local design dossier) · Agent design (local design dossier)
+
+## Reproduce a business decision
+
+1. In the opt-in server’s `/api/v2/docs`, open `POST /api/v2/campaign-reviews` and submit **sellerMarginCheck**. Inspect the THB 2 fixed order fee, THB 32 minimum unit contribution, THB 25 incremental profit target and assumed demand response of 8. All dates use Bangkok time and an exclusive end.
+2. Read the review under `review`. Post `{"confirmed":true,"revision":1}` to `links.approve`. Post the resulting approval ID and a fresh UUID as `submission_id` to `/api/v2/runs`. Poll the returned `status_url` until the report is available.
+3. Read `/report` for the exact plan inputs and `/evaluation` for the decision checks. Join `plan_results` to `comparisons` by plan ID and scenario. Each contains identical metric distributions, seed ledgers, campaign/post totals, weekly series, segment results and any rule firings. The top-level report series describes the original. `recommendation.selected_plan_id` identifies the winner.
+4. Revise only `order_fee_thb` to 7, approve the new revision and submit a new run. Comparison against the previous run isolates the fee change.
+
+| Approved example | Original P50 incremental profit | Smaller voucher P50 | Original / smaller contribution per redeemed pack | Comparison |
+| --- | ---: | ---: | ---: | --- |
+| Published THB 10 voucher, THB 1,000 cap, default demand response | −600 THB | −537.50 THB | 30 / 35 THB | Hold. Both plans lose money on all eight seeds. |
+| Seller margin example, fee of 2 THB | +767 THB | +1,038 THB | 28 / 33 THB | Revise to the THB 5 voucher. Only that offer clears the floor. |
+| Same seller example, fee of 7 THB | +534.50 THB | +770.50 THB | 23 / 28 THB | Hold. Both offers breach the floor despite positive total incremental profit. |
+
+The no-campaign self-delta is zero. In the default example the original spends 1,000 THB, has P10 incremental profit of −772 THB, median campaign iROI of −60%, and median leakage of 92%. Media spend is zero, so incremental media ROAS has an unavailable value. The default response and the more responsive margin example are planning assumptions. Neither establishes a seller’s actual elasticity.
+
+## How the figures reconcile
+
+| Seller question | API evidence and interpretation |
+| --- | --- |
+| What happened during the promotion? | Select the campaign entry under `period_results` for kept orders, units, regular-price gross sales, seller discounts, net receipts and profit. The headline covers the approved measurement window, including follow-up. Weekly buckets split at the campaign boundary. |
+| How much did the seller keep? | For each seed, net receipts equal gross sales less funded discounts. Contribution deducts COGS, commission on net merchandise, per-order fees, fulfillment, redemption fees and fixed media once. Incremental profit subtracts the paired baseline’s contribution. Metered budget includes vouchers and committed media. |
+| What did a baht of spend earn? | Campaign iROI divides paired incremental contribution by actual voucher plus media spend. Modeled incremental media ROAS divides the package’s paired incremental net receipts by positive incremental media spend. The model supplies no click or view attribution. Platform ROAS, impressions, clicks and conversion rates carry an unavailable reason. Shopee reports ad interactions, attributed orders and ad spend on their own windows. [Shopee reporting definitions](https://ads.shopee.com.my/learn/faq/78/107) · [Google Ads conversion definitions](https://support.google.com/google-ads/answer/6270625) |
+| Who received the subsidy? | Each redemption contributes its discount value to leakage if that same shopper buys anywhere in the paired baseline campaign window. Incremental campaign buyers count distinct buyers across branches. First-ever acquisition requires purchase history. Repeat rate uses campaign buyers who purchase again during follow-up. Only released segment aggregates appear in audience results. Segment contribution excludes unallocated fixed campaign media. |
+| Did the campaign bring future sales forward? | The optional approved stock-up duration permits one induced sale to displace one later ordinary sale. Post-period incremental units and the fraction of active-window gain offset are computed within each seed. A zero-day assumption disables carryover. |
+| How was the winner selected? | Every included scenario must meet the median goal, loss-risk ceiling, maximum spend and applicable unit floor. Decision evidence requires paired seeds and measured leakage. Eligible offers rank by lowest scenario P10, then lower maximum regret, then original preference on exact ties. `decision` continues to describe the original. `recommendation` describes the comparison, with per-plan gates and paired profit differences versus the original. |
+
+Compute each ratio, difference and cumulative total within a seed before taking percentiles. Independently reported medians generally do not add up. Seed ledger values and counts provide the reconciliation basis. The SRS hand check gives baseline, original and alternative contributions of 4,000, 3,500 and 4,030 THB through the same settlement code used by HTTP runs. [Regression checks](../tests/test_seller_report.py)
+
+## Agreement, drift and remaining acceptance work
+
+| SRS area | What works on the published route | Remaining acceptance work |
+| --- | --- | --- |
+| Intake, scope and evidence | A planner can approve dated catalog evidence or the tissue example, enter actual cost terms and targets, confirm quoted suggestions, resolve an unknown fee explicitly and revise the inputs. Revisions and catalog changes invalidate stale submissions. The recovered accepted evidence provider is exercised by its original contract tests. | The draft FEAT-02/04 nested API examples use a different wire shape. Free-text coverage, especially Thai and ambiguous commercial terms, still needs representative seller briefs. Structured inputs are the complete path for the supported terms. |
+| Plan, execution and pairing | The original preserves the approved offer. The tissue policy allows a smaller bounded proposal or a committed original. An optional pre-run OpenAI strategist can propose the permitted lever with a labeled deterministic fallback. The rice capability fixes its voucher amount and minimum spend. Identical submissions share a durable run, and restart/interruption can be detected on polling. | Expand the authorized lever catalog and demonstrate bounded multi-candidate screening versus random controls. The current runtime uses eight seeds. Exact scenario membership, near-tie policy and the larger screening exercise still need agreement. |
+| Shopper and competitive behavior | S1 uses common passive conditions. Optional S2 applies an approved shared demand stress with unknown likelihood. An approved spend-utilization rule can stop future vouchers at a weekly tick. Carryover, weekly results and segment outcomes are numerical. | The standalone weekly Arena uses a different population, price model, brand choice, shopper memory and rival policies. It does not settle the same approved contract. S3/S4, evidence-qualified rival likelihood, safe persona/SSR inputs, customer voice and archetype breakdowns remain outside the live voucher path. Do not use weekly demo rankings as verification of a seller decision. |
+| Report, confidence and history | Inputs, assumptions, source counts, checks, seed evidence and an explicitly limited confidence label survive replay. Historical evidence is pinned independently. Tissue has a category reference, while rice lacks a comparable case. | The offline campaign-18 replay uses realized offer depths. An aligned pre-launch prediction with an evidence digest, cutoff, controls and windows is still required for HTTP historical scoring. Incidence versus a naive holdout benchmark remains a stretch requirement. Real seller calibration and predictive validation are outstanding. |
+| User experience | The v2 interview exposes questions, costs, proposed inputs, unit economics and action links. The v1 browser continues to use its original endpoints and saved runs. | The comparison winner, extended weekly and audience measures are available to v2 API consumers. Displaying them in the browser would require a frontend integration. The unversioned demo API continues to serve recorded fixtures. |
+
+[Published v2 API](campaigntwin-api-v2.openapi.yaml) · [Numerical settlement](../engine/seller_ledger.py) · [Comparison policy](../engine/seller_simulation.py) · [Standalone weekly Arena](../engine/arena.py)
+
+## Verification scope
+
+The seller regression tests cover the SRS settlement example, fee-sensitive ranking, budget exhaustion, cross-day leakage, follow-up, segment and weekly reporting, evidence pinning and equality of the two report views. The version tests exercise the published schemas, the original v1 response, separate admission and persistence, and the interview-to-run flow. [Seller output tests](../tests/test_seller_report.py) · [Seller and version journeys](../tests/test_v2_seller_interview.py)
+
+During version-isolation verification, both existing v1 runs replayed from a copy with identical reports and inputs. A fresh PostgreSQL database accepted the same submission UUID independently in each version, and concurrent identical v2 requests returned the same run. The packaged backend served both contracts.
+
+The FEAT-02 and FEAT-04 draft suites describe a separate nested wire contract. Their 29 failures and four passes on the earlier prototype identify open contract differences. The earlier frontend walkthrough and live model check exercised the prototype before the version split. The v2 API ships independently of the frontend.
+
+## Compatibility and evidence audit
+
+The opt-in process also serves the v1 weekly Arena introduced on `dev`. Existing clients can submit its four-scenario Arena example through the v1 path. V2 independently supports its documented daily voucher policies and keeps review IDs, approvals, submissions, runs and worker locks in its own namespace. An existing PostgreSQL deployment needs the optional [seller workspace table](../db/seller_v2.sql) only when adopting v2.
+
+The dated voucher path checks the exact selected capability, the dates covered by prices and fees, and the availability date and observation window of the aggregate behavior. Future observations, unmodeled voucher restrictions and unsupported source counts block approval. Output includes the number of commercial inputs in each pinned evidence class. The packaged rice snapshot contains two synthetic cohorts of 120 and 80 households.
+
+The interview asks for clarification on unsupported currency and ambiguous monetary shorthand. A seller can say the discount is fixed and specify a loss ceiling separately. The engine applies the same discount eligibility rules to the original and proposed alternatives. It withholds a ranking when plan IDs or paired-seed counts disagree. These checks protect the interpretation of a rehearsal. Seller-specific predictive accuracy still requires held-out seller outcomes.

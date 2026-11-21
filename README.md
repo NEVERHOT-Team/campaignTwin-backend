@@ -86,6 +86,14 @@ Set `OPENAI_API_KEY` in the backend repository's local `.env`. The backend loads
 
 The interview uses `MODEL_FAST`, then `OPENAI_MODEL`, then `gpt-4.1-mini` when those settings are blank. Use a model available to your OpenAI project that supports structured Chat Completions. Restart the backend after changing the environment. Run `python -m agents.llm --check` in the backend environment for an uncached provider check.
 
+## Optional seller interview API
+
+A separate entry point serves a guided seller interview, voucher economics and a seeded
+comparison at `/api/v2`. To try it alongside the existing server, run
+`DB_MODE=json python -m uvicorn api.v2.app:app --host 127.0.0.1 --port 8002`.
+See the [seller walkthrough](docs/seller-interview-v2.md) and
+[static v2 OpenAPI contract](docs/campaigntwin-api-v2.openapi.yaml).
+
 ## Versioned planner workflow
 
 Use the review ID to resume a session after reloading.

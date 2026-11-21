@@ -40,7 +40,7 @@ namespaces = false
 [tool.setuptools.package-data]
 data = ["processed/*.csv", "processed/*.json", "processed/*.parquet"]
 demo = ["*.json"]
-docs = ["campaigntwin-api-v1.openapi.yaml"]
+docs = ["campaigntwin-api-v1.openapi.yaml", "campaigntwin-api-v2.openapi.yaml"]
 mocks = ["*.json"]
 
 [tool.pytest.ini_options]
