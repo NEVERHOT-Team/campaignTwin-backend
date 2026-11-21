@@ -10,6 +10,7 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+from contracts.campaign_spec import CampaignSpec
 from data.etl.config import BACKTEST_START_WEEK, CATEGORY, PRODUCT_PATH
 from data.sources import ASSETS, CJ_TABLES
 
@@ -271,6 +272,19 @@ def load_backtest() -> dict[str, Any]:
     _require_keys(
         record["actual"], "lift_pct redemption_rate incremental_sales", f"{filename}.actual"
     )
+    return record
+
+
+@lru_cache(maxsize=1)
+def load_demo_brief() -> dict[str, Any]:
+    """Load the stage brief and check its expected parser output against CampaignSpec."""
+    filename = "demo_brief.json"
+    record = _read_json(filename)
+    _require_keys(record, "brief_text user_plan_spec approved_plan expected_story", filename)
+    spec = CampaignSpec.model_validate(record["user_plan_spec"])
+    for path, meta in spec.field_meta.items():
+        if meta.source == "extracted" and meta.evidence not in record["brief_text"]:
+            raise ValueError(f"{filename}: evidence for {path} must appear in brief_text")
     return record
 
 
