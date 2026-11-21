@@ -43,6 +43,7 @@ python -m data.etl.pick_category
 python -m data.etl.build_tissue
 python -m data.etl.build_rival_prior
 python -m data.etl.build_engine_inputs
+python -m data.quality
 ```
 
 The builder regenerates `personas.json`, `market.json`, `knob_ranges.json`,
@@ -87,6 +88,29 @@ difficulty limiting spending (QID32), preference for earlier payment (QID84), an
 preference for a sure payout (QID250). These are proxies for the three
 traits. The checked-in personas use archetype defaults.
 [Twin-2K-500 question catalog and numeric CSV](https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/tree/main/question_catalog_and_human_response_csv)
+
+## Persona quality report
+
+`python -m data.quality` writes `eval_report.json` and prints the checks.
+Consumers can read the published aggregates through `load_eval_report()` without
+the private calibration panel. A local rebuild without the panel marks the
+reference-dependent checks as skipped and still measures directions, evidence
+and assumption coverage.
+
+Each reference household counts once. Buy rate uses all panel weeks. Promo and
+coupon rates use purchase weeks, paid price is weighted by units, and purchase
+cycle is the median gap between purchase weeks. For a single purchase week the
+cycle is the observation length. Loyalty is the leading manufacturer's share of
+all units across purchase lines. Rebuild older panels with
+`python -m data.etl.build_tissue` to get that exact field.
+
+Persona weights apply to the empirical CDF, population SD, Pearson correlations
+and elasticity comparisons. KS treats ties at the published six-decimal precision.
+Correlation uses the 15 distinct pairs. Direction checks compare signed mean
+elasticities using annual income below USD 35,000 and at least USD 75,000.
+The observed elasticity field is fitted by archetype, so the income comparison
+measures differences in the mix of archetypes represented in each income group.
+The benchmark uses the same pre-holdout, simulated grocery panel used for fitting.
 
 ## Historical backtest
 

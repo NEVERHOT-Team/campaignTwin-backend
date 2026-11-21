@@ -312,6 +312,29 @@ def load_assumptions() -> list[dict[str, Any]]:
     return rows
 
 
+def load_eval_report() -> dict[str, Any]:
+    """Return the published aggregate quality report without loading the private panel."""
+    filename = "eval_report.json"
+    report = _read_json(filename)
+    _require_keys(
+        report,
+        "status reference targets marginal_fit variance_ratio over_correlation "
+        "direction_checks rival_evidence data_coverage confidence_inputs",
+        filename,
+    )
+    _require_keys(
+        report["marginal_fit"],
+        "weekly_buy_rate purchase_cycle_weeks avg_price_paid promo_share coupon_rate brand_loyalty",
+        f"{filename}.marginal_fit",
+    )
+    _require_keys(
+        report["confidence_inputs"],
+        "coverage_pct rival_evidence_n backtest_label",
+        f"{filename}.confidence_inputs",
+    )
+    return report
+
+
 @lru_cache(maxsize=1)
 def load_demo_brief() -> dict[str, Any]:
     """Load the stage brief and check its expected parser output against CampaignSpec."""
