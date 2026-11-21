@@ -2,7 +2,13 @@ import pandas as pd
 import pytest
 
 from data import loaders
-from data.etl.backtest import CONTROL_PRODUCT_TYPES, _control_changes, _score, build_backtest
+from data.etl.backtest import (
+    CONTROL_PRODUCT_TYPES,
+    _control_changes,
+    _markdown_split,
+    _score,
+    build_backtest,
+)
 from data.etl.build_tissue import _category_purchases, _elasticity
 from data.etl.config import DEFAULTS
 
@@ -27,6 +33,20 @@ def test_campaign_coupon_on_unsold_control_product_disqualifies_category(control
     products.loc[len(products)] = [77, CONTROL_PRODUCT_TYPES[0]]
     with pytest.raises(ValueError, match="Campaign 18 coupons overlap controls"):
         _control_changes(products, tx, pd.Series([77]))
+
+
+def test_markdown_split_keeps_store_coupon_match_conditional_on_redemption():
+    lines = pd.DataFrame({
+        "sales_value": [5.0, 12.0],
+        "retail_disc": [-1.0, 0.0],
+        "coupon_match_disc": [-2.0, 0.0],
+        "coupon_disc": [-3.0, 0.0],
+    })
+    split = _markdown_split(lines)
+    assert split["regular_shelf_value_usd"] == 20
+    assert split["shelf_depth_fraction"] == 1 / 20
+    assert split["coupon_depth_fraction"] == (2 + 3) / 20
+    assert split["combined_depth_fraction"] == 6 / 20
 
 
 def test_category_sales_include_nonrecipients_and_returns_and_deduplicate_redemptions(
@@ -64,6 +84,10 @@ def test_category_sales_include_nonrecipients_and_returns_and_deduplicate_redemp
     assert [control["change_pct"] for control in controls] == pytest.approx([10, 20, -30, 0])
     backtest = _score(tx, coupons, redemptions, pd.Index([7, 8]), pd.Index(range(1, 45)), controls)
     assert backtest["treated_households"] == 2
+    assert backtest["treated_share"] == 0  # neither assignee bought tissue before week 45
+    assert backtest["mechanics"]["all_tissue_purchases"]["purchase_lines"] == 10
+    assert backtest["mechanics"]["matched_campaign_redemptions"]["purchase_lines"] == 2
+    assert backtest["observed_redemption_rate"] == 0.5
     assert backtest["actual"] == {
         "lift_pct_raw": 100.0,
         "control_change_pct": 0.0,
@@ -107,6 +131,33 @@ def test_published_actuals_and_training_window():
         (5669.07 - 5221.50) * DEFAULTS["usd_thb"], 2
     )
     assert backtest["actual"]["redemption_rate"] == pytest.approx(8 / 1133)
+
+
+def test_published_mechanics_use_separate_assignment_and_redemption_denominators():
+    case = loaders.load_backtest()
+    mechanics = case["mechanics"]
+    assert mechanics["treated_share_basis"] == {
+        "category_buying_households": 1417,
+        "assigned_category_buying_households": 885,
+        "weeks": [1, 44],
+    }
+    assert case["treated_share"] == pytest.approx(885 / 1417)
+    assert case["shelf_reach"] == 1.0
+    assert mechanics["redemption_rate_basis"] == {
+        "assigned_households": 1133,
+        "assigned_households_with_matched_redemption": 8,
+    }
+    assert case["observed_redemption_rate"] == case["actual"]["redemption_rate"]
+    assert case["observed_redemption_rate_note"] == "use to validate, not as reach input"
+    broad = mechanics["all_tissue_purchases"]
+    assert broad["purchase_lines"] == 1185
+    assert broad["shelf_depth_fraction"] == pytest.approx(1055.31 / 6731.58)
+    matched = mechanics["matched_campaign_redemptions"]
+    assert matched["purchase_lines"] == 8
+    assert matched["shelf_depth_fraction"] == pytest.approx(14 / 71.92)
+    assert matched["coupon_depth_fraction"] == pytest.approx(8 / 71.92)
+    assert matched["combined_depth_fraction"] == pytest.approx(22 / 71.92)
+    assert case["discount_depth"] == 0.222469
 
 
 @pytest.mark.skipif(

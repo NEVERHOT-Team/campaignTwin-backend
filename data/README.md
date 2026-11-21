@@ -257,6 +257,15 @@ prediction is partially calibrated if its absolute error from the midpoint
 uncalibrated. Beating the naive planner requires a strictly smaller absolute
 error from the same midpoint. Both functions work with the checked-in data.
 
+Campaign 18 exposes separate inputs for the shelf offer and the mailed coupon.
+`shelf_reach` is 1.0 at a qualifying shelf. `treated_share` is the fraction of
+prelaunch tissue-buying households assigned the coupon. Under `mechanics`,
+`all_tissue_purchases` describes category-wide prices during weeks 45–52, and
+`matched_campaign_redemptions` describes the verified campaign coupon purchases.
+Both give shelf and coupon depths as fractions of the same regular shelf value.
+`observed_redemption_rate` measures realized campaign redemption among all assigned
+households and is reserved for validation.
+
 `load_appeal_fallback()` returns 150 rows keyed by archetype, mechanic and message
 style. The rule weights persona profiles within each archetype and combines
 message affinity (60%) with mechanic affinity (40%) on a −1 to +1 scale. Every
@@ -400,7 +409,17 @@ scenarios per selected rival.
 
 Use `data/loaders.py` to read the generated inputs.
 
-The builder also writes `data/calib/household_behavior.parquet`, a local
+### Shopper baseline calibration
+
+With the local household panel and Complete Journey tables installed, run
+`python -m data.etl.calibrate_shopper` to rebuild `data/processed/shopper_params.json`.
+`load_shopper_params()` returns a mapping by numeric `ShopperParams` field, or an empty
+mapping when the file is absent. Each record contains `value`, `label`, `target` and
+`achieved`. Use `{key: row["value"] for key, row in load_shopper_params().items()}` as
+the keyword arguments for `ShopperParams`. The price-response, stockpiling and waiting
+parameters retain the engine defaults pending historical lift calibration.
+
+`python -m data.etl.build_tissue` writes `data/calib/household_behavior.parquet`, a local
 calibration panel with one row per pre-campaign category-buying household per fit week.
 The price columns are per-unit THB amounts. The brand field is the manufacturer
 with the most purchased units in that household-week. Zero-purchase weeks

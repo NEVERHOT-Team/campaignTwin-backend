@@ -4,9 +4,9 @@ import json
 from functools import lru_cache
 from hashlib import sha256
 from io import BytesIO
-from math import isclose
+from math import isclose, isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict
 from zipfile import ZipFile
 
 import pandas as pd
@@ -67,6 +67,46 @@ def _require_keys(record, expected: str, location: str) -> None:
 
 def _read_json(filename: str) -> Any:
     return json.loads((PROCESSED / filename).read_text(encoding="utf-8"))
+
+
+class ShopperParameter(TypedDict):
+    value: float
+    label: Literal["calibrated", "default"]
+    target: str | None
+    achieved: float | None
+
+
+def load_shopper_params() -> dict[str, ShopperParameter]:
+    """Read parameter values and per-field provenance; an absent release uses engine defaults."""
+    filename = "shopper_params.json"
+    try:
+        parameters = _read_json(filename)
+    except FileNotFoundError:
+        return {}
+    fields = (
+        "beta_price beta_loyalty beta_appeal asc_rival asc_other rival_non_price_boost "
+        "need_floor need_cap price_mult_cap max_weekly_prob stockpile wait_per_exposure "
+        "wait_floor habit jitter holdout_share organic_reach households_per_agent"
+    ).split()
+    if not isinstance(parameters, dict) or parameters.keys() != set(fields):
+        raise ValueError(f"{filename} has missing or unexpected shopper parameters")
+    record_fields = {"value", "label", "target", "achieved"}
+    for name, record in parameters.items():
+        if not isinstance(record, dict) or record.keys() != record_fields:
+            raise ValueError(f"{filename}.{name} has an invalid parameter record")
+        value, label = record["value"], record["label"]
+        target, achieved = record["target"], record["achieved"]
+        if type(value) not in (int, float) or not isfinite(value):
+            raise ValueError(f"{filename}.{name} requires a finite numeric value")
+        if label not in ("calibrated", "default"):
+            raise ValueError(f"{filename}.{name} has an unknown parameter label")
+        if target is not None and not isinstance(target, str):
+            raise ValueError(f"{filename}.{name}.target must be text or null")
+        if achieved is not None and (type(achieved) not in (int, float) or not isfinite(achieved)):
+            raise ValueError(f"{filename}.{name}.achieved must be finite or null")
+        if label == "calibrated" and (not target or achieved is None):
+            raise ValueError(f"{filename}.{name} is missing its calibration evidence")
+    return parameters
 
 
 @lru_cache(maxsize=1)

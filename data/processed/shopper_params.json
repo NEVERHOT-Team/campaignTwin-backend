@@ -1,0 +1,110 @@
+{
+  "beta_price": {
+    "value": 4.0,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "beta_loyalty": {
+    "value": 2.0,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "beta_appeal": {
+    "value": 0.8,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "asc_rival": {
+    "value": 1.285156,
+    "label": "calibrated",
+    "target": "Manufacturer 751 own-brand units per panel household-week target 0.0127189324437 (within 10% over 6 and 44 weeks). Achieved is the 44-week mean.",
+    "achieved": 0.013568615487272727
+  },
+  "asc_other": {
+    "value": 1.285156,
+    "label": "calibrated",
+    "target": "Manufacturer 751 own-brand units per panel household-week target 0.0127189324437 (within 10% over 6 and 44 weeks). Achieved is the 44-week mean.",
+    "achieved": 0.013568615487272727
+  },
+  "rival_non_price_boost": {
+    "value": 0.3,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "need_floor": {
+    "value": 0.3,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "need_cap": {
+    "value": 2.0,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "price_mult_cap": {
+    "value": 3.0,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "max_weekly_prob": {
+    "value": 0.9,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "stockpile": {
+    "value": 0.5,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "wait_per_exposure": {
+    "value": 0.15,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "wait_floor": {
+    "value": 0.4,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "jitter": {
+    "value": 0.1,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "holdout_share": {
+    "value": 0.1,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "habit": {
+    "value": 0.2,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "organic_reach": {
+    "value": 0.3,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  },
+  "households_per_agent": {
+    "value": 50.0,
+    "label": "default",
+    "target": null,
+    "achieved": null
+  }
+}
