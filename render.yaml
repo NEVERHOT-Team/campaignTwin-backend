@@ -4,15 +4,15 @@ services:
     runtime: docker
     plan: free
     branch: dev
-    healthCheckPath: /api/health
+    healthCheckPath: /api/v2
     envVars:
       - key: DB_MODE
         value: json
       - key: OPENAI_API_KEY
         sync: false
       - key: MODEL_STRONG
-        value: gpt-4.1-mini
+        value: gpt-6-astra
       - key: MODEL_FAST
-        value: gpt-4.1-mini
+        value: gpt-6.1-sol
       - key: EMBED_MODEL
         value: text-embedding-3-small
