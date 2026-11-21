@@ -1,4 +1,4 @@
-"""Validate and load the checked-in synthetic data."""
+"""Read the local source tables and validate the checked-in fixtures."""
 
 import json
 from functools import lru_cache
@@ -7,7 +7,31 @@ from typing import Any
 
 import pandas as pd
 
-PROCESSED = Path(__file__).resolve().parent / "processed"
+DATA_DIR = Path(__file__).resolve().parent
+PROCESSED = DATA_DIR / "processed"
+RAW = DATA_DIR / "raw"
+RAW_TABLES = (
+    "transactions",
+    "products",
+    "demographics",
+    "campaigns",
+    "campaign_descriptions",
+    "coupons",
+    "coupon_redemptions",
+    "promotions",
+)
+
+
+def load_raw_table(name: str, *, columns: list[str] | None = None) -> pd.DataFrame:
+    if name not in RAW_TABLES:
+        raise ValueError(f"Unknown Complete Journey table: {name}")
+    path = RAW / f"{name}.parquet"
+    try:
+        return pd.read_parquet(path, columns=columns)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.download_raw first."
+        ) from error
 
 
 def _require_keys(record, expected: str, location: str) -> None:
