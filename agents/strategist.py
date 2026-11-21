@@ -266,14 +266,23 @@ def _equal_mix(channels: list[str]) -> dict[str, float]:
     return {channel: share for channel in channels}
 
 
-def _timing(spec: CampaignSpec, budget: float, flash_days: int | None = None) -> dict[str, Any]:
-    return {
+def _timing(
+    spec: CampaignSpec,
+    budget: float,
+    flash_days: int | None = None,
+    eligibility: str | None = None,
+) -> dict[str, Any]:
+    """budget_thb and eligibility live here until Strategy gains fields for them."""
+    timing = {
         "start_date": spec.timing.start_date.isoformat() if spec.timing.start_date else None,
         "end_date": spec.timing.end_date.isoformat() if spec.timing.end_date else None,
         "event": spec.timing.event,
         "budget_thb": round(budget, 2),
         "flash_days": flash_days,
     }
+    if eligibility and eligibility != "all":
+        timing["eligibility"] = eligibility
+    return timing
 
 
 def _normalize(shares: dict[str, float], allowed: list[str] | None = None) -> dict[str, float]:
@@ -399,6 +408,15 @@ def template_strategies(
             text=f"{high:g}% off everything",
         ),
         dict(
+            key="newbuyer", name="Welcome voucher for new buyers only", discount=low,
+            mechanic="voucher", targets=[], cap=1, budget=bounds.budget_thb,
+            split={"discount": 0.85, "media": 0.1, "fees": 0.05}, mix=mix,
+            rules=[], eligibility="new_only",
+            why="Win shoppers who do not buy us yet; loyal buyers keep paying full price, "
+                "so the discount does not leak to sales we would make anyway.",
+            text=f"{low:g}% off your first order",
+        ),
+        dict(
             key="targeted", name="Targeted voucher for price-sensitive shoppers", discount=mid,
             mechanic="voucher", targets=sensitive[:2], cap=1, budget=bounds.budget_thb,
             split={"discount": 0.7, "media": 0.25, "fees": 0.05}, mix=mix,
@@ -454,7 +472,7 @@ def template_strategies(
             target_segments=list(item["targets"]),
             message=_message(spec, item["text"]),
             channel_mix=dict(item["mix"]),
-            timing=_timing(spec, item["budget"], item.get("flash_days")),
+            timing=_timing(spec, item["budget"], item.get("flash_days"), item.get("eligibility")),
             cap_per_user=item["cap"],
             budget_split=dict(item["split"]),
             contingency_rules=list(item["rules"]),
@@ -525,7 +543,7 @@ def enforce(
     fixed_budget = min(max(budget, bounds.budget_min), bounds.budget_max)
     if abs(fixed_budget - budget) > 0.5:
         notes.append(f"budget {budget:,.0f}->{fixed_budget:,.0f} THB (flex)")
-    base_timing = _timing(spec, fixed_budget, timing.get("flash_days"))
+    base_timing = _timing(spec, fixed_budget, timing.get("flash_days"), timing.get("eligibility"))
 
     # Media beyond what reaches the target audience buys almost no extra reach, so cap
     # it at MEDIA_FREQUENCY impressions per targeted household and move the rest to the
@@ -574,6 +592,7 @@ def knobs(strategy: Strategy, bounds: Bounds) -> tuple:
         frozenset(strategy.target_segments),
         strategy.cap_per_user,
         strategy.timing.get("flash_days"),
+        strategy.timing.get("eligibility", "all"),
         round(budget / bounds.budget_thb, 1) if bounds.budget_thb else 0,
     )
 

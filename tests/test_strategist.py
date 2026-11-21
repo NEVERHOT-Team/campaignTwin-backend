@@ -208,3 +208,11 @@ def test_media_is_capped_at_what_reaches_the_target(context):
     assert targeted.budget_split["media"] < 0.25
     assert "media" in targeted.rationale and "enough to reach the target" in targeted.rationale
     assert bounds.media_needed(["deal_hunter"]) < bounds.media_needed([])
+
+
+def test_new_buyer_voucher_is_offered_and_keeps_its_eligibility(spec, context):
+    plans = {plan.id: plan for plan in propose(spec, context)}
+    newbuyer = plans["g0-newbuyer"]
+    assert newbuyer.timing["eligibility"] == "new_only"
+    assert newbuyer.mechanic == "voucher" and newbuyer.cap_per_user == 1
+    assert all("eligibility" not in plans[pid].timing for pid in plans if pid != "g0-newbuyer")
