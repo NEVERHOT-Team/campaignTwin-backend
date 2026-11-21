@@ -28,6 +28,7 @@ from engine.evaluator import media_cost, plan_budget
 logger = logging.getLogger(__name__)
 SEEDS = 8
 N_AGENTS = 3000
+SHOPPER_SAMPLE_SIZE = 120
 REPRESENTABLE = {"percent_off", "voucher", "fixed_off"}
 TIERS = {"low": "budget", "mid": "mid", "high": "premium"}
 Progress = Callable[[float], None]
@@ -334,7 +335,7 @@ def evaluate(
             progress(min(0.99, done / total))
 
     try:
-        outcome = arena.run(plan, progress=report_progress)
+        outcome = arena.run(plan, progress=report_progress, shopper_sample_size=SHOPPER_SAMPLE_SIZE)
     except Exception as exc:
         raise ArenaRunError("The arena simulation failed.") from exc
     by_key = {(r.strategy_id, r.scenario): r for r in outcome.results}
@@ -378,6 +379,15 @@ def evaluate(
         "scenario_results": [{"scenario": s, "metrics": baseline_metrics(target)} for s in order],
     })
 
+    replay_plans = {f"{run_id}/original": outcome.shopper_frames.get(original.id, {})}
+    if best is not None:
+        replay_plans[f"{run_id}/conservative"] = outcome.shopper_frames.get(best.id, {})
+    shopper_replay = {
+        "seed": outcome.seeds[len(outcome.seeds) // 2],
+        "plans": replay_plans,
+        "baseline": outcome.shopper_baseline,
+    }
+
     s1 = next((r for r in original_results if r["scenario"] == "S1"), original_results[0])
     status, reason, explanation = _decision(s1["metrics"], evaluation)
     top = next(s for s in strategies if s.id == ranked[0])
@@ -388,6 +398,7 @@ def evaluate(
     return {
         "evaluation_engine": "arena", "field_sources": field_sources(review),
         **report_fields,
+        "shopper_replay": shopper_replay,
         "competitive_outlook": {"user_plan": user_outlook, "top_ranked_plan": top_outlook},
         "customer_voice": {
             "status": "unavailable",

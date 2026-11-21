@@ -22,6 +22,7 @@ import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from random import Random
 from typing import Any
 
 from contracts.campaign_spec import CampaignSpec
@@ -52,6 +53,8 @@ class ArenaResult:
     # rival reactions ({"week", "side": "us"|"rival", "action", "detail"}).
     events: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
     adaptive: bool = True
+    shopper_frames: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
+    shopper_baseline: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- inputs
@@ -163,6 +166,7 @@ def run(
     red_team_fn: RedTeamFn | None = None,
     progress: ProgressFn | None = None,
     adaptive: bool = True,
+    shopper_sample_size: int = 0,
 ) -> ArenaResult:
     """adaptive=True: weekly closed loop (our contingency rules and reactive rivals).
     adaptive=False: the earlier scheduled-rival, fixed-plan arena, kept for comparison."""
@@ -198,9 +202,19 @@ def run(
         except Exception as error:
             logger.warning("arena red_team_failed error_type=%s", type(error).__name__)
 
+    trace_seed = seeds[len(seeds) // 2]
+    sample = tuple(sorted(Random(base_seed).sample(
+        range(population.size), min(max(0, shopper_sample_size), population.size)
+    )))
+    shopper_frames: dict[str, dict[str, list[dict[str, Any]]]] = {}
+
+    def frames(stats: list[shopper.WeekStats]) -> list[dict[str, Any]]:
+        return [{"week": week, "agents": row.extra["shopper_frame"]}
+                for week, row in enumerate(stats, 1)]
+
     baselines = {
         seed: shopper.simulate(population, base_strategy, weeks, campaign_weeks, seed, None, None,
-                               params)
+                               params, shopper_indices=sample if seed == trace_seed else ())
         for seed in seeds
     }
 
@@ -208,13 +222,13 @@ def run(
     results: list[SimResult] = []
     events: dict[str, dict[str, list[dict[str, Any]]]] = {}
     target = _target_profit(spec)
-    trace_seed = seeds[len(seeds) // 2]
     for done, (strategy, scenario) in enumerate(jobs, start=1):
         rows = rivals[strategy.id][scenario]
         runs = {
             seed: shopper.simulate(
                 population, strategy, weeks, campaign_weeks, seed, rows, appeal, params,
                 adaptive=adaptive, reference=baselines[seed], market=market,
+                shopper_indices=sample if seed == trace_seed else (),
             )
             for seed in seeds
         }
@@ -226,6 +240,8 @@ def run(
             for seed in seeds
         ]
         trace = runs[trace_seed]
+        if sample:
+            shopper_frames.setdefault(strategy.id, {})[scenario] = frames(trace)
         rival_weeks = None
         if adaptive:
             rival_weeks = {
@@ -253,6 +269,8 @@ def run(
         appeal_source=appeal_source,
         events=events,
         adaptive=adaptive,
+        shopper_frames=shopper_frames,
+        shopper_baseline=frames(baselines[trace_seed]) if sample else [],
     )
 
 

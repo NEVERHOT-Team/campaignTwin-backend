@@ -1519,6 +1519,45 @@ components:
           type: array
           maxItems: 5
           items: {$ref: '#/components/schemas/ArenaSimilarCampaign'}
+    ArenaShopper:
+      type: object
+      additionalProperties: false
+      required: [shopper_id, brand, purchase, waiting]
+      properties:
+        shopper_id: {type: string, description: Simulated shopper ID stable across weeks and comparisons within this report.}
+        brand: {type: string, enum: [ours, rival, market], description: Brand the shopper would choose this week.}
+        purchase: {type: string, enum: [bought, no_purchase]}
+        waiting: {type: boolean, description: True when a shopper skipped their purchase while waiting for a promotion.}
+    ArenaShopperFrame:
+      type: object
+      additionalProperties: false
+      required: [week, agents]
+      properties:
+        week: {type: integer, minimum: 1}
+        agents:
+          type: array
+          maxItems: 120
+          items: {$ref: '#/components/schemas/ArenaShopper'}
+    ArenaShopperReplay:
+      type: object
+      additionalProperties: false
+      required: [seed, plans, baseline]
+      description: A fixed sample of simulated shoppers in the middle seed of the run. Counts in these frames are unscaled. Map paths are illustrative.
+      properties:
+        seed: {type: integer, minimum: 0}
+        plans:
+          type: object
+          description: Frames keyed by public plan_results input.plan_id, then evaluated scenario.
+          additionalProperties:
+            type: object
+            propertyNames: {$ref: '#/components/schemas/ScenarioId'}
+            additionalProperties:
+              type: array
+              items: {$ref: '#/components/schemas/ArenaShopperFrame'}
+        baseline:
+          type: array
+          description: The paired no-campaign sample, shared across scenarios.
+          items: {$ref: '#/components/schemas/ArenaShopperFrame'}
     RunReport:
       type: object
       additionalProperties: false
@@ -1559,6 +1598,7 @@ components:
         commentary: {$ref: '#/components/schemas/Text'}
         evaluation_engine: {type: string, enum: [arena, synthetic_fallback]}
         fallback_reason: {type: string, description: Why the run used the internal fallback evaluator.}
+        shopper_replay: {$ref: '#/components/schemas/ArenaShopperReplay'}
         field_sources:
           type: object
           description: Effective spec paths mapped to their evidence source.

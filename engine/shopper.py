@@ -315,6 +315,8 @@ def step(
     week: int,
     params: ShopperParams | None = None,
     appeal: np.ndarray | None = None,
+    *,
+    shopper_indices: tuple[int, ...] = (),
 ) -> tuple[WeekStats, ShopperState]:
     """Advance one week. Same (seed, week) -> same random draws for every offer."""
     params = params or default_params()
@@ -397,6 +399,15 @@ def step(
     def count(mask: np.ndarray) -> int:
         return int(round(float(mask.sum()) * scale))
 
+    frame = [
+        {
+            "shopper_id": f"shopper-{index + 1}",
+            "brand": ("ours", "rival", "market")[brand[index]],
+            "purchase": "bought" if buy[index] else "no_purchase",
+            "waiting": bool(not buy[index] and waiting_factor[index] < 1),
+        }
+        for index in shopper_indices
+    ]
     stats = WeekStats(
         buyers_us=count(ours),
         units_us=float(units[ours].sum()) * scale,
@@ -413,6 +424,7 @@ def step(
         extra={
             "households_per_agent": scale,
             "discounted_units_would_buy": float(units[would_buy].sum()) * scale,
+            **({"shopper_frame": frame} if frame else {}),
         },
         revenue_rival=float((units * population.ref_price * p_rival)[buy & (brand == RIVAL)].sum())
         * scale,
@@ -538,6 +550,7 @@ def simulate(
     adaptive: bool = False,
     reference: list[WeekStats] | None = None,
     market: dict[str, Any] | None = None,
+    shopper_indices: tuple[int, ...] = (),
 ) -> list[WeekStats]:
     """Run one plan for `weeks` weeks (campaign weeks first, then the post window).
 
@@ -550,7 +563,7 @@ def simulate(
     """
     if adaptive:
         return _simulate_adaptive(population, strategy, weeks, campaign_weeks, seed, rivals,
-                                  appeal, params, reference, market)
+                                  appeal, params, reference, market, shopper_indices)
     state = initial_state(population, seed)
     message = None if strategy.is_baseline else strategy.id
     vector = appeal_vector(population, appeal, message)
@@ -558,7 +571,8 @@ def simulate(
     stats = []
     for week in range(1, weeks + 1):
         offer = offer_from_strategy(strategy, week, campaign_weeks, rivals, reach)
-        week_stats, state = step(population, state, offer, seed, week, params, vector)
+        week_stats, state = step(population, state, offer, seed, week, params, vector,
+                                 shopper_indices=shopper_indices)
         stats.append(week_stats)
     return stats
 
@@ -579,6 +593,7 @@ def _simulate_adaptive(
     params: ShopperParams | None,
     reference: list[WeekStats] | None,
     market: dict[str, Any] | None,
+    shopper_indices: tuple[int, ...],
 ) -> list[WeekStats]:
     from engine.rival import RivalBook
     from engine.rules import Observation, PlanState, apply_rules, parse_rules
@@ -627,7 +642,8 @@ def _simulate_adaptive(
             rival_discount_pct=rival_pct,
             rival_non_price=non_price,
         )
-        week_stats, state = step(population, state, offer, seed, week, params, vector)
+        week_stats, state = step(population, state, offer, seed, week, params, vector,
+                                 shopper_indices=shopper_indices)
         share = _share_pp(week_stats)
         if week == 1:
             first_share = share

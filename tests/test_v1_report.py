@@ -166,3 +166,29 @@ def test_invalid_structured_event_rejected_before_approval():
         response = client.post("/api/v1/campaign-reviews", json={"fields": {"event": "surprise"}})
     assert response.status_code == 422
     assert any(issue["field"] == "/fields/event" for issue in response.json()["issues"])
+
+
+def test_shopper_replay_uses_the_simulated_weekly_sample_for_each_public_plan(tissue_run):
+    _, report, _, outcome = tissue_run
+    replay = report["shopper_replay"]
+    assert replay["seed"] == outcome.seeds[len(outcome.seeds) // 2]
+    assert replay["baseline"] == outcome.shopper_baseline
+    baseline_ids = [agent["shopper_id"] for agent in replay["baseline"][0]["agents"]]
+    assert len(set(baseline_ids)) == len(baseline_ids) == 120
+    assert len(replay["baseline"]) == outcome.weeks
+    for plan in report["plan_results"]:
+        if plan["role"] == "baseline":
+            continue
+        plan_id = plan["input"]["plan_id"]
+        engine_id = (report["competitive_outlook"]["user_plan"]["plan_id"]
+                     if plan["role"] == "original"
+                     else plan["input"]["offer"]["offer_id"].removeprefix("arena-"))
+        frames = replay["plans"][plan_id]
+        assert frames == outcome.shopper_frames[engine_id]
+        assert set(frames) == {row["scenario"] for row in plan["scenario_results"]}
+        for path in frames.values():
+            assert [row["week"] for row in path] == list(range(1, outcome.weeks + 1))
+            for row in path:
+                assert [agent["shopper_id"] for agent in row["agents"]] == baseline_ids
+                assert all(not agent["waiting"] or agent["purchase"] == "no_purchase"
+                           for agent in row["agents"])
