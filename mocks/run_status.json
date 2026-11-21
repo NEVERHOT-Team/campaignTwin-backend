@@ -1,0 +1,755 @@
+{
+  "run_id": "00000000-0000-4000-8000-000000000111",
+  "status": "done",
+  "progress": 1.0,
+  "generation": 0,
+  "partial_results": [
+    {
+      "strategy_id": "baseline",
+      "scenario": "S1",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 83000,
+          "profit": 21000,
+          "buyers": 224,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 2,
+          "sales": 82000,
+          "profit": 20500,
+          "buyers": 221,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 3,
+          "sales": 86500,
+          "profit": 21600,
+          "buyers": 233,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 4,
+          "sales": 85000,
+          "profit": 21400,
+          "buyers": 229,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 5,
+          "sales": 83500,
+          "profit": 20700,
+          "buyers": 225,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 6,
+          "sales": 84200,
+          "profit": 21000,
+          "buyers": 227,
+          "from_rival": 0,
+          "waiting": 34
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "iroas": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "leakage": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "new_buyers": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "p_hit_target": 0,
+        "p_loss": 0
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "deep-1111",
+      "scenario": "S1",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 102800,
+          "profit": 30000,
+          "buyers": 284,
+          "from_rival": 26,
+          "waiting": 34
+        },
+        {
+          "week": 2,
+          "sales": 106200,
+          "profit": 31500,
+          "buyers": 294,
+          "from_rival": 31,
+          "waiting": 34
+        },
+        {
+          "week": 3,
+          "sales": 126100,
+          "profit": 39600,
+          "buyers": 353,
+          "from_rival": 51,
+          "waiting": 34
+        },
+        {
+          "week": 4,
+          "sales": 110300,
+          "profit": 32900,
+          "buyers": 306,
+          "from_rival": 33,
+          "waiting": 34
+        },
+        {
+          "week": 5,
+          "sales": 76460,
+          "profit": 17500,
+          "buyers": 204,
+          "from_rival": 0,
+          "waiting": 34
+        },
+        {
+          "week": 6,
+          "sales": 80240,
+          "profit": 19200,
+          "buyers": 215,
+          "from_rival": 0,
+          "waiting": 34
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 34500,
+          "p50": 44500,
+          "p90": 56500
+        },
+        "iroas": {
+          "p10": 3.25,
+          "p50": 3.6,
+          "p90": 4.0
+        },
+        "leakage": {
+          "p10": 0.27,
+          "p50": 0.32,
+          "p90": 0.38
+        },
+        "new_buyers": {
+          "p10": 270,
+          "p50": 310,
+          "p90": 355
+        },
+        "p_hit_target": 0.92,
+        "p_loss": 0.02
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "targeted-loyalty",
+      "scenario": "S1",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 96200,
+          "profit": 27000,
+          "buyers": 264,
+          "from_rival": 17,
+          "waiting": 34
+        },
+        {
+          "week": 2,
+          "sales": 98060,
+          "profit": 27800,
+          "buyers": 270,
+          "from_rival": 21,
+          "waiting": 34
+        },
+        {
+          "week": 3,
+          "sales": 109600,
+          "profit": 32100,
+          "buyers": 303,
+          "from_rival": 30,
+          "waiting": 34
+        },
+        {
+          "week": 4,
+          "sales": 105900,
+          "profit": 30900,
+          "buyers": 292,
+          "from_rival": 27,
+          "waiting": 34
+        },
+        {
+          "week": 5,
+          "sales": 85480,
+          "profit": 21600,
+          "buyers": 231,
+          "from_rival": 3,
+          "waiting": 34
+        },
+        {
+          "week": 6,
+          "sales": 85520,
+          "profit": 21600,
+          "buyers": 231,
+          "from_rival": 2,
+          "waiting": 34
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 24800,
+          "p50": 34800,
+          "p90": 46800
+        },
+        "iroas": {
+          "p10": 2.75,
+          "p50": 3.1,
+          "p90": 3.5
+        },
+        "leakage": {
+          "p10": 0.13,
+          "p50": 0.18,
+          "p90": 0.24
+        },
+        "new_buyers": {
+          "p10": 190,
+          "p50": 230,
+          "p90": 275
+        },
+        "p_hit_target": 0.83,
+        "p_loss": 0.04
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "baseline",
+      "scenario": "S2",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 81800,
+          "profit": 20550,
+          "buyers": 221,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 2,
+          "sales": 80800,
+          "profit": 20050,
+          "buyers": 218,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 3,
+          "sales": 85300,
+          "profit": 21150,
+          "buyers": 230,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 4,
+          "sales": 83800,
+          "profit": 20950,
+          "buyers": 226,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 5,
+          "sales": 82300,
+          "profit": 20250,
+          "buyers": 222,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 6,
+          "sales": 83000,
+          "profit": 20550,
+          "buyers": 224,
+          "from_rival": 0,
+          "waiting": 38
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "iroas": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "leakage": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "new_buyers": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "p_hit_target": 0,
+        "p_loss": 0
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "deep-1111",
+      "scenario": "S2",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 99400,
+          "profit": 28550,
+          "buyers": 274,
+          "from_rival": 23,
+          "waiting": 38
+        },
+        {
+          "week": 2,
+          "sales": 95100,
+          "profit": 26550,
+          "buyers": 261,
+          "from_rival": 19,
+          "waiting": 38
+        },
+        {
+          "week": 3,
+          "sales": 101800,
+          "profit": 28650,
+          "buyers": 280,
+          "from_rival": 21,
+          "waiting": 38
+        },
+        {
+          "week": 4,
+          "sales": 92600,
+          "profit": 24950,
+          "buyers": 253,
+          "from_rival": 11,
+          "waiting": 38
+        },
+        {
+          "week": 5,
+          "sales": 72620,
+          "profit": 15850,
+          "buyers": 193,
+          "from_rival": 0,
+          "waiting": 38
+        },
+        {
+          "week": 6,
+          "sales": 77500,
+          "profit": 18050,
+          "buyers": 207,
+          "from_rival": 0,
+          "waiting": 38
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 9100,
+          "p50": 19100,
+          "p90": 31100
+        },
+        "iroas": {
+          "p10": 1.85,
+          "p50": 2.2,
+          "p90": 2.6
+        },
+        "leakage": {
+          "p10": 0.34,
+          "p50": 0.39,
+          "p90": 0.45
+        },
+        "new_buyers": {
+          "p10": 180,
+          "p50": 220,
+          "p90": 265
+        },
+        "p_hit_target": 0.61,
+        "p_loss": 0.15
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "targeted-loyalty",
+      "scenario": "S2",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 93900,
+          "profit": 26050,
+          "buyers": 258,
+          "from_rival": 16,
+          "waiting": 38
+        },
+        {
+          "week": 2,
+          "sales": 95100,
+          "profit": 26550,
+          "buyers": 261,
+          "from_rival": 19,
+          "waiting": 38
+        },
+        {
+          "week": 3,
+          "sales": 101800,
+          "profit": 28650,
+          "buyers": 280,
+          "from_rival": 21,
+          "waiting": 38
+        },
+        {
+          "week": 4,
+          "sales": 98760,
+          "profit": 27750,
+          "buyers": 271,
+          "from_rival": 19,
+          "waiting": 38
+        },
+        {
+          "week": 5,
+          "sales": 83620,
+          "profit": 20850,
+          "buyers": 226,
+          "from_rival": 2,
+          "waiting": 38
+        },
+        {
+          "week": 6,
+          "sales": 83880,
+          "profit": 20950,
+          "buyers": 227,
+          "from_rival": 1,
+          "waiting": 38
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 17300,
+          "p50": 27300,
+          "p90": 39300
+        },
+        "iroas": {
+          "p10": 2.35,
+          "p50": 2.7,
+          "p90": 3.1
+        },
+        "leakage": {
+          "p10": 0.14,
+          "p50": 0.19,
+          "p90": 0.25
+        },
+        "new_buyers": {
+          "p10": 170,
+          "p50": 210,
+          "p90": 255
+        },
+        "p_hit_target": 0.77,
+        "p_loss": 0.05
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "baseline",
+      "scenario": "S3",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 80600,
+          "profit": 20100,
+          "buyers": 217,
+          "from_rival": 0,
+          "waiting": 42
+        },
+        {
+          "week": 2,
+          "sales": 79600,
+          "profit": 19600,
+          "buyers": 215,
+          "from_rival": 0,
+          "waiting": 42
+        },
+        {
+          "week": 3,
+          "sales": 84100,
+          "profit": 20700,
+          "buyers": 227,
+          "from_rival": 0,
+          "waiting": 42
+        },
+        {
+          "week": 4,
+          "sales": 82600,
+          "profit": 20500,
+          "buyers": 223,
+          "from_rival": 0,
+          "waiting": 42
+        },
+        {
+          "week": 5,
+          "sales": 81100,
+          "profit": 19800,
+          "buyers": 219,
+          "from_rival": 0,
+          "waiting": 42
+        },
+        {
+          "week": 6,
+          "sales": 81800,
+          "profit": 20100,
+          "buyers": 221,
+          "from_rival": 0,
+          "waiting": 42
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "iroas": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "leakage": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "new_buyers": {
+          "p10": 0,
+          "p50": 0,
+          "p90": 0
+        },
+        "p_hit_target": 0,
+        "p_loss": 0
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    },
+    {
+      "strategy_id": "deep-1111",
+      "scenario": "S3",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 98200,
+          "profit": 28100,
+          "buyers": 270,
+          "from_rival": 23,
+          "waiting": 42
+        },
+        {
+          "week": 2,
+          "sales": 93900,
+          "profit": 26100,
+          "buyers": 258,
+          "from_rival": 19,
+          "waiting": 42
+        },
+        {
+          "week": 3,
+          "sales": 50000,
+          "profit": 5200,
+          "buyers": 124,
+          "from_rival": 0,
+          "waiting": 76
+        },
+        {
+          "week": 4,
+          "sales": 61480,
+          "profit": 10900,
+          "buyers": 159,
+          "from_rival": 0,
+          "waiting": 76
+        },
+        {
+          "week": 5,
+          "sales": 69660,
+          "profit": 14600,
+          "buyers": 184,
+          "from_rival": 0,
+          "waiting": 76
+        },
+        {
+          "week": 6,
+          "sales": 74100,
+          "profit": 16600,
+          "buyers": 198,
+          "from_rival": 0,
+          "waiting": 76
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": -29300,
+          "p50": -19300,
+          "p90": -7300
+        },
+        "iroas": {
+          "p10": 0.9,
+          "p50": 1.25,
+          "p90": 1.65
+        },
+        "leakage": {
+          "p10": 0.43,
+          "p50": 0.48,
+          "p90": 0.54
+        },
+        "new_buyers": {
+          "p10": 80,
+          "p50": 120,
+          "p90": 165
+        },
+        "p_hit_target": 0.06,
+        "p_loss": 0.85
+      },
+      "breakpoint": {
+        "week": 3,
+        "cause": "rival undercut",
+        "share": 0.68
+      }
+    },
+    {
+      "strategy_id": "targeted-loyalty",
+      "scenario": "S3",
+      "weekly": [
+        {
+          "week": 1,
+          "sales": 90940,
+          "profit": 24800,
+          "buyers": 248,
+          "from_rival": 13,
+          "waiting": 42
+        },
+        {
+          "week": 2,
+          "sales": 91040,
+          "profit": 24800,
+          "buyers": 250,
+          "from_rival": 15,
+          "waiting": 42
+        },
+        {
+          "week": 3,
+          "sales": 95320,
+          "profit": 25800,
+          "buyers": 261,
+          "from_rival": 15,
+          "waiting": 42
+        },
+        {
+          "week": 4,
+          "sales": 93600,
+          "profit": 25500,
+          "buyers": 256,
+          "from_rival": 14,
+          "waiting": 42
+        },
+        {
+          "week": 5,
+          "sales": 81980,
+          "profit": 20200,
+          "buyers": 222,
+          "from_rival": 1,
+          "waiting": 42
+        },
+        {
+          "week": 6,
+          "sales": 82240,
+          "profit": 20300,
+          "buyers": 222,
+          "from_rival": 1,
+          "waiting": 42
+        }
+      ],
+      "kpi": {
+        "incr_profit": {
+          "p10": 10600,
+          "p50": 20600,
+          "p90": 32600
+        },
+        "iroas": {
+          "p10": 2.0,
+          "p50": 2.35,
+          "p90": 2.75
+        },
+        "leakage": {
+          "p10": 0.16,
+          "p50": 0.21,
+          "p90": 0.27
+        },
+        "new_buyers": {
+          "p10": 130,
+          "p50": 170,
+          "p90": 215
+        },
+        "p_hit_target": 0.71,
+        "p_loss": 0.08
+      },
+      "breakpoint": {
+        "week": null,
+        "cause": null,
+        "share": null
+      }
+    }
+  ]
+}

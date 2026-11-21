@@ -1,0 +1,187 @@
+{
+  "category": "instant_coffee",
+  "segments": [
+    {
+      "segment_id": "loyal",
+      "name": "Brand loyalists",
+      "archetype": "loyal",
+      "households": 410,
+      "share": 0.24,
+      "weekly_purchase_prob": 0.34,
+      "avg_basket_thb": 428,
+      "price_elasticity": -0.6,
+      "coupon_rate": 0.27,
+      "promo_response": 0.31,
+      "private_label_share": 0.13,
+      "source": "default"
+    },
+    {
+      "segment_id": "deal_hunter",
+      "name": "Deal hunters",
+      "archetype": "deal_hunter",
+      "households": 360,
+      "share": 0.26,
+      "weekly_purchase_prob": 0.26,
+      "avg_basket_thb": 385,
+      "price_elasticity": -2.1,
+      "coupon_rate": 0.72,
+      "promo_response": 0.75,
+      "private_label_share": 0.33,
+      "source": "default"
+    },
+    {
+      "segment_id": "waiter",
+      "name": "Promotion waiters",
+      "archetype": "waiter",
+      "households": 270,
+      "share": 0.19,
+      "weekly_purchase_prob": 0.19,
+      "avg_basket_thb": 413,
+      "price_elasticity": -1.8,
+      "coupon_rate": 0.61,
+      "promo_response": 0.67,
+      "private_label_share": 0.24,
+      "source": "default"
+    },
+    {
+      "segment_id": "explorer",
+      "name": "Brand explorers",
+      "archetype": "explorer",
+      "households": 215,
+      "share": 0.17,
+      "weekly_purchase_prob": 0.24,
+      "avg_basket_thb": 352,
+      "price_elasticity": -1.2,
+      "coupon_rate": 0.35,
+      "promo_response": 0.48,
+      "private_label_share": 0.39,
+      "source": "default"
+    },
+    {
+      "segment_id": "indifferent",
+      "name": "Low-engagement shoppers",
+      "archetype": "indifferent",
+      "households": 195,
+      "share": 0.14,
+      "weekly_purchase_prob": 0.16,
+      "avg_basket_thb": 316,
+      "price_elasticity": -0.8,
+      "coupon_rate": 0.11,
+      "promo_response": 0.19,
+      "private_label_share": 0.29,
+      "source": "default"
+    }
+  ],
+  "rivals": [
+    {
+      "rival": "Daily Peak",
+      "scenario": "S1",
+      "reaction": "none",
+      "depth": 0,
+      "delay_weeks": 0,
+      "duration_weeks": 0,
+      "likelihood": 0.35,
+      "ci_low": 0.25,
+      "ci_high": 0.45,
+      "evidence_ids": [],
+      "rival_score": 0.86
+    },
+    {
+      "rival": "Daily Peak",
+      "scenario": "S2",
+      "reaction": "match",
+      "depth": 0.4,
+      "delay_weeks": 1,
+      "duration_weeks": 2,
+      "likelihood": 0.45,
+      "ci_low": 0.35,
+      "ci_high": 0.55,
+      "evidence_ids": [
+        "c05"
+      ],
+      "rival_score": 0.86
+    },
+    {
+      "rival": "Daily Peak",
+      "scenario": "S3",
+      "reaction": "undercut",
+      "depth": 0.44,
+      "delay_weeks": 2,
+      "duration_weeks": 2,
+      "likelihood": 0.2,
+      "ci_low": 0.1,
+      "ci_high": 0.3,
+      "evidence_ids": [
+        "c02"
+      ],
+      "rival_score": 0.86
+    },
+    {
+      "rival": "Brew Lane",
+      "scenario": "S1",
+      "reaction": "none",
+      "depth": 0,
+      "delay_weeks": 0,
+      "duration_weeks": 0,
+      "likelihood": 0.4,
+      "ci_low": 0.3,
+      "ci_high": 0.5,
+      "evidence_ids": [],
+      "rival_score": 0.74
+    },
+    {
+      "rival": "Brew Lane",
+      "scenario": "S2",
+      "reaction": "match",
+      "depth": 0.4,
+      "delay_weeks": 1,
+      "duration_weeks": 2,
+      "likelihood": 0.45,
+      "ci_low": 0.35,
+      "ci_high": 0.55,
+      "evidence_ids": [
+        "c08"
+      ],
+      "rival_score": 0.74
+    },
+    {
+      "rival": "Brew Lane",
+      "scenario": "S3",
+      "reaction": "non_price",
+      "depth": 0.25,
+      "delay_weeks": 2,
+      "duration_weeks": 2,
+      "likelihood": 0.15,
+      "ci_low": 0.05,
+      "ci_high": 0.25,
+      "evidence_ids": [
+        "c03"
+      ],
+      "rival_score": 0.74
+    }
+  ],
+  "assumptions": [
+    {
+      "name": "margin_pct",
+      "value": 44,
+      "label": "default",
+      "source": "unit_economics"
+    },
+    {
+      "name": "campaign_weeks",
+      "value": 4,
+      "label": "default",
+      "source": "demo_fixture"
+    },
+    {
+      "name": "post_campaign_weeks",
+      "value": 2,
+      "label": "default",
+      "source": "demo_fixture"
+    }
+  ],
+  "gaps": [
+    "Market and unit-economics inputs are synthetic.",
+    "Confirm the profit target."
+  ]
+}

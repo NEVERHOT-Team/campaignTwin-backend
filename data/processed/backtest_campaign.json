@@ -1,0 +1,28 @@
+{
+  "campaign_id": "c07",
+  "description": "Fictional held-out 10.10 instant coffee voucher.",
+  "start_week": 41,
+  "end_week": 41,
+  "discount_depth": 0.3,
+  "target_segments": [
+    "deal_hunter",
+    "loyal"
+  ],
+  "treated_households": 320,
+  "actual": {
+    "lift_pct": 8.5,
+    "redemption_rate": 0.17,
+    "incremental_sales": 16200
+  },
+  "calibration_weeks": [
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40
+  ],
+  "source": "default"
+}

@@ -1,0 +1,22 @@
+{
+  "category": "instant_coffee",
+  "currency": "THB",
+  "usd_thb": 35.1,
+  "price_thb": 169.0,
+  "margin_pct": 44.0,
+  "shopee_commission_pct": 7.0,
+  "shopee_txn_fee_pct": 3.0,
+  "media_cost_per_reach_thb": 0.32,
+  "collected_at": "2026-11-21",
+  "source": {
+    "category": "default",
+    "currency": "default",
+    "usd_thb": "default",
+    "price_thb": "default",
+    "margin_pct": "default",
+    "shopee_commission_pct": "default",
+    "shopee_txn_fee_pct": "default",
+    "media_cost_per_reach_thb": "default",
+    "collected_at": "default"
+  }
+}

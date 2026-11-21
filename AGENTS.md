@@ -1,10 +1,16 @@
-# Campaign Rehearsal backend
+# CampaignTwin backend
 
-- Big owns FastAPI and OpenAI integration. Mic owns the NumPy engine and shopper traces. The team lead owns the data pipeline, back-test, and integration checkpoints.
-- Before coding opens at 10:00 Bangkok time on 21 November 2026, prepare specs, decisions, and prompts only.
-- Start integration work with [the frozen contract summary](docs/contract-brief.md). The backend owns the published schema and OpenAPI on build day. Bring any wire contract change to Phee and the affected backend owner before implementation.
-- Use segment aggregates from groups of at least 50 households. Keep personal and household records out of LLM calls. Trace IDs identify simulated shoppers only.
-- Route extraction, strategist, optional competitor decisions, and explanations through the OpenAI API. Use vectorized math for shopper decisions. Apply human confirmation before using extracted inputs.
-- Report scenario ranges, profit after costs, brand outcomes, assumptions, and the confidence label. Keep data-derived results and assumed Thai market mechanics distinct.
-- Use `$campaign-api` for API and AI work, `$simulation-validation` for the engine, strategist ranking, or back-test, and `$campaign-debug` and `$campaign-code-review` as needed.
-- When delegation is requested, route work to `backend_api`, `simulation_engine`, or `data_integration`. Record what Codex built and the verification evidence for the team log.
+CampaignTwin stress-tests e-commerce campaigns against simulated shopper and rival behavior before launch.
+
+1. Stack and commands: `pip install -e .`, `uvicorn main:app --reload --host 0.0.0.0 --port 8000`, `pytest -q`, `ruff check .`.
+2. Folder owners: api/agents/contracts = Big, engine = Mic, data/db = Gan. Stay in your folder.
+3. `contracts/` is the API contract. Only Big edits it, and announces changes in team chat.
+4. Read data only via `data/loaders.py`. Never open `data/processed/` or `data/raw/` directly.
+5. No shared static DB. Static data lives in `data/processed/` (git). Postgres in Docker on Gan's Mac holds runs + LLM cache only. `DB_MODE=json` is the fallback.
+6. Every value carries a source label: data | llm_estimate | default.
+7. `data/processed/` holds aggregates (segments ≥ 50 households) and personas only. Never send household-level data to an LLM.
+8. Engine is deterministic: numpy, vectorized, seeded; plan and baseline share seeds. No LLM calls inside the weekly loop.
+9. All LLM calls go through `agents/llm.py` (cache by prompt hash, timeout, fallback).
+10. Report numbers come only from results JSON; LLM writes commentary only.
+11. Never commit `.env` or keys. Commit `data/processed/`, `cache/llm/`, `demo/replay.json`.
+12. Small PRs, feature branch per person, merge at each checkpoint.

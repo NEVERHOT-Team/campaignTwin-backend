@@ -1,0 +1,20 @@
+{
+  "th": [
+    [
+      "ไม่ซื้อแน่นอน",
+      "ไม่น่าจะซื้อ",
+      "ยังไม่แน่ใจว่าจะซื้อไหม",
+      "น่าจะซื้อ",
+      "ซื้อแน่นอน"
+    ]
+  ],
+  "en": [
+    [
+      "I definitely would not buy it.",
+      "I probably would not buy it.",
+      "I am unsure whether I would buy it.",
+      "I probably would buy it.",
+      "I definitely would buy it."
+    ]
+  ]
+}

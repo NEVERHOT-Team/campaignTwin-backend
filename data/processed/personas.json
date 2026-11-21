@@ -1,0 +1,407 @@
+[
+  {
+    "persona_id": "loyal-1",
+    "segment_id": "loyal",
+    "archetype": "loyal",
+    "demo": {
+      "age_band": "25-34",
+      "income_band": "THB 25,000-39,999",
+      "hh_size": 2,
+      "kids": 0,
+      "homeowner": false,
+      "gender": "unspecified",
+      "urban": true
+    },
+    "behavior": {
+      "purchase_every_days": 21,
+      "aov_thb": 413,
+      "elasticity": -0.6,
+      "coupon_rate": 0.27,
+      "promo_sensitivity": 0.31
+    },
+    "psycho": {
+      "deal_proneness": 0.27,
+      "impulsiveness": 0.36,
+      "brand_consciousness": 0.8,
+      "risk_aversion": 0.5,
+      "digital": 0.67
+    },
+    "story": "Restocks the same coffee for weekday breakfasts.",
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "weight": 0.12,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "loyal-2",
+    "segment_id": "loyal",
+    "archetype": "loyal",
+    "demo": {
+      "age_band": "35-44",
+      "income_band": "THB 40,000-59,999",
+      "hh_size": 3,
+      "kids": 1,
+      "homeowner": true,
+      "gender": "unspecified",
+      "urban": false
+    },
+    "behavior": {
+      "purchase_every_days": 21,
+      "aov_thb": 443,
+      "elasticity": -0.6,
+      "coupon_rate": 0.27,
+      "promo_sensitivity": 0.31
+    },
+    "psycho": {
+      "deal_proneness": 0.27,
+      "impulsiveness": 0.48,
+      "brand_consciousness": 0.8,
+      "risk_aversion": 0.39999999999999997,
+      "digital": 0.79
+    },
+    "story": "Buys a familiar roast for the household.",
+    "channels": [
+      "Shopee"
+    ],
+    "weight": 0.12,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "deal_hunter-1",
+    "segment_id": "deal_hunter",
+    "archetype": "deal_hunter",
+    "demo": {
+      "age_band": "25-34",
+      "income_band": "THB 25,000-39,999",
+      "hh_size": 2,
+      "kids": 0,
+      "homeowner": false,
+      "gender": "unspecified",
+      "urban": true
+    },
+    "behavior": {
+      "purchase_every_days": 27,
+      "aov_thb": 370,
+      "elasticity": -2.1,
+      "coupon_rate": 0.72,
+      "promo_sensitivity": 0.75
+    },
+    "psycho": {
+      "deal_proneness": 0.72,
+      "impulsiveness": 0.36,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.5,
+      "digital": 0.67
+    },
+    "story": "Compares vouchers across shops before checkout.",
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "weight": 0.13,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "deal_hunter-2",
+    "segment_id": "deal_hunter",
+    "archetype": "deal_hunter",
+    "demo": {
+      "age_band": "35-44",
+      "income_band": "THB 40,000-59,999",
+      "hh_size": 3,
+      "kids": 1,
+      "homeowner": true,
+      "gender": "unspecified",
+      "urban": false
+    },
+    "behavior": {
+      "purchase_every_days": 27,
+      "aov_thb": 400,
+      "elasticity": -2.1,
+      "coupon_rate": 0.72,
+      "promo_sensitivity": 0.75
+    },
+    "psycho": {
+      "deal_proneness": 0.72,
+      "impulsiveness": 0.48,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.39999999999999997,
+      "digital": 0.79
+    },
+    "story": "Looks for a lower price per sachet.",
+    "channels": [
+      "Shopee"
+    ],
+    "weight": 0.13,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "waiter-1",
+    "segment_id": "waiter",
+    "archetype": "waiter",
+    "demo": {
+      "age_band": "25-34",
+      "income_band": "THB 25,000-39,999",
+      "hh_size": 2,
+      "kids": 0,
+      "homeowner": false,
+      "gender": "unspecified",
+      "urban": true
+    },
+    "behavior": {
+      "purchase_every_days": 37,
+      "aov_thb": 398,
+      "elasticity": -1.8,
+      "coupon_rate": 0.61,
+      "promo_sensitivity": 0.67
+    },
+    "psycho": {
+      "deal_proneness": 0.61,
+      "impulsiveness": 0.36,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.5,
+      "digital": 0.67
+    },
+    "story": "Holds off on restocking until double-date sales.",
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "weight": 0.095,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "waiter-2",
+    "segment_id": "waiter",
+    "archetype": "waiter",
+    "demo": {
+      "age_band": "35-44",
+      "income_band": "THB 40,000-59,999",
+      "hh_size": 3,
+      "kids": 1,
+      "homeowner": true,
+      "gender": "unspecified",
+      "urban": false
+    },
+    "behavior": {
+      "purchase_every_days": 37,
+      "aov_thb": 428,
+      "elasticity": -1.8,
+      "coupon_rate": 0.61,
+      "promo_sensitivity": 0.67
+    },
+    "psycho": {
+      "deal_proneness": 0.61,
+      "impulsiveness": 0.48,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.39999999999999997,
+      "digital": 0.79
+    },
+    "story": "Waits for free shipping before reordering.",
+    "channels": [
+      "Shopee"
+    ],
+    "weight": 0.095,
+    "edge": true,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "explorer-1",
+    "segment_id": "explorer",
+    "archetype": "explorer",
+    "demo": {
+      "age_band": "25-34",
+      "income_band": "THB 25,000-39,999",
+      "hh_size": 2,
+      "kids": 0,
+      "homeowner": false,
+      "gender": "unspecified",
+      "urban": true
+    },
+    "behavior": {
+      "purchase_every_days": 29,
+      "aov_thb": 337,
+      "elasticity": -1.2,
+      "coupon_rate": 0.35,
+      "promo_sensitivity": 0.48
+    },
+    "psycho": {
+      "deal_proneness": 0.35,
+      "impulsiveness": 0.36,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.5,
+      "digital": 0.67
+    },
+    "story": "Tries a different roast when a sample is offered.",
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "weight": 0.085,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "explorer-2",
+    "segment_id": "explorer",
+    "archetype": "explorer",
+    "demo": {
+      "age_band": "35-44",
+      "income_band": "THB 40,000-59,999",
+      "hh_size": 3,
+      "kids": 1,
+      "homeowner": true,
+      "gender": "unspecified",
+      "urban": false
+    },
+    "behavior": {
+      "purchase_every_days": 29,
+      "aov_thb": 367,
+      "elasticity": -1.2,
+      "coupon_rate": 0.35,
+      "promo_sensitivity": 0.48
+    },
+    "psycho": {
+      "deal_proneness": 0.35,
+      "impulsiveness": 0.48,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.39999999999999997,
+      "digital": 0.79
+    },
+    "story": "Likes small packs of new flavors.",
+    "channels": [
+      "Shopee"
+    ],
+    "weight": 0.085,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "indifferent-1",
+    "segment_id": "indifferent",
+    "archetype": "indifferent",
+    "demo": {
+      "age_band": "25-34",
+      "income_band": "THB 25,000-39,999",
+      "hh_size": 2,
+      "kids": 0,
+      "homeowner": false,
+      "gender": "unspecified",
+      "urban": true
+    },
+    "behavior": {
+      "purchase_every_days": 44,
+      "aov_thb": 301,
+      "elasticity": -0.8,
+      "coupon_rate": 0.11,
+      "promo_sensitivity": 0.19
+    },
+    "psycho": {
+      "deal_proneness": 0.11,
+      "impulsiveness": 0.36,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.5,
+      "digital": 0.67
+    },
+    "story": "Buys coffee online when the pantry runs out.",
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "weight": 0.07,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  },
+  {
+    "persona_id": "indifferent-2",
+    "segment_id": "indifferent",
+    "archetype": "indifferent",
+    "demo": {
+      "age_band": "35-44",
+      "income_band": "THB 40,000-59,999",
+      "hh_size": 3,
+      "kids": 1,
+      "homeowner": true,
+      "gender": "unspecified",
+      "urban": false
+    },
+    "behavior": {
+      "purchase_every_days": 44,
+      "aov_thb": 331,
+      "elasticity": -0.8,
+      "coupon_rate": 0.11,
+      "promo_sensitivity": 0.19
+    },
+    "psycho": {
+      "deal_proneness": 0.11,
+      "impulsiveness": 0.48,
+      "brand_consciousness": 0.4,
+      "risk_aversion": 0.39999999999999997,
+      "digital": 0.79
+    },
+    "story": "Usually adds coffee to an existing grocery order.",
+    "channels": [
+      "Shopee"
+    ],
+    "weight": 0.07,
+    "edge": false,
+    "labels": {
+      "demo": "default",
+      "behavior": "default",
+      "psycho": "default",
+      "story": "default"
+    }
+  }
+]
