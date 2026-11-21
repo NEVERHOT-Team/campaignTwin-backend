@@ -199,3 +199,14 @@ def test_rival_undercut_keeps_hurting_after_it_ends(population):
     post = range(CAMPAIGN + 1, WEEKS + 1)
     # Some shoppers who switched during the undercut keep buying the rival.
     assert total(attacked, "buyers_us", post) < total(calm, "buyers_us", post)
+
+
+def test_rival_promotion_never_raises_our_full_price_sales(population):
+    # Regression: a rival discount used to pull shoppers into the category and then let
+    # them buy (and stock up on) our full-price product.
+    base = make_strategy(baseline=True)
+    calm = run(population, base)
+    attacked = run(population, base, rivals=[undercut(30, delay=0, duration=4)])
+    campaign = range(1, CAMPAIGN + 1)
+    assert total(attacked, "units_us", campaign) < total(calm, "units_us", campaign)
+    assert total(attacked, "buyers_us", campaign) <= total(calm, "buyers_us", campaign)

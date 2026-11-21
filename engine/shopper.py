@@ -44,7 +44,7 @@ class ShopperParams:
     price_mult_cap: float = 3.0
     max_weekly_prob: float = 0.9
     stockpile: float = 0.5  # extra units per unit of price-driven demand lift
-    wait_per_exposure: float = 0.15
+    wait_per_exposure: float = 0.15  # x promo_share, once a shopper has seen a promotion
     wait_floor: float = 0.4
     jitter: float = 0.1
     holdout_share: float = 0.10
@@ -290,15 +290,17 @@ def step(
     price_mult = np.clip(np.power(np.maximum(best, 1e-6), population.elasticity), 1.0,
                          params.price_mult_cap)
     promo_now = (d_us > 0) | (d_rival > 0)
+    # Having seen a promotion teaches a shopper to hold back in weeks without one. One
+    # campaign is one lesson: the effect does not grow with each week of the same campaign.
     waiting_factor = np.where(
         ~promo_now & (state.exposures > 0),
-        np.clip(1 - params.wait_per_exposure * population.promo_share * state.exposures,
-                params.wait_floor, 1.0),
+        np.clip(1 - params.wait_per_exposure * population.promo_share, params.wait_floor, 1.0),
         1.0,
     )
-    p_buy = np.clip(
-        population.weekly_buy_rate * need * price_mult * waiting_factor, 0, params.max_weekly_prob
+    p_base = np.clip(
+        population.weekly_buy_rate * need * waiting_factor, 0, params.max_weekly_prob
     )
+    p_buy = np.clip(p_base * price_mult, 0, params.max_weekly_prob)
     buy = u_buy < p_buy
 
     loyal = params.beta_loyalty * population.loyalty
@@ -321,7 +323,15 @@ def step(
     probs /= probs.sum(axis=1, keepdims=True)
     brand = (u_brand[:, None] > np.cumsum(probs, axis=1)).sum(axis=1).clip(0, 2)
 
-    units = np.where(buy, population.avg_units * (1 + params.stockpile * (price_mult - 1)), 0.0)
+    # Price effects follow the brand actually bought. A purchase that only happened
+    # because some brand was on promotion (u_buy >= p_base) must be of a promoted brand,
+    # and only a promoted purchase is stockpiled. Without this, a rival's discount would
+    # make our loyal shoppers buy and stock up on our full-price product.
+    chosen_price = np.where(brand == US, p_us, np.where(brand == RIVAL, p_rival, 1.0))
+    chosen_mult = np.clip(np.power(np.maximum(chosen_price, 1e-6), population.elasticity), 1.0,
+                          params.price_mult_cap)
+    buy &= (u_buy < p_base) | (chosen_mult > 1.0)
+    units = np.where(buy, population.avg_units * (1 + params.stockpile * (chosen_mult - 1)), 0.0)
     ours = buy & (brand == US)
     discounted = ours & (d_us > 0)
 
