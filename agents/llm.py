@@ -29,7 +29,10 @@ PROMPT_VERSION = "structured-v1"
 def resolve_model(model: str) -> str | None:
     name = model.strip()
     alias = {"strong": "MODEL_STRONG", "fast": "MODEL_FAST"}.get(name.lower())
-    return (os.getenv(alias, "").strip() if alias else name) or None
+    if alias:
+        return (os.getenv(alias, "").strip() or os.getenv("OPENAI_MODEL", "").strip()
+                or "gpt-4.1-mini")
+    return name or None
 
 
 def _safe_error(error: Exception) -> str:
@@ -76,7 +79,11 @@ def _cache_write(key: str, model: str, prompt: dict, result: BaseModel) -> None:
 def _provider_call(model: str, messages: list, schema: type[Response]) -> Response:
     client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=30.0, max_retries=1)
     try:
-        completion = client.chat.completions.parse(
+        # Earlier supported SDK releases expose structured parsing under beta.
+        parse = getattr(client.chat.completions, "parse", None)
+        if parse is None:
+            parse = client.beta.chat.completions.parse
+        completion = parse(
             model=model,
             messages=messages,
             response_format=schema,

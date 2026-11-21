@@ -22,3 +22,8 @@ CREATE TABLE IF NOT EXISTS llm_cache (
     response jsonb NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS rehearsal_workspace (
+    id integer PRIMARY KEY CHECK (id = 1),
+    state jsonb NOT NULL
+);
