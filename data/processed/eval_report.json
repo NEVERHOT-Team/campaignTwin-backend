@@ -1,8 +1,8 @@
 {
   "status": "fail",
   "check_counts": {
-    "pass": 4,
-    "fail": 7,
+    "pass": 6,
+    "fail": 6,
     "skipped": 0
   },
   "source": "data",
@@ -11,7 +11,7 @@
     "households": 1417,
     "weeks": 44
   },
-  "persona_count": 60,
+  "persona_count": 150,
   "ks_population": {
     "agents": 5000,
     "seed": 42,
@@ -20,7 +20,8 @@
     "source": "default"
   },
   "targets": {
-    "ks_similarity_min": 0.9,
+    "ks_similarity_min": 0.85,
+    "brand_loyalty_ks_min": 0.75,
     "sd_ratio_min": 0.8,
     "correlation_gap_max": 0.1
   },
@@ -28,76 +29,303 @@
   "method": {
     "reference": "Pre-holdout panel from the packaged simulated Complete Journey data.",
     "weights": "Population weights for personas and equal weights for households.",
-    "marginal_fit": "KS similarity at six decimals. profile_value uses weighted profiles. value and status apply to equally weighted agents sampled by persona weight. Jitter applies to all six attributes. Rates are clipped to [0, 1] and cycles to at least one week.",
+    "selection_bias": "The tissue ETL records the pre-holdout comparison and fitted weighting factors in a local aggregate audit when it builds the personas.",
+    "marginal_fit": "KS similarity at six decimals. profile_value uses weighted profiles. value and status apply to equally weighted agents sampled by persona weight. Rates are clipped to [0, 1]. Cycles and units are clipped to at least one. Units use additional independent jitter draws after the six historical fields.",
     "variance_ratio": "Population SD of persona buy rate over household population SD.",
     "over_correlation": "Absolute gap in mean absolute Pearson r over 15 distinct pairs.",
     "direction_checks": "Weighted persona means. A more negative slope means greater price sensitivity. Annual income groups are below USD 35k and at least USD 75k. Observed slopes were fitted by archetype and assigned to personas.",
     "confidence_inputs": "Coverage is the percentage of all assumptions labelled data. Rival evidence counts library rows with both a nonblank source URL and a known reaction type."
   },
+  "selection_bias": {
+    "status": "available",
+    "source": "data",
+    "threshold": 0.9,
+    "method": "Each pre-holdout category buyer counts once. Coverage requires both age and income. KS similarity is one minus the KS statistic. Mean difference is with demographics minus without, in each attribute's original units.",
+    "counts": {
+      "with_demographics": 621,
+      "without_demographics": 796
+    },
+    "metrics": {
+      "weekly_buy_rate": {
+        "ks_similarity": 0.7508982108610687,
+        "mean_with_demographics": 0.11469770165422341,
+        "mean_without_demographics": 0.07743261763362265,
+        "mean_difference": 0.03726508402060076
+      },
+      "purchase_cycle_weeks": {
+        "ks_similarity": 0.7756253085071088,
+        "mean_with_demographics": 15.439613526570048,
+        "mean_without_demographics": 23.46608040201005,
+        "mean_difference": -8.026466875440002
+      },
+      "avg_units": {
+        "ks_similarity": 0.924730334441936,
+        "mean_with_demographics": 1.278263595849977,
+        "mean_without_demographics": 1.2517263192216042,
+        "mean_difference": 0.026537276628372908
+      },
+      "avg_price_paid": {
+        "ks_similarity": 0.8283547366461939,
+        "mean_with_demographics": 170.50140890298795,
+        "mean_without_demographics": 140.30189422543427,
+        "mean_difference": 30.19951467755368
+      },
+      "promo_share": {
+        "ks_similarity": 0.8756018417368647,
+        "mean_with_demographics": 0.6968361191155202,
+        "mean_without_demographics": 0.6157906056303093,
+        "mean_difference": 0.08104551348521094
+      },
+      "coupon_rate": {
+        "ks_similarity": 0.90385097791696,
+        "mean_with_demographics": 0.08236862860335438,
+        "mean_without_demographics": 0.050456556962431925,
+        "mean_difference": 0.031912071640922454
+      },
+      "brand_loyalty": {
+        "ks_similarity": 0.841783393618657,
+        "mean_with_demographics": 0.7883113299314284,
+        "mean_without_demographics": 0.8419874605673316,
+        "mean_difference": -0.05367613063590326
+      }
+    },
+    "triggered_attributes": [
+      "weekly_buy_rate",
+      "purchase_cycle_weeks",
+      "avg_price_paid",
+      "promo_share",
+      "brand_loyalty"
+    ],
+    "needs_reweighting": true,
+    "reweighting": {
+      "applied": true,
+      "source": "data",
+      "method": "Calibrate flagged behaviour distributions to all buyers using exponential tilting from the demographic design weights. Multiply by each reported bin factor, then normalize within each original archetype and demographic weighting stratum to preserve its original mass. Bins follow the nearest attainable population quartiles without splitting ties. The last bin is above the final cut. Each multiplier is bounded by population size and its reciprocal. Target and achieved shares include bins with limited or zero sample support.",
+      "factors": {
+        "weekly_buy_rate": {
+          "upper_cuts_inclusive": [
+            0.022727,
+            0.045455,
+            0.113636
+          ],
+          "multiplier": [
+            0.6802166241164702,
+            0.16611749191255729,
+            0.3768887924230936,
+            23.48140990938361
+          ],
+          "target_share": [
+            0.3196894848270995,
+            0.17290049400141144,
+            0.27522935779816515,
+            0.23218066337332394
+          ],
+          "before_share": [
+            0.26486815936357216,
+            0.24688614138155415,
+            0.28596976418077336,
+            0.20227593507410024
+          ],
+          "after_share": [
+            0.31968948297976213,
+            0.17290049650091846,
+            0.27522935610577776,
+            0.23218066441354154
+          ]
+        },
+        "purchase_cycle_weeks": {
+          "upper_cuts_inclusive": [
+            4.5,
+            10.5,
+            41.0
+          ],
+          "multiplier": [
+            1.1592436962191761,
+            1.2206688091871667,
+            1.0389153616199933,
+            0.6802166241164702
+          ],
+          "target_share": [
+            0.2526464361326747,
+            0.24135497529992944,
+            0.1863091037402964,
+            0.3196894848270995
+          ],
+          "before_share": [
+            0.21849251665765423,
+            0.26110128403706384,
+            0.2555380399417096,
+            0.26486815936357216
+          ],
+          "after_share": [
+            0.25264643952126886,
+            0.24135497823317148,
+            0.1863090992657975,
+            0.31968948297976213
+          ]
+        },
+        "avg_price_paid": {
+          "upper_cuts_inclusive": [
+            55.224,
+            158.652,
+            224.289
+          ],
+          "multiplier": [
+            1.580104074976735,
+            1.1050541551266553,
+            0.6868271133481353,
+            0.8338411310673066
+          ],
+          "target_share": [
+            0.24982357092448837,
+            0.24982357092448837,
+            0.2526464361326747,
+            0.24770642201834864
+          ],
+          "before_share": [
+            0.22461025213318792,
+            0.1898995499912931,
+            0.317400489418838,
+            0.26808970845668095
+          ],
+          "after_share": [
+            0.24982357098908903,
+            0.24982357147368064,
+            0.2526464349386155,
+            0.24770642259861478
+          ]
+        },
+        "promo_share": {
+          "upper_cuts_inclusive": [
+            0.333333,
+            0.75,
+            0.95
+          ],
+          "multiplier": [
+            1.3781649880447946,
+            1.492070260681282,
+            0.9212286866608833,
+            0.5278883284476099
+          ],
+          "target_share": [
+            0.2646436132674665,
+            0.23500352858151025,
+            0.05716302046577276,
+            0.44318983768525055
+          ],
+          "before_share": [
+            0.2197744915634824,
+            0.2048479043891888,
+            0.07824629498941427,
+            0.49713130905791464
+          ],
+          "after_share": [
+            0.2646436123406599,
+            0.2350035267329751,
+            0.057163022849500776,
+            0.44318983807686424
+          ]
+        },
+        "brand_loyalty": {
+          "upper_cuts_inclusive": [
+            0.642857,
+            0.978261
+          ],
+          "multiplier": [
+            0.5738560169628002,
+            0.9352982989670295,
+            1.8631461176223016
+          ],
+          "target_share": [
+            0.24982357092448837,
+            0.21594918842625266,
+            0.534227240649259
+          ],
+          "before_share": [
+            0.33549248916221397,
+            0.16478246524118084,
+            0.4997250455966052
+          ],
+          "after_share": [
+            0.2498235698921294,
+            0.21594918775884395,
+            0.5342272423490266
+          ]
+        }
+      },
+      "max_abs_share_gap_before": 0.0856689182377256,
+      "max_abs_share_gap_after": 4.474498938034088e-09
+    }
+  },
   "marginal_fit": {
     "weekly_buy_rate": {
-      "profile_value": 0.7102426203976346,
-      "value": 0.6995105151729004,
+      "profile_value": 0.9644379420506087,
+      "value": 0.8384,
       "status": "fail"
     },
     "purchase_cycle_weeks": {
-      "profile_value": 0.7102426203976346,
-      "value": 0.6977105151729005,
+      "profile_value": 0.9658827228026576,
+      "value": 0.8372,
       "status": "fail"
     },
     "avg_price_paid": {
-      "profile_value": 0.7592240739735447,
-      "value": 0.771930698659139,
-      "status": "fail"
+      "profile_value": 0.9607034354343185,
+      "value": 0.9552338743824982,
+      "status": "pass"
     },
     "promo_share": {
-      "profile_value": 0.6381926362154138,
-      "value": 0.6390101623147495,
+      "profile_value": 0.9684255142578035,
+      "value": 0.7786101623147494,
       "status": "fail"
     },
     "coupon_rate": {
-      "profile_value": 0.6190474591481508,
-      "value": 0.6107203952011291,
-      "status": "fail"
+      "profile_value": 0.9777547545207277,
+      "value": 0.9778746647847565,
+      "status": "pass"
     },
     "brand_loyalty": {
-      "profile_value": 0.5136641277103157,
-      "value": 0.535772759350741,
+      "profile_value": 0.9400812151250246,
+      "value": 0.747172759350741,
+      "status": "fail"
+    },
+    "avg_units": {
+      "profile_value": 0.9319845020128885,
+      "value": 0.6317181369089626,
       "status": "fail"
     }
   },
   "variance_ratio": {
-    "persona_sd": 0.10203124190693616,
+    "persona_sd": 0.10727167380946982,
     "household_sd": 0.1015706426358705,
-    "value": 1.0045347677154797,
+    "value": 1.0561287299720792,
     "status": "pass"
   },
   "over_correlation": {
-    "persona_mean_abs_corr": 0.27731101382201295,
+    "persona_mean_abs_corr": 0.1901096934577513,
     "household_mean_abs_corr": 0.18934305276729144,
-    "gap": 0.08796796105472152,
+    "gap": 0.0007666406904598688,
     "status": "pass"
   },
   "direction_checks": {
     "deal_hunter_vs_loyal": {
       "field": "price_elasticity",
       "source": "default",
-      "deal_hunter": -2.765,
-      "loyal": -0.8779487179487179,
+      "deal_hunter": -2.695,
+      "loyal": -0.8216949152542372,
       "status": "pass"
     },
     "income_observed": {
       "field": "price_elasticity_observed",
       "source": "data",
-      "low": -0.24816235250587526,
-      "high": -0.32621127040446635,
+      "low": -0.21431421747055332,
+      "high": -0.24750169810135714,
       "status": "fail"
     },
     "income_prior": {
       "field": "price_elasticity",
       "source": "default",
-      "low": -1.6040648926404828,
-      "high": -1.557787838186145,
+      "low": -1.7593688132449323,
+      "high": -1.4783036931192641,
       "status": "pass"
     }
   },

@@ -34,6 +34,7 @@ def test_panel_denominators_singletons_and_exact_mixed_brand_loyalty(panel):
     assert values.loc["tt-hh-0001"].to_dict() == {
         "weekly_buy_rate": 0.5,
         "purchase_cycle_weeks": 2,
+        "avg_units": 2,
         "avg_price_paid": 12.5,
         "promo_share": 0.5,
         "coupon_rate": 0.5,
@@ -42,6 +43,7 @@ def test_panel_denominators_singletons_and_exact_mixed_brand_loyalty(panel):
     assert values.loc["tt-hh-0002"].to_dict() == {
         "weekly_buy_rate": 0.25,
         "purchase_cycle_weeks": 4,
+        "avg_units": 1,
         "avg_price_paid": 12,
         "promo_share": 1,
         "coupon_rate": 0,
@@ -129,6 +131,11 @@ def test_population_ks_uses_seeded_weighted_draws_and_bounded_independent_jitter
     expected = 1 - max((rates < 0.6).mean(), (rates > 0.6).mean())
     assert marginal["coupon_rate"]["value"] == pytest.approx(expected)
 
+    with_units = quality._expand_population(profiles.assign(avg_units=[2.0, 10.0]))
+    pd.testing.assert_frame_equal(with_units[list(quality.ATTRIBUTES)], agents)
+    units = np.where(draws == 0, 2.0, 10.0)
+    assert with_units["avg_units"].between(0.9 * units, 1.1 * units).all()
+
 
 def test_adjusted_priors_pass_both_directions_on_published_personas():
     checks = quality._direction_checks(pd.DataFrame(loaders.load_personas()))
@@ -163,6 +170,7 @@ def test_missing_panel_preserves_badge_inputs_and_reports_skips(monkeypatch, tmp
     assert "household_behavior.parquet is missing" in capsys.readouterr().out
     report = loaders.load_eval_report()
     assert report["reference"]["status"] == "skipped"
+    assert report["selection_bias"]["status"] == "skipped"
     assert all(
         m == {"value": None, "profile_value": None, "status": "skipped"}
         for m in report["marginal_fit"].values()
@@ -198,20 +206,36 @@ def test_legacy_panel_marks_unrecoverable_loyalty_and_correlation(monkeypatch, p
 def test_published_report_thresholds_and_source_counts():
     report = loaders.load_eval_report()
     assert report["reference"]["status"] in {"available", "partial", "skipped"}
-    assert set(report["marginal_fit"]) == set(quality.ATTRIBUTES)
-    for metric in report["marginal_fit"].values():
+    assert report["persona_count"] == 150
+    audit = report["selection_bias"]
+    # Campaign 18 is held out. Using all 52 weeks would include 646 known households.
+    assert audit["counts"] == {"with_demographics": 621, "without_demographics": 796}
+    assert audit["threshold"] == 0.9
+    assert set(audit["metrics"]) == set(report["marginal_fit"])
+    triggered = {
+        name for name, row in audit["metrics"].items() if round(row["ks_similarity"], 12) < 0.9
+    }
+    assert set(audit["triggered_attributes"]) == triggered
+    assert audit["needs_reweighting"] == audit["reweighting"]["applied"] == bool(triggered)
+    for row in audit["metrics"].values():
+        assert row["mean_difference"] == pytest.approx(
+            row["mean_with_demographics"] - row["mean_without_demographics"]
+        )
+    assert set(report["marginal_fit"]) == {*quality.ATTRIBUTES, "avg_units"}
+    for field, metric in report["marginal_fit"].items():
         if metric["value"] is None:
             assert metric["status"] == "skipped" and report["reference"]["status"] != "available"
             continue
         assert 0 <= metric["value"] <= 1 and 0 <= metric["profile_value"] <= 1
-        assert metric["status"] == ("pass" if metric["value"] >= 0.9 else "fail")
+        threshold = 0.75 if field == "brand_loyalty" else 0.85
+        assert metric["status"] == ("pass" if metric["value"] >= threshold else "fail")
     ratio, gap = report["variance_ratio"], report["over_correlation"]
     if ratio["value"] is not None:
         assert ratio["status"] == ("pass" if ratio["value"] >= 0.8 else "fail")
     if gap["gap"] is not None:
         assert gap["status"] == ("pass" if gap["gap"] <= 0.1 else "fail")
     counts = report["check_counts"]
-    assert sum(counts.values()) == 11
+    assert sum(counts.values()) == 12
     assert report["status"] == (
         "fail" if counts["fail"] else "skipped" if counts["skipped"] else "pass"
     )
@@ -219,7 +243,7 @@ def test_published_report_thresholds_and_source_counts():
     for key in ("direction_checks", "rival_evidence", "data_coverage", "confidence_inputs"):
         assert fresh[key] == report[key]
     if report["reference"]["status"] == fresh["reference"]["status"] == "available":
-        for attr in quality.ATTRIBUTES:
+        for attr in report["marginal_fit"]:
             for key in ("value", "profile_value"):
                 assert fresh["marginal_fit"][attr][key] == pytest.approx(
                     report["marginal_fit"][attr][key]

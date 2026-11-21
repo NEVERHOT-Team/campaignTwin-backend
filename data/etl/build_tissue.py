@@ -27,7 +27,8 @@ from data.etl.config import (
     PANEL_WEEKS,
     SEED,
 )
-from data.etl.personas import build_personas
+from data.etl.personas import build_personas, sample_households
+from data.etl.selection_bias import calibrate_selection
 from data.loaders import CALIB, DATA_DIR, PROCESSED, load_category_products, load_raw_table
 
 PROMOTION_KEYS = ["product_id", "store_id", "week"]
@@ -370,7 +371,12 @@ def _market_inputs(
                 "scope": "Archetype base prior midpoint before income adjustment.",
             },
             "pooled_price_elasticity_observed": {"value": round(elasticity, 6), "source": "data"},
-            "persona_fields": {"demographics": "data", "weight": "data", "channels": "default"},
+            "persona_fields": {
+                "demographics": "data",
+                "imputed_demographics": "default",
+                "weight": "data",
+                "channels": "default",
+            },
             "dataset": "Complete Journey as packaged by completejourney_py (simulated)",
         },
     }
@@ -473,7 +479,7 @@ def _calibration(households: pd.DataFrame, weekly: pd.DataFrame, weeks: pd.Index
 
 
 def _write_artifacts(
-    json_records: dict[str, dict | list], segments: pd.DataFrame, panel: pd.DataFrame
+    json_records: dict[str, dict | list], segments: pd.DataFrame, panel: pd.DataFrame, bias: dict
 ) -> None:
     PROCESSED.mkdir(parents=True, exist_ok=True)
     CALIB.mkdir(parents=True, exist_ok=True)
@@ -484,9 +490,12 @@ def _write_artifacts(
             (staging / name).write_text(text + "\n", encoding="utf-8")
         segments.to_parquet(staging / "segments.parquet", index=False)
         panel.to_parquet(staging / "household_behavior.parquet", index=False)
+        audit = staging / "selection_bias.json"
+        audit.write_text(json.dumps(bias, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         for name in [*json_records, "segments.parquet"]:
             (staging / name).replace(PROCESSED / name)
         (staging / "household_behavior.parquet").replace(CALIB / "household_behavior.parquet")
+        audit.replace(CALIB / audit.name)
 
 
 def main() -> None:
@@ -495,7 +504,8 @@ def main() -> None:
     households, archetype_segments, elasticity = _household_features(
         purchases, purchase_weeks, visits, weeks
     )
-    personas = build_personas(households)
+    sample, bias = calibrate_selection(households, sample_households(households))
+    personas = build_personas(households, sample=sample)
     segments = _segments(households, personas)
     market, economics, knobs = _market_inputs(purchases, segments, archetype_segments, elasticity)
     panel = _calibration(households, purchase_weeks, weeks)
@@ -509,6 +519,7 @@ def main() -> None:
         },
         segments,
         panel,
+        bias,
     )
     print(f"{CATEGORY}: {len(personas)} personas and {len(segments)} segments")
     print(f"Local calibration: {len(panel):,} household-weeks from {len(households):,} households")
