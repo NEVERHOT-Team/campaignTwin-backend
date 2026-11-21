@@ -5,8 +5,8 @@
     "undercut": 0.15,
     "non_price": 0.1
   },
-  "depth_p50": 0.25,
-  "depth_p90": 0.44,
+  "depth_p50": 25.0,
+  "depth_p90": 44.0,
   "delay_weeks_p50": 1,
   "delay_weeks_min": 0,
   "duration_weeks": 2,

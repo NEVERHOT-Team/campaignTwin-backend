@@ -1,13 +1,65 @@
-"""Validate and load the checked-in synthetic data."""
+"""Load synthetic engine fixtures and isolated public-source ETL data."""
+"""Read local source tables and validate the engine inputs."""
 
 import json
 from functools import lru_cache
+from hashlib import sha256
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 import pandas as pd
 
-PROCESSED = Path(__file__).resolve().parent / "processed"
+from data.sources import ASSETS, CJ_TABLES
+
+from data.etl.config import CATEGORY
+
+DATA_DIR = Path(__file__).resolve().parent
+PROCESSED = DATA_DIR / "processed"
+RAW = DATA_DIR / "raw"
+CALIB = DATA_DIR / "calib"
+RAW_TABLES = (
+    "transactions",
+    "products",
+    "demographics",
+    "campaigns",
+    "campaign_descriptions",
+    "coupons",
+    "coupon_redemptions",
+    "promotions",
+)
+
+
+def load_raw_table(
+    name: str,
+    *,
+    columns: list[str] | None = None,
+    filters: list[tuple[str, str, Any]] | None = None,
+) -> pd.DataFrame:
+    if name not in RAW_TABLES:
+        raise ValueError(f"Unknown Complete Journey table: {name}")
+    path = RAW / f"{name}.parquet"
+    try:
+        return pd.read_parquet(path, columns=columns, filters=filters)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.download_raw first."
+        ) from error
+
+
+def load_twin_responses(columns: list[str]) -> pd.DataFrame | None:
+    filename = "wave1_3_response.csv"
+    response_directory = "question_catalog_and_human_response_csv"
+    candidates = (
+        RAW / filename,
+        RAW / response_directory / filename,
+        RAW / "Twin-2K-500" / response_directory / filename,
+    )
+    for path in candidates:
+        if path.is_file():
+            return pd.read_csv(path, usecols=columns)
+    return None
 
 
 def _require_keys(record, expected: str, location: str) -> None:
@@ -28,7 +80,8 @@ def load_segments() -> pd.DataFrame:
     _require_keys(
         frame.columns,
         "segment_id name archetype households share weekly_purchase_prob avg_basket_thb "
-        "price_elasticity coupon_rate promo_response private_label_share source",
+        "cluster_label price_elasticity price_elasticity_observed price_elasticity_source "
+        "price_elasticity_observed_source coupon_rate promo_response private_label_share source",
         filename,
     )
     return frame
@@ -55,54 +108,140 @@ def load_personas() -> list[dict[str, Any]]:
         location = f"{filename}[{index}]"
         _require_keys(
             record,
-            "persona_id segment_id archetype demo behavior psycho "
-            "story channels weight edge labels",
+            "persona_id segment archetype cluster_label weight age_band income_band household_size "
+            "kids homeowner weekly_buy_rate purchase_cycle_weeks avg_units avg_price_paid "
+            "price_elasticity price_elasticity_observed promo_share coupon_rate brand_loyalty "
+            "traits channels backstory source",
             location,
         )
         _require_keys(
-            record["demo"],
-            "age_band income_band hh_size kids homeowner gender urban",
-            f"{location}.demo",
+            record["traits"], "impulsiveness risk_aversion time_preference", f"{location}.traits"
         )
         _require_keys(
-            record["behavior"],
-            "purchase_every_days aov_thb elasticity coupon_rate promo_sensitivity",
-            f"{location}.behavior",
+            record["source"],
+            "behavior traits backstory price_elasticity price_elasticity_observed",
+            f"{location}.source",
         )
-        _require_keys(
-            record["psycho"],
-            "deal_proneness impulsiveness brand_consciousness risk_aversion digital",
-            f"{location}.psycho",
-        )
-        _require_keys(record["labels"], "demo behavior psycho story", f"{location}.labels")
     return records
+
+
+@lru_cache(maxsize=1)
+def load_market() -> dict[str, Any]:
+    filename = "market.json"
+    market = _read_json(filename)
+    _require_keys(
+        market,
+        "category currency ref_price unit_cost platform_fee_pct payment_fee_pct "
+        "shipping_cost_per_order margin_floor_pct segments weeks source_notes",
+        filename,
+    )
+    _require_keys(market["weeks"], "campaign post", f"{filename}.weeks")
+    for index, segment in enumerate(market["segments"]):
+        _require_keys(
+            segment,
+            "name archetype cluster_label share weekly_buy_rate households "
+            "price_elasticity price_elasticity_observed",
+            f"{filename}.segments[{index}]",
+        )
+    return market
+
+
+@lru_cache(maxsize=1)
+def load_knobs() -> dict[str, Any]:
+    filename = "knob_ranges.json"
+    knobs = _read_json(filename)
+    _require_keys(
+        knobs,
+        "discount_pct duration_days mechanics cap_per_user calendar channels source",
+        filename,
+    )
+    _require_keys(knobs["discount_pct"], "min p50 p90 max raw_max", f"{filename}.discount_pct")
+    return knobs
+
+
+def load_household_behavior() -> pd.DataFrame:
+    """Load local-only household data for calibration runs."""
+    path = CALIB / "household_behavior.parquet"
+    try:
+        panel = pd.read_parquet(path)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.build_tissue after downloading raw data."
+        ) from error
+    _require_keys(
+        panel.columns,
+        "household_key archetype segment week bought units price_paid shelf_price on_promo "
+        "discount_pct coupon_used in_mailer on_display brand",
+        path.name,
+    )
+    return panel
 
 
 @lru_cache(maxsize=1)
 def load_library() -> pd.DataFrame:
     filename = "campaign_library.csv"
-    frame = pd.read_csv(PROCESSED / filename, keep_default_na=False)
+    frame = pd.read_csv(
+        PROCESSED / filename,
+        keep_default_na=False,
+        dtype={"campaign_id": str, "reaction_to_campaign_id": str, "brand": str, "season": str},
+    )
     _require_keys(
         frame.columns,
         "campaign_id brand platform category price_tier start_date end_date season mechanic "
-        "discount_depth voucher_type min_spend target_segment channel_mix reaction_to "
+        "discount_depth voucher_type min_spend target_segment channel_mix reaction_to_campaign_id "
         "reaction_type reaction_delay_days reported_outcome description source_url confidence",
         filename,
     )
+    if frame["campaign_id"].eq("").any() or frame["campaign_id"].duplicated().any():
+        raise ValueError("campaign_library.csv requires a unique nonempty campaign_id per row")
+    if not frame["reaction_type"].isin(["", "none", "match", "undercut", "non_price"]).all():
+        raise ValueError("campaign_library.csv contains an unknown reaction_type")
+    return frame
+
+
+@lru_cache(maxsize=1)
+def load_brands() -> pd.DataFrame:
+    filename = "brands.csv"
+    frame = pd.read_csv(PROCESSED / filename, dtype={"brand": str}, keep_default_na=False)
+    _require_keys(
+        frame.columns,
+        "brand is_ours category sub_category price_tier avg_price target_segments "
+        "channels geo market_share typical_discount_pct margin_floor_pct",
+        filename,
+    )
+    if frame["is_ours"].dtype != bool or frame["is_ours"].sum() != 1:
+        raise ValueError("brands.csv requires exactly one is_ours brand")
     return frame
 
 
 @lru_cache(maxsize=1)
 def load_rival_prior() -> dict[str, Any]:
-    filename = "rival_prior.json"
-    record = _read_json(filename)
+    filename = "reaction_base_rate.json"
+    record = _read_json(filename)[CATEGORY]
     _require_keys(
         record,
-        "p depth_p50 depth_p90 delay_weeks_p50 delay_weeks_min duration_weeks n_events source",
+        "none match undercut non_price depth_p50 depth_p90 delay_median n_events source "
+        "event_rates background_rates lift n_trigger_weeks n_matched_trigger_weeks "
+        "n_background_weeks n_comparisons",
         filename,
     )
-    _require_keys(record["p"], "none match undercut non_price", f"{filename}.p")
-    return record
+    return {
+        "p": {name: record[name] for name in ("none", "match", "undercut", "non_price")},
+        "event_rates": record["event_rates"],
+        "background_rates": record["background_rates"],
+        "lift": record["lift"],
+        "n_trigger_weeks": record["n_trigger_weeks"],
+        "n_matched_trigger_weeks": record["n_matched_trigger_weeks"],
+        "n_background_weeks": record["n_background_weeks"],
+        "n_comparisons": record["n_comparisons"],
+        "depth_p50": record["depth_p50"],
+        "depth_p90": record["depth_p90"],
+        "delay_weeks_p50": record["delay_median"],
+        "delay_weeks_min": record.get("delay_min", record["delay_median"]),
+        "duration_weeks": record.get("duration_weeks", 2),
+        "n_events": record["n_events"],
+        "source": record["source"],
+    }
 
 
 @lru_cache(maxsize=1)
@@ -127,3 +266,172 @@ def load_backtest() -> dict[str, Any]:
         record["actual"], "lift_pct redemption_rate incremental_sales", f"{filename}.actual"
     )
     return record
+
+
+def source_asset_path(key: str) -> Path:
+    """Resolve only registered files inside the ignored raw-data directory."""
+    asset = ASSETS[key]
+    return RAW / asset.dataset / asset.filename
+
+
+def source_asset_info(key: str) -> dict[str, Any] | None:
+    path = source_asset_path(key)
+    if not path.is_file():
+        return None
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
+
+
+def load_source_manifest() -> dict[str, Any]:
+    path = PROCESSED / "source_manifest.json"
+    if not path.is_file():
+        return {"version": 1, "assets": {}}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_source_manifest(manifest: dict[str, Any]) -> None:
+    PROCESSED.mkdir(parents=True, exist_ok=True)
+    destination = PROCESSED / "source_manifest.json"
+    temporary = destination.with_suffix(".json.partial")
+    temporary.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(destination)
+
+
+def _source_cache_path(table: str) -> Path:
+    # Validate before constructing a path: table is never a user-supplied filename.
+    CJ_TABLES[table]
+    return RAW / "completejourney" / "normalized" / f"{table}.parquet"
+
+
+def _read_completejourney_r(table: str, *, offset: int = 0, limit: int = 0) -> pd.DataFrame:
+    import pyreadr
+
+    path = source_asset_path(f"completejourney/{CJ_TABLES[table]}")
+    objects = pyreadr.read_r(path, row_offset=offset, row_limit=limit)
+    if len(objects) != 1:
+        raise ValueError(f"Expected one data frame in {table}")
+    frame = next(iter(objects.values()))
+    if not isinstance(frame, pd.DataFrame):
+        raise ValueError(f"Expected tabular data in {table}")
+    return frame
+
+
+def load_completejourney(table: str, *, limit: int | None = None) -> pd.DataFrame:
+    """Household-level source data: local ETL/evaluation only, never an LLM input."""
+    path = source_asset_path(f"completejourney/{CJ_TABLES[table]}")
+    cached = _source_cache_path(table)
+    if cached.is_file() and cached.stat().st_mtime_ns >= path.stat().st_mtime_ns:
+        if limit is not None:
+            import pyarrow.parquet as pq
+
+            if limit < 1:
+                raise ValueError("limit must be positive")
+            batch = next(pq.ParquetFile(cached).iter_batches(batch_size=limit))
+            return batch.to_pandas()
+        return pd.read_parquet(cached)
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be positive")
+    if table == "promotions" and limit is None:
+        raise ValueError("Large promotions table: pass limit= or normalize it explicitly first")
+    return _read_completejourney_r(table, limit=limit or 0)
+
+
+def normalize_completejourney(table: str, *, chunk_size: int = 1_000_000) -> dict[str, Any]:
+    """Convert source R data to local Parquet with bounded per-chunk memory."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    source = source_asset_path(f"completejourney/{CJ_TABLES[table]}")
+    destination = _source_cache_path(table)
+    if destination.is_file() and destination.stat().st_mtime_ns >= source.stat().st_mtime_ns:
+        metadata = pq.ParquetFile(destination)
+        return {"rows": metadata.metadata.num_rows, "columns": metadata.schema_arrow.names}
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(".parquet.partial")
+    writer = None
+    rows = 0
+    columns = []
+    try:
+        while True:
+            frame = _read_completejourney_r(table, offset=rows, limit=chunk_size)
+            if frame.empty:
+                break
+            batch = pa.Table.from_pandas(frame, preserve_index=False)
+            if writer is None:
+                writer = pq.ParquetWriter(temporary, batch.schema, compression="zstd")
+                columns = list(frame.columns)
+            writer.write_table(batch)
+            rows += len(frame)
+            if len(frame) < chunk_size:
+                break
+        if writer is None:
+            raise ValueError(f"Empty source table: {table}")
+        writer.close()
+        writer = None
+        temporary.replace(destination)
+    finally:
+        if writer is not None:
+            writer.close()
+        temporary.unlink(missing_ok=True)
+    return {"rows": rows, "columns": columns}
+
+
+def load_twin_responses(wave: str = "1_3") -> pd.DataFrame:
+    """US survey respondents, not a Thai population or an LLM prompt payload."""
+    filename = {"1_3": "wave1_3_response.csv", "4": "wave4_response.csv"}[wave]
+    return pd.read_csv(source_asset_path(f"twin2k/{filename}"), low_memory=False)
+
+
+def load_twin_catalog() -> Any:
+    return json.loads(source_asset_path("twin2k/question_catalog.json").read_text(encoding="utf-8"))
+
+
+def load_hillstrom() -> pd.DataFrame:
+    """Independent randomized email experiment; reserved for evaluation."""
+    frame = pd.read_csv(source_asset_path("hillstrom/hillstrom.csv.gz"))
+    _require_keys(frame.columns, "segment visit conversion spend", "Hillstrom")
+    return frame
+
+
+def list_breakfast_files() -> list[str]:
+    with ZipFile(source_asset_path("breakfast/breakfast_at_the_frat.zip")) as archive:
+        return [info.filename for info in archive.infolist() if not info.is_dir()]
+
+
+def list_breakfast_sheets(member: str) -> list[dict[str, Any]]:
+    import openpyxl
+
+    with ZipFile(source_asset_path("breakfast/breakfast_at_the_frat.zip")) as archive:
+        content = BytesIO(archive.read(member))
+    workbook = openpyxl.load_workbook(content, read_only=True, data_only=True)
+    try:
+        return [
+            {"sheet": sheet.title, "worksheet_rows": sheet.max_row, "columns": sheet.max_column}
+            for sheet in workbook.worksheets
+        ]
+    finally:
+        workbook.close()
+
+
+def load_breakfast_table(
+    member: str,
+    *,
+    sheet_name: str | int = 0,
+    nrows: int | None = None,
+) -> pd.DataFrame:
+    """Read an archive member in memory; never extract untrusted ZIP paths."""
+    with ZipFile(source_asset_path("breakfast/breakfast_at_the_frat.zip")) as archive:
+        if member not in archive.namelist():
+            raise KeyError(member)
+        suffix = Path(member).suffix.lower()
+        content = BytesIO(archive.read(member))
+        if suffix == ".csv":
+            return pd.read_csv(content, low_memory=False, nrows=nrows)
+        if suffix == ".xlsx":
+            return pd.read_excel(content, sheet_name=sheet_name, engine="openpyxl", nrows=nrows)
+        raise ValueError("Only CSV and XLSX tables are supported")
