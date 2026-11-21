@@ -48,7 +48,7 @@ def offline_llm(monkeypatch):
     provider = Mock(
         return_value=rival_policy.CounterMove(
             reaction="undercut",
-            depth=0.99,
+            depth=99,
             delay_weeks=1,
             duration_weeks=2,
             rationale="Target the same shoppers with an earlier undercut.",
@@ -90,7 +90,7 @@ def test_s4_shortlist_depth_evidence_and_unweighted_outputs(spec, strategies, ri
     assert [row.strategy_id for row in rows] == ["plan-a", "plan-b", "plan-c"]
     library = loaders.load_library()
     top_history = library[library["brand"] == "Daily Peak"]
-    cap = top_history["discount_depth"].max() * 1.1
+    cap = top_history["discount_depth"].max() * 100 * 1.1  # library fraction -> percent
     for row in rows:
         assert isinstance(row, RivalScenario)
         assert row.rival == "Daily Peak" and row.scenario == "S4"
@@ -106,7 +106,8 @@ def test_s4_shortlist_depth_evidence_and_unweighted_outputs(spec, strategies, ri
     assert model == "strong" and schema is rival_policy.CounterMove
     prompt = json.loads(messages[1]["content"])
     assert {row["scenario"] for row in prompt["S2_S3"]} == {"S2", "S3"}
-    assert prompt["history_stats"]["max_observed_depth"] == 0.44
+    assert prompt["history_stats"]["max_observed_depth"] == pytest.approx(44)
+    assert all(0 <= row["discount_depth_pct"] <= 100 for row in prompt["history"])
 
 
 def test_bad_evidence_ids_are_dropped(spec, strategies, rivals):
@@ -116,13 +117,35 @@ def test_bad_evidence_ids_are_dropped(spec, strategies, rivals):
     assert result.evidence_ids == ["c02"]
 
 
-@pytest.mark.parametrize("field,value", [("rival_margin_floor", 0.2), ("margin_floor_pct", 20)])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("rival_margin_floor", 0.8),  # fraction floor -> cap 100 - 80 = 20%
+        ("margin_floor_pct", 80),  # percent floor -> cap 20%
+        ("max_discount_pct", 20),  # explicit ceiling
+        ("max_discount_depth", 0.2),  # explicit ceiling as a fraction
+    ],
+)
 def test_known_rival_margin_cap_is_enforced(spec, strategies, rivals, monkeypatch, field, value):
     library = loaders.load_library().copy()
     library[field] = value
     monkeypatch.setattr(rival_policy, "load_library", lambda: library)
     result = rival_policy.red_team(spec, strategies[:2], rivals)[0]
-    assert result.depth == result.depth_bound == pytest.approx(0.2)
+    assert result.depth == result.depth_bound == pytest.approx(20)
+
+
+def test_rival_margin_floor_from_brands_caps_depth(spec, strategies, rivals, monkeypatch):
+    brands = pd.DataFrame([{"brand": "Daily Peak", "margin_floor_pct": 70.0}])
+    monkeypatch.setattr(rival_policy, "load_brands", lambda: brands)
+    result = rival_policy.red_team(spec, strategies[:2], rivals)[0]
+    assert result.depth_bound == pytest.approx(30)  # 100 - 70
+    assert result.depth <= 30
+
+
+def test_s4_depth_is_percent_not_fraction(spec, strategies, rivals):
+    for row in rival_policy.red_team(spec, strategies, rivals):
+        assert 1 < row.depth <= 100
+        assert 1 < row.depth_bound <= 100
 
 
 def test_llm_failure_uses_s3_numbers_and_default_label(spec, strategies, rivals, offline_llm):

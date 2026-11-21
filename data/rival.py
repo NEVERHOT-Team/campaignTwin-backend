@@ -1,15 +1,22 @@
-"""Retrieve competitors and estimate scenario probabilities from campaign evidence."""
+"""Retrieve competitors and estimate scenario probabilities from campaign evidence.
+
+Rival `depth` is in percentage points (0-100), the same unit as a discount_pct.
+`get_rival_scenarios` accepts a CampaignSpec v0.1 (or the legacy flat object used by the
+original tests) and, optionally, a Strategy whose offer replaces the brief's offer.
+"""
 
 import math
 import re
 from datetime import date
+from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy.stats import beta
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from contracts.models import CampaignSpec, RivalScenario
+from contracts.models import CampaignSpec, RivalScenario, Strategy
 from data.etl.config import MANUFACTURERS
 from data.loaders import load_brands, load_library, load_rival_prior
 
@@ -17,6 +24,45 @@ REACTIONS = ("none", "match", "undercut", "non_price")
 UNDERCUT = REACTIONS.index("undercut")
 PRIOR_STRENGTH = 5
 NEIGHBOURS = 10
+
+
+def _legacy_view(spec: Any, strategy: Strategy | None = None) -> Any:
+    """Expose the flat fields this module reads from a nested CampaignSpec v0.1.
+
+    Legacy flat objects (with `goal`) pass through unchanged unless a strategy overrides
+    the offer. A strategy replaces discount, mechanic, target segments and channels.
+    """
+    if hasattr(spec, "goal"):
+        view = SimpleNamespace(
+            goal=spec.goal,
+            start=spec.start,
+            end=spec.end,
+            mechanic=getattr(spec, "mechanic", None),
+            discount_pct=getattr(spec, "discount_pct", None),
+            channel=list(getattr(spec, "channel", None) or []),
+            target_segments=list(getattr(spec, "target_segments", None) or []),
+        )
+    else:
+        first = spec.offer.mechanics[0] if spec.offer.mechanics else None
+        event = spec.timing.event if spec.timing.event not in (None, "none") else None
+        words = [spec.name, event, first.type if first else None, spec.audience.description]
+        view = SimpleNamespace(
+            goal=" ".join(word for word in words if word),
+            start=spec.timing.start_date.isoformat() if spec.timing.start_date else None,
+            end=spec.timing.end_date.isoformat() if spec.timing.end_date else None,
+            mechanic=first.type if first else None,
+            discount_pct=first.percentage if first else None,
+            channel=list(spec.channels),
+            target_segments=list(spec.audience.include_hints),
+        )
+    if strategy is not None:
+        view.discount_pct = 0.0 if strategy.is_baseline else float(strategy.discount_pct)
+        view.mechanic = None if strategy.mechanic == "none" else strategy.mechanic
+        if strategy.target_segments:
+            view.target_segments = list(strategy.target_segments)
+        if strategy.channel_mix:
+            view.channel = list(strategy.channel_mix)
+    return view
 
 
 def _tags(value: str | list[str]) -> set[str]:
@@ -179,7 +225,11 @@ def _interval(alpha: np.ndarray, index: int) -> tuple[float, float]:
     return float(low), float(high)
 
 
-def get_rival_scenarios(spec: CampaignSpec) -> list[RivalScenario]:
+def get_rival_scenarios(
+    spec: CampaignSpec, strategy: Strategy | None = None
+) -> list[RivalScenario]:
+    """S1-S3 per top rival. Pass a strategy to price the rival response to that plan."""
+    spec = _legacy_view(spec, strategy)
     ours, rivals = _competitors(spec, load_brands())
     prior = load_rival_prior()
     library = load_library()
