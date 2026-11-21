@@ -1,0 +1,45 @@
+{
+  "discount_pct": {
+    "min": 4.816956,
+    "p50": 22.222222,
+    "p90": 38.820912,
+    "raw_max": 100.0,
+    "max": 50.0
+  },
+  "duration_days": {
+    "min": 7,
+    "max": 28
+  },
+  "mechanics": [
+    "percentage_discount",
+    "seller_voucher",
+    "loyalty_voucher",
+    "bundle",
+    "free_shipping"
+  ],
+  "cap_per_user": {
+    "min": 1,
+    "max": 4
+  },
+  "calendar": [
+    "12.12",
+    "payday"
+  ],
+  "channels": [
+    "Shopee",
+    "LINE"
+  ],
+  "source": {
+    "discount_pct": "data",
+    "duration_days": "default",
+    "mechanics": "default",
+    "cap_per_user": "default",
+    "calendar": "default",
+    "channels": "default",
+    "discount_pct.raw_max": "data",
+    "discount_pct.max": "default"
+  },
+  "source_notes": {
+    "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases."
+  }
+}

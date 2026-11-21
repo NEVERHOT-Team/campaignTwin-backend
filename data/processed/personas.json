@@ -1,407 +1,2282 @@
 [
   {
-    "persona_id": "loyal-1",
-    "segment_id": "loyal",
-    "archetype": "loyal",
-    "demo": {
-      "age_band": "25-34",
-      "income_band": "THB 25,000-39,999",
-      "hh_size": 2,
-      "kids": 0,
-      "homeowner": false,
-      "gender": "unspecified",
-      "urban": true
-    },
-    "behavior": {
-      "purchase_every_days": 21,
-      "aov_thb": 413,
-      "elasticity": -0.6,
-      "coupon_rate": 0.27,
-      "promo_sensitivity": 0.31
-    },
-    "psycho": {
-      "deal_proneness": 0.27,
-      "impulsiveness": 0.36,
-      "brand_consciousness": 0.8,
-      "risk_aversion": 0.5,
-      "digital": 0.67
-    },
-    "story": "Restocks the same coffee for weekday breakfasts.",
-    "channels": [
-      "Shopee",
-      "LINE"
-    ],
-    "weight": 0.12,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "loyal-2",
-    "segment_id": "loyal",
-    "archetype": "loyal",
-    "demo": {
-      "age_band": "35-44",
-      "income_band": "THB 40,000-59,999",
-      "hh_size": 3,
-      "kids": 1,
-      "homeowner": true,
-      "gender": "unspecified",
-      "urban": false
-    },
-    "behavior": {
-      "purchase_every_days": 21,
-      "aov_thb": 443,
-      "elasticity": -0.6,
-      "coupon_rate": 0.27,
-      "promo_sensitivity": 0.31
-    },
-    "psycho": {
-      "deal_proneness": 0.27,
-      "impulsiveness": 0.48,
-      "brand_consciousness": 0.8,
-      "risk_aversion": 0.39999999999999997,
-      "digital": 0.79
-    },
-    "story": "Buys a familiar roast for the household.",
-    "channels": [
-      "Shopee"
-    ],
-    "weight": 0.12,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "deal_hunter-1",
-    "segment_id": "deal_hunter",
-    "archetype": "deal_hunter",
-    "demo": {
-      "age_band": "25-34",
-      "income_band": "THB 25,000-39,999",
-      "hh_size": 2,
-      "kids": 0,
-      "homeowner": false,
-      "gender": "unspecified",
-      "urban": true
-    },
-    "behavior": {
-      "purchase_every_days": 27,
-      "aov_thb": 370,
-      "elasticity": -2.1,
-      "coupon_rate": 0.72,
-      "promo_sensitivity": 0.75
-    },
-    "psycho": {
-      "deal_proneness": 0.72,
-      "impulsiveness": 0.36,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.5,
-      "digital": 0.67
-    },
-    "story": "Compares vouchers across shops before checkout.",
-    "channels": [
-      "Shopee",
-      "LINE"
-    ],
-    "weight": 0.13,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "deal_hunter-2",
-    "segment_id": "deal_hunter",
-    "archetype": "deal_hunter",
-    "demo": {
-      "age_band": "35-44",
-      "income_band": "THB 40,000-59,999",
-      "hh_size": 3,
-      "kids": 1,
-      "homeowner": true,
-      "gender": "unspecified",
-      "urban": false
-    },
-    "behavior": {
-      "purchase_every_days": 27,
-      "aov_thb": 400,
-      "elasticity": -2.1,
-      "coupon_rate": 0.72,
-      "promo_sensitivity": 0.75
-    },
-    "psycho": {
-      "deal_proneness": 0.72,
-      "impulsiveness": 0.48,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.39999999999999997,
-      "digital": 0.79
-    },
-    "story": "Looks for a lower price per sachet.",
-    "channels": [
-      "Shopee"
-    ],
-    "weight": 0.13,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "waiter-1",
-    "segment_id": "waiter",
+    "persona_id": "tt-01",
+    "segment": "waiter",
     "archetype": "waiter",
-    "demo": {
-      "age_band": "25-34",
-      "income_band": "THB 25,000-39,999",
-      "hh_size": 2,
-      "kids": 0,
-      "homeowner": false,
-      "gender": "unspecified",
-      "urban": true
+    "cluster_label": "occasional",
+    "weight": 0.023945684179787312,
+    "age_band": "25-34",
+    "income_band": "35-49K",
+    "household_size": 3,
+    "kids": 2,
+    "homeowner": true,
+    "weekly_buy_rate": 0.024621,
+    "purchase_cycle_weeks": 40.666667,
+    "avg_units": 1.083333,
+    "avg_price_paid": 202.08825,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 1.0,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
     },
-    "behavior": {
-      "purchase_every_days": 37,
-      "aov_thb": 398,
-      "elasticity": -1.8,
-      "coupon_rate": 0.61,
-      "promo_sensitivity": 0.67
-    },
-    "psycho": {
-      "deal_proneness": 0.61,
-      "impulsiveness": 0.36,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.5,
-      "digital": 0.67
-    },
-    "story": "Holds off on restocking until double-date sales.",
     "channels": [
       "Shopee",
       "LINE"
     ],
-    "weight": 0.095,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
     }
   },
   {
-    "persona_id": "waiter-2",
-    "segment_id": "waiter",
+    "persona_id": "tt-02",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.01891655744866754,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.066288,
+    "purchase_cycle_weeks": 15.875,
+    "avg_units": 1.1875,
+    "avg_price_paid": 213.440663,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.923611,
+    "coupon_rate": 0.027778,
+    "brand_loyalty": 0.755556,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-03",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.008007165734759241,
+    "age_band": "35-44",
+    "income_band": "15-24K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": false,
+    "weekly_buy_rate": 0.032197,
+    "purchase_cycle_weeks": 33.0,
+    "avg_units": 1.458333,
+    "avg_price_paid": 76.95675,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.041667,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.861111,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-04",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.016014331469518483,
+    "age_band": "35-44",
+    "income_band": "25-34K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.049242,
+    "purchase_cycle_weeks": 25.166667,
+    "avg_units": 1.291667,
+    "avg_price_paid": 79.36175,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.055556,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.912037,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-05",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.016977206090986473,
+    "age_band": "35-44",
+    "income_band": "35-49K",
+    "household_size": 3,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.231061,
+    "purchase_cycle_weeks": 3.375,
+    "avg_units": 1.273253,
+    "avg_price_paid": 134.781806,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.610185,
+    "coupon_rate": 0.043981,
+    "brand_loyalty": 0.792014,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-06",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.032028662939036966,
+    "age_band": "35-44",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.051136,
+    "purchase_cycle_weeks": 26.208333,
+    "avg_units": 1.020833,
+    "avg_price_paid": 71.105775,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.173611,
+    "coupon_rate": 0.041667,
+    "brand_loyalty": 0.816667,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-07",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.004365359411230971,
+    "age_band": "35-44",
+    "income_band": "75-99K",
+    "household_size": 2,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.058712,
+    "purchase_cycle_weeks": 19.291667,
+    "avg_units": 1.138889,
+    "avg_price_paid": 209.369063,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.873611,
+    "coupon_rate": 0.027778,
+    "brand_loyalty": 0.709722,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-08",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.032028662939036966,
+    "age_band": "45-54",
+    "income_band": "15-24K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.028409,
+    "purchase_cycle_weeks": 36.916667,
+    "avg_units": 1.041667,
+    "avg_price_paid": 99.45,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.083333,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-09",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.018283145021062357,
+    "age_band": "45-54",
+    "income_band": "25-34K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.229167,
+    "purchase_cycle_weeks": 3.666667,
+    "avg_units": 1.171526,
+    "avg_price_paid": 175.7639,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.623562,
+    "coupon_rate": 0.052778,
+    "brand_loyalty": 0.778125,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-10",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.05238431293477165,
+    "age_band": "45-54",
+    "income_band": "35-49K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.056818,
+    "purchase_cycle_weeks": 18.875,
+    "avg_units": 1.441667,
+    "avg_price_paid": 200.084254,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.822222,
+    "coupon_rate": 0.016667,
+    "brand_loyalty": 0.713721,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-11",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.02089502288121412,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.215909,
+    "purchase_cycle_weeks": 3.958333,
+    "avg_units": 1.111105,
+    "avg_price_paid": 152.486074,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.626026,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.81524,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-12",
+    "segment": "waiter",
     "archetype": "waiter",
-    "demo": {
-      "age_band": "35-44",
-      "income_band": "THB 40,000-59,999",
-      "hh_size": 3,
-      "kids": 1,
-      "homeowner": true,
-      "gender": "unspecified",
-      "urban": false
+    "cluster_label": "occasional",
+    "weight": 0.023945684179787312,
+    "age_band": "45-54",
+    "income_band": "75-99K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.030303,
+    "purchase_cycle_weeks": 35.333333,
+    "avg_units": 1.180556,
+    "avg_price_paid": 136.80225,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.930556,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
     },
-    "behavior": {
-      "purchase_every_days": 37,
-      "aov_thb": 428,
-      "elasticity": -1.8,
-      "coupon_rate": 0.61,
-      "promo_sensitivity": 0.67
-    },
-    "psycho": {
-      "deal_proneness": 0.61,
-      "impulsiveness": 0.48,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.39999999999999997,
-      "digital": 0.79
-    },
-    "story": "Waits for free shipping before reordering.",
-    "channels": [
-      "Shopee"
-    ],
-    "weight": 0.095,
-    "edge": true,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "explorer-1",
-    "segment_id": "explorer",
-    "archetype": "explorer",
-    "demo": {
-      "age_band": "25-34",
-      "income_band": "THB 25,000-39,999",
-      "hh_size": 2,
-      "kids": 0,
-      "homeowner": false,
-      "gender": "unspecified",
-      "urban": true
-    },
-    "behavior": {
-      "purchase_every_days": 29,
-      "aov_thb": 337,
-      "elasticity": -1.2,
-      "coupon_rate": 0.35,
-      "promo_sensitivity": 0.48
-    },
-    "psycho": {
-      "deal_proneness": 0.35,
-      "impulsiveness": 0.36,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.5,
-      "digital": 0.67
-    },
-    "story": "Tries a different roast when a sample is offered.",
     "channels": [
       "Shopee",
       "LINE"
     ],
-    "weight": 0.085,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
     }
   },
   {
-    "persona_id": "explorer-2",
-    "segment_id": "explorer",
-    "archetype": "explorer",
-    "demo": {
-      "age_band": "35-44",
-      "income_band": "THB 40,000-59,999",
-      "hh_size": 3,
-      "kids": 1,
-      "homeowner": true,
-      "gender": "unspecified",
-      "urban": false
-    },
-    "behavior": {
-      "purchase_every_days": 29,
-      "aov_thb": 367,
-      "elasticity": -1.2,
-      "coupon_rate": 0.35,
-      "promo_sensitivity": 0.48
-    },
-    "psycho": {
-      "deal_proneness": 0.35,
-      "impulsiveness": 0.48,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.39999999999999997,
-      "digital": 0.79
-    },
-    "story": "Likes small packs of new flavors.",
-    "channels": [
-      "Shopee"
-    ],
-    "weight": 0.085,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
-    }
-  },
-  {
-    "persona_id": "indifferent-1",
-    "segment_id": "indifferent",
+    "persona_id": "tt-13",
+    "segment": "indifferent",
     "archetype": "indifferent",
-    "demo": {
-      "age_band": "25-34",
-      "income_band": "THB 25,000-39,999",
-      "hh_size": 2,
-      "kids": 0,
-      "homeowner": false,
-      "gender": "unspecified",
-      "urban": true
+    "cluster_label": "high_spender",
+    "weight": 0.020371677252411197,
+    "age_band": "45-54",
+    "income_band": "Under 15K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.054924,
+    "purchase_cycle_weeks": 23.458333,
+    "avg_units": 1.354167,
+    "avg_price_paid": 204.883087,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.875,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.783333,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
     },
-    "behavior": {
-      "purchase_every_days": 44,
-      "aov_thb": 301,
-      "elasticity": -0.8,
-      "coupon_rate": 0.11,
-      "promo_sensitivity": 0.19
-    },
-    "psycho": {
-      "deal_proneness": 0.11,
-      "impulsiveness": 0.36,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.5,
-      "digital": 0.67
-    },
-    "story": "Buys coffee online when the pantry runs out.",
     "channels": [
       "Shopee",
       "LINE"
     ],
-    "weight": 0.07,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
     }
   },
   {
-    "persona_id": "indifferent-2",
-    "segment_id": "indifferent",
-    "archetype": "indifferent",
-    "demo": {
-      "age_band": "35-44",
-      "income_band": "THB 40,000-59,999",
-      "hh_size": 3,
-      "kids": 1,
-      "homeowner": true,
-      "gender": "unspecified",
-      "urban": false
+    "persona_id": "tt-14",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.016014331469518483,
+    "age_band": "65+",
+    "income_band": "35-49K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.047348,
+    "purchase_cycle_weeks": 19.708333,
+    "avg_units": 1.125,
+    "avg_price_paid": 93.146625,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.145833,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.9375,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
     },
-    "behavior": {
-      "purchase_every_days": 44,
-      "aov_thb": 331,
-      "elasticity": -0.8,
-      "coupon_rate": 0.11,
-      "promo_sensitivity": 0.19
-    },
-    "psycho": {
-      "deal_proneness": 0.11,
-      "impulsiveness": 0.48,
-      "brand_consciousness": 0.4,
-      "risk_aversion": 0.39999999999999997,
-      "digital": 0.79
-    },
-    "story": "Usually adds coffee to an existing grocery order.",
     "channels": [
-      "Shopee"
+      "Shopee",
+      "LINE"
     ],
-    "weight": 0.07,
-    "edge": false,
-    "labels": {
-      "demo": "default",
-      "behavior": "default",
-      "psycho": "default",
-      "story": "default"
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-15",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.004940014114326041,
+    "age_band": "45-54",
+    "income_band": "150-174K",
+    "household_size": 4,
+    "kids": 2,
+    "homeowner": true,
+    "weekly_buy_rate": 0.047348,
+    "purchase_cycle_weeks": 28.583333,
+    "avg_units": 1.083333,
+    "avg_price_paid": 182.860031,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.958333,
+    "coupon_rate": 0.864583,
+    "brand_loyalty": 0.916667,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-16",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.0024700070571630206,
+    "age_band": "35-44",
+    "income_band": "200-249K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.043561,
+    "purchase_cycle_weeks": 32.5,
+    "avg_units": 1.041667,
+    "avg_price_paid": 163.803656,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 1.0,
+    "coupon_rate": 0.878472,
+    "brand_loyalty": 0.930556,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-17",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.009880028228652082,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.068182,
+    "purchase_cycle_weeks": 21.583333,
+    "avg_units": 1.336111,
+    "avg_price_paid": 211.939406,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.95,
+    "coupon_rate": 0.761806,
+    "brand_loyalty": 0.777778,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-18",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.003705010585744531,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.045455,
+    "purchase_cycle_weeks": 29.416667,
+    "avg_units": 1.333333,
+    "avg_price_paid": 180.8495,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 1.0,
+    "coupon_rate": 0.805556,
+    "brand_loyalty": 0.810185,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-19",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.004940014114326041,
+    "age_band": "55-64",
+    "income_band": "35-49K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.049242,
+    "purchase_cycle_weeks": 26.041667,
+    "avg_units": 1.1,
+    "avg_price_paid": 229.44675,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.958333,
+    "coupon_rate": 0.8,
+    "brand_loyalty": 0.826389,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-20",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.009880028228652082,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.092803,
+    "purchase_cycle_weeks": 17.875,
+    "avg_units": 1.238889,
+    "avg_price_paid": 223.797918,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.941667,
+    "coupon_rate": 0.75625,
+    "brand_loyalty": 0.761574,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-21",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.004940014114326041,
+    "age_band": "45-54",
+    "income_band": "Under 15K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.075758,
+    "purchase_cycle_weeks": 23.666667,
+    "avg_units": 1.208333,
+    "avg_price_paid": 202.766281,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 1.0,
+    "coupon_rate": 0.815972,
+    "brand_loyalty": 0.810185,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-22",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.007410021171489062,
+    "age_band": "35-44",
+    "income_band": "75-99K",
+    "household_size": 4,
+    "kids": 2,
+    "homeowner": true,
+    "weekly_buy_rate": 0.051136,
+    "purchase_cycle_weeks": 22.75,
+    "avg_units": 1.5,
+    "avg_price_paid": 194.333344,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.958333,
+    "coupon_rate": 0.739583,
+    "brand_loyalty": 0.868056,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-23",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.0024700070571630206,
+    "age_band": "65+",
+    "income_band": "15-24K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.045455,
+    "purchase_cycle_weeks": 24.875,
+    "avg_units": 1.058333,
+    "avg_price_paid": 187.9605,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 1.0,
+    "coupon_rate": 0.813889,
+    "brand_loyalty": 0.916667,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-24",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.004940014114326041,
+    "age_band": "55-64",
+    "income_band": "35-49K",
+    "household_size": 2,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.0625,
+    "purchase_cycle_weeks": 18.291667,
+    "avg_units": 1.127778,
+    "avg_price_paid": 206.829188,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 1.0,
+    "coupon_rate": 0.727778,
+    "brand_loyalty": 0.756944,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-25",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.04179004576242825,
+    "age_band": "45-54",
+    "income_band": "75-99K",
+    "household_size": 4,
+    "kids": 2,
+    "homeowner": true,
+    "weekly_buy_rate": 0.403409,
+    "purchase_cycle_weeks": 2.875,
+    "avg_units": 1.37058,
+    "avg_price_paid": 120.841251,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.45156,
+    "coupon_rate": 0.092308,
+    "brand_loyalty": 0.857095,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-26",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.013059389300758829,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.244318,
+    "purchase_cycle_weeks": 3.708333,
+    "avg_units": 1.676681,
+    "avg_price_paid": 115.736618,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.43313,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.835497,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-27",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.026118778601517657,
+    "age_band": "35-44",
+    "income_band": "75-99K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.193182,
+    "purchase_cycle_weeks": 4.416667,
+    "avg_units": 1.27381,
+    "avg_price_paid": 169.293695,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.758883,
+    "coupon_rate": 0.033333,
+    "brand_loyalty": 0.746146,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-28",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.010447511440607063,
+    "age_band": "25-34",
+    "income_band": "125-149K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.359848,
+    "purchase_cycle_weeks": 3.666667,
+    "avg_units": 1.251037,
+    "avg_price_paid": 153.785559,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.432075,
+    "coupon_rate": 0.157631,
+    "brand_loyalty": 0.842167,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-29",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.016977206090986473,
+    "age_band": "25-34",
+    "income_band": "35-49K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.278409,
+    "purchase_cycle_weeks": 3.583333,
+    "avg_units": 1.534643,
+    "avg_price_paid": 103.91419,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.471327,
+    "coupon_rate": 0.033333,
+    "brand_loyalty": 0.685751,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-30",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.02089502288121412,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 3,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.198864,
+    "purchase_cycle_weeks": 4.875,
+    "avg_units": 1.070798,
+    "avg_price_paid": 195.32507,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.804772,
+    "coupon_rate": 0.156268,
+    "brand_loyalty": 0.80377,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-31",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.02089502288121412,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.261364,
+    "purchase_cycle_weeks": 3.666667,
+    "avg_units": 1.163132,
+    "avg_price_paid": 142.193902,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.6746,
+    "coupon_rate": 0.058974,
+    "brand_loyalty": 0.673232,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-32",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.008730718822461942,
+    "age_band": "65+",
+    "income_band": "75-99K",
+    "household_size": 4,
+    "kids": 2,
+    "homeowner": true,
+    "weekly_buy_rate": 0.083333,
+    "purchase_cycle_weeks": 15.291667,
+    "avg_units": 1.038194,
+    "avg_price_paid": 164.965125,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.822222,
+    "coupon_rate": 0.016667,
+    "brand_loyalty": 0.652778,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-33",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.03201263568236045,
+    "age_band": "35-44",
+    "income_band": "35-49K",
+    "household_size": 2,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.051136,
+    "purchase_cycle_weeks": 21.083333,
+    "avg_units": 1.027778,
+    "avg_price_paid": 238.901813,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.854167,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.930556,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-34",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.023281916859898513,
+    "age_band": "35-44",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.089015,
+    "purchase_cycle_weeks": 14.0,
+    "avg_units": 1.260417,
+    "avg_price_paid": 157.110316,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.944444,
+    "coupon_rate": 0.127778,
+    "brand_loyalty": 0.758333,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-35",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.017461437644923885,
+    "age_band": "45-54",
+    "income_band": "15-24K",
+    "household_size": 2,
+    "kids": 1,
+    "homeowner": false,
+    "weekly_buy_rate": 0.075758,
+    "purchase_cycle_weeks": 7.25,
+    "avg_units": 1.183333,
+    "avg_price_paid": 176.773536,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.776389,
+    "coupon_rate": 0.016667,
+    "brand_loyalty": 0.767526,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-36",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.01891655744866754,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.068182,
+    "purchase_cycle_weeks": 11.666667,
+    "avg_units": 1.083333,
+    "avg_price_paid": 214.195313,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.930556,
+    "coupon_rate": 0.055556,
+    "brand_loyalty": 0.638889,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-37",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.017461437644923885,
+    "age_band": "25-34",
+    "income_band": "35-49K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.056818,
+    "purchase_cycle_weeks": 18.5,
+    "avg_units": 1.076389,
+    "avg_price_paid": 209.6874,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.888889,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.831944,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-38",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.011972842089893656,
+    "age_band": "45-54",
+    "income_band": "125-149K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.041667,
+    "purchase_cycle_weeks": 31.083333,
+    "avg_units": 2.833333,
+    "avg_price_paid": 71.34075,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.883333,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.9,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-39",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.005986421044946828,
+    "age_band": "25-34",
+    "income_band": "Under 15K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.032197,
+    "purchase_cycle_weeks": 34.666667,
+    "avg_units": 1.111111,
+    "avg_price_paid": 170.45145,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.944444,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 1.0,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-40",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.02993210522473414,
+    "age_band": "45-54",
+    "income_band": "35-49K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": false,
+    "weekly_buy_rate": 0.022727,
+    "purchase_cycle_weeks": 44.0,
+    "avg_units": 1.0,
+    "avg_price_paid": 161.0505,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 1.0,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 1.0,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-41",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.011972842089893656,
+    "age_band": "45-54",
+    "income_band": "100-124K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.026515,
+    "purchase_cycle_weeks": 38.083333,
+    "avg_units": 1.125,
+    "avg_price_paid": 243.7344,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.958333,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 1.0,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-42",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.002993210522473414,
+    "age_band": "45-54",
+    "income_band": "Under 15K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.028409,
+    "purchase_cycle_weeks": 38.083333,
+    "avg_units": 1.513889,
+    "avg_price_paid": 129.5775,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.930556,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.972222,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-43",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.03591852626968097,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": false,
+    "weekly_buy_rate": 0.032197,
+    "purchase_cycle_weeks": 31.166667,
+    "avg_units": 1.0,
+    "avg_price_paid": 147.186,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.916667,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.847222,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-44",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.005986421044946828,
+    "age_band": "35-44",
+    "income_band": "35-49K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.028409,
+    "purchase_cycle_weeks": 37.625,
+    "avg_units": 1.25,
+    "avg_price_paid": 164.426438,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 1.0,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.979167,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-45",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.002993210522473414,
+    "age_band": "45-54",
+    "income_band": "Under 15K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.024621,
+    "purchase_cycle_weeks": 42.083333,
+    "avg_units": 1.0,
+    "avg_price_paid": 274.701375,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 1.0,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-46",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.032028662939036966,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.037879,
+    "purchase_cycle_weeks": 28.0,
+    "avg_units": 1.25,
+    "avg_price_paid": 62.5365,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.020833,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.916667,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-47",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.016014331469518483,
+    "age_band": "35-44",
+    "income_band": "25-34K",
+    "household_size": 3,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.041667,
+    "purchase_cycle_weeks": 29.166667,
+    "avg_units": 1.395833,
+    "avg_price_paid": 75.0009,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.083333,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.872222,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-48",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.008007165734759241,
+    "age_band": "35-44",
+    "income_band": "15-24K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": false,
+    "weekly_buy_rate": 0.028409,
+    "purchase_cycle_weeks": 34.916667,
+    "avg_units": 1.083333,
+    "avg_price_paid": 70.390125,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.041667,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-49",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.02135244195935798,
+    "age_band": "45-54",
+    "income_band": "25-34K",
+    "household_size": 5,
+    "kids": 3,
+    "homeowner": true,
+    "weekly_buy_rate": 0.045455,
+    "purchase_cycle_weeks": 24.916667,
+    "avg_units": 1.479167,
+    "avg_price_paid": 71.85158,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.083333,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.930556,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-50",
+    "segment": "loyal",
+    "archetype": "loyal",
+    "cluster_label": "steady_shopper",
+    "weight": 0.026690552449197477,
+    "age_band": "25-34",
+    "income_band": "35-49K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.043561,
+    "purchase_cycle_weeks": 25.666667,
+    "avg_units": 1.152778,
+    "avg_price_paid": 48.240563,
+    "price_elasticity_observed": -0.298906,
+    "promo_share": 0.131944,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.9375,
+    "price_elasticity": -0.8,
+    "traits": {
+      "impulsiveness": 0.35,
+      "risk_aversion": 0.52,
+      "time_preference": 0.45
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Replenishes toilet tissue when it is needed during a regular shop.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-51",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.016977206090986473,
+    "age_band": "35-44",
+    "income_band": "35-49K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.248106,
+    "purchase_cycle_weeks": 5.041667,
+    "avg_units": 1.258532,
+    "avg_price_paid": 182.569247,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.577579,
+    "coupon_rate": 0.204001,
+    "brand_loyalty": 0.758949,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-52",
+    "segment": "deal_hunter",
+    "archetype": "deal_hunter",
+    "cluster_label": "deal_hunter",
+    "weight": 0.003705010585744531,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.058712,
+    "purchase_cycle_weeks": 20.625,
+    "avg_units": 1.211111,
+    "avg_price_paid": 151.354125,
+    "price_elasticity_observed": 0.093959,
+    "promo_share": 0.983333,
+    "coupon_rate": 0.738889,
+    "brand_loyalty": 0.833333,
+    "price_elasticity": -2.8,
+    "traits": {
+      "impulsiveness": 0.45,
+      "risk_aversion": 0.55,
+      "time_preference": 0.3
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Checks offers before stocking up on toilet tissue.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-53",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.005986421044946828,
+    "age_band": "35-44",
+    "income_band": "15-24K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": false,
+    "weekly_buy_rate": 0.032197,
+    "purchase_cycle_weeks": 31.833333,
+    "avg_units": 1.222222,
+    "avg_price_paid": 175.9407,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.930556,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.913889,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-54",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.06693551097220822,
+    "age_band": "45-54",
+    "income_band": "50-74K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.064394,
+    "purchase_cycle_weeks": 13.083333,
+    "avg_units": 1.159722,
+    "avg_price_paid": 269.1234,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.930556,
+    "coupon_rate": 0.027778,
+    "brand_loyalty": 0.866667,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-55",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.005820479214974628,
+    "age_band": "55-64",
+    "income_band": "25-34K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.073864,
+    "purchase_cycle_weeks": 16.375,
+    "avg_units": 1.058333,
+    "avg_price_paid": 168.608213,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.868056,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.8,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-56",
+    "segment": "waiter",
+    "archetype": "waiter",
+    "cluster_label": "occasional",
+    "weight": 0.011972842089893656,
+    "age_band": "25-34",
+    "income_band": "75-99K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.032197,
+    "purchase_cycle_weeks": 32.25,
+    "avg_units": 1.972222,
+    "avg_price_paid": 152.178975,
+    "price_elasticity_observed": -0.55856,
+    "promo_share": 0.888889,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.958333,
+    "price_elasticity": -2.3,
+    "traits": {
+      "impulsiveness": 0.28,
+      "risk_aversion": 0.68,
+      "time_preference": 0.35
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Buys toilet tissue infrequently and keeps an eye on the supply at home.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-edge-57",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.014551198037436569,
+    "age_band": "19-24",
+    "income_band": "Under 15K",
+    "household_size": 3,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.060606,
+    "purchase_cycle_weeks": 18.708333,
+    "avg_units": 1.111111,
+    "avg_price_paid": 158.325375,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.972222,
+    "coupon_rate": 0.166667,
+    "brand_loyalty": 0.805556,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-58",
+    "segment": "indifferent",
+    "archetype": "indifferent",
+    "cluster_label": "high_spender",
+    "weight": 0.004365359411230971,
+    "age_band": "35-44",
+    "income_band": "75-99K",
+    "household_size": 3,
+    "kids": 1,
+    "homeowner": true,
+    "weekly_buy_rate": 0.075758,
+    "purchase_cycle_weeks": 14.041667,
+    "avg_units": 1.226389,
+    "avg_price_paid": 163.582088,
+    "price_elasticity_observed": -0.097814,
+    "promo_share": 0.7875,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.6875,
+    "price_elasticity": -1.8,
+    "traits": {
+      "impulsiveness": 0.5,
+      "risk_aversion": 0.4,
+      "time_preference": 0.6
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Spends more on toilet tissue across their household shopping trips.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-59",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.013059389300758829,
+    "age_band": "25-34",
+    "income_band": "50-74K",
+    "household_size": 2,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.238636,
+    "purchase_cycle_weeks": 3.791667,
+    "avg_units": 1.437874,
+    "avg_price_paid": 157.609494,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.68396,
+    "coupon_rate": 0.016667,
+    "brand_loyalty": 0.837256,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
+    }
+  },
+  {
+    "persona_id": "tt-60",
+    "segment": "explorer",
+    "archetype": "explorer",
+    "cluster_label": "frequent_replenisher",
+    "weight": 0.016977206090986473,
+    "age_band": "25-34",
+    "income_band": "35-49K",
+    "household_size": 1,
+    "kids": 0,
+    "homeowner": true,
+    "weekly_buy_rate": 0.265152,
+    "purchase_cycle_weeks": 4.208333,
+    "avg_units": 1.383494,
+    "avg_price_paid": 136.815048,
+    "price_elasticity_observed": -0.279064,
+    "promo_share": 0.540786,
+    "coupon_rate": 0.0,
+    "brand_loyalty": 0.638409,
+    "price_elasticity": -1.3,
+    "traits": {
+      "impulsiveness": 0.32,
+      "risk_aversion": 0.55,
+      "time_preference": 0.48
+    },
+    "channels": [
+      "Shopee",
+      "LINE"
+    ],
+    "backstory": "Restocks toilet tissue regularly as part of a shopping routine.",
+    "source": {
+      "behavior": "data",
+      "price_elasticity": "default",
+      "price_elasticity_observed": "data",
+      "traits": "default",
+      "backstory": "llm_estimate"
     }
   }
 ]

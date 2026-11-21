@@ -117,7 +117,8 @@ def test_cors_preflight(client, origin):
     assert response.headers["access-control-allow-origin"] == origin
 
 
-def test_fixture_llm_cache(client, tmp_path):
+def test_fixture_llm_cache(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "")
     messages = [{"role": "user", "content": "Fixture prompt"}]
     expected = BriefParseResponse.model_validate(load_mock("campaign_spec"))
     assert call_llm("fixture-model", messages, BriefParseResponse) == expected

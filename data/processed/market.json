@@ -1,0 +1,129 @@
+{
+  "category": "toilet_tissue",
+  "currency": "THB",
+  "ref_price": 315.55,
+  "unit_cost": 189.33,
+  "platform_fee_pct": 7.0,
+  "payment_fee_pct": 3.0,
+  "shipping_cost_per_order": 25.0,
+  "margin_floor_pct": 10.0,
+  "segments": [
+    {
+      "name": "deal_hunter",
+      "archetype": "deal_hunter",
+      "cluster_label": "deal_hunter",
+      "share": 0.059280169371912494,
+      "weekly_buy_rate": 0.055735930735930736,
+      "households": 84,
+      "price_elasticity": -2.8,
+      "price_elasticity_observed": 0.0939586129725973
+    },
+    {
+      "name": "explorer",
+      "archetype": "explorer",
+      "cluster_label": "frequent_replenisher",
+      "share": 0.25335215243472126,
+      "weekly_buy_rate": 0.22486705495062043,
+      "households": 359,
+      "price_elasticity": -1.3,
+      "price_elasticity_observed": -0.27906386320134713
+    },
+    {
+      "name": "indifferent",
+      "archetype": "indifferent",
+      "cluster_label": "high_spender",
+      "share": 0.305575158786168,
+      "weekly_buy_rate": 0.06272307369305061,
+      "households": 433,
+      "price_elasticity": -1.8,
+      "price_elasticity_observed": -0.0978144203083116
+    },
+    {
+      "name": "loyal",
+      "archetype": "loyal",
+      "cluster_label": "steady_shopper",
+      "share": 0.2081863091037403,
+      "weekly_buy_rate": 0.044530046224961484,
+      "households": 295,
+      "price_elasticity": -0.8,
+      "price_elasticity_observed": -0.29890583434018153
+    },
+    {
+      "name": "waiter",
+      "archetype": "waiter",
+      "cluster_label": "occasional",
+      "share": 0.17360621030345802,
+      "weekly_buy_rate": 0.0291019955654102,
+      "households": 246,
+      "price_elasticity": -2.3,
+      "price_elasticity_observed": -0.5585600024380348
+    }
+  ],
+  "weeks": {
+    "campaign": 4,
+    "post": 2
+  },
+  "source_notes": {
+    "fields": {
+      "category": "data",
+      "currency": "default",
+      "ref_price": "data",
+      "unit_cost": "default",
+      "platform_fee_pct": "default",
+      "payment_fee_pct": "default",
+      "shipping_cost_per_order": "default",
+      "margin_floor_pct": "default",
+      "segments": "data",
+      "segments.price_elasticity": "default",
+      "segments.price_elasticity_observed": "data",
+      "weeks": "default"
+    },
+    "usd_thb": {
+      "value": 35.1,
+      "source": "default"
+    },
+    "manufacturers": {
+      "751": {
+        "role": "our_brand",
+        "source": "default"
+      },
+      "764": {
+        "role": "leader",
+        "source": "default"
+      },
+      "595": {
+        "role": "peer",
+        "source": "default"
+      },
+      "69": {
+        "role": "private_label",
+        "source": "default"
+      }
+    },
+    "archetype_segments": {
+      "values": {
+        "deal_hunter": "deal_hunter",
+        "explorer": "explorer",
+        "indifferent": "indifferent",
+        "waiter": "waiter",
+        "loyal": "loyal"
+      },
+      "source": "data"
+    },
+    "pooled_price_elasticity": {
+      "value": -1.8,
+      "source": "default",
+      "note": "observational slope biased toward 0 by promo endogeneity"
+    },
+    "pooled_price_elasticity_observed": {
+      "value": -0.365881,
+      "source": "data"
+    },
+    "persona_fields": {
+      "demographics": "data",
+      "weight": "data",
+      "channels": "default"
+    },
+    "dataset": "Complete Journey as packaged by completejourney_py (simulated)"
+  }
+}

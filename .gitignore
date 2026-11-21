@@ -7,5 +7,7 @@ __pycache__/
 .ruff_cache/
 data/raw/*
 !data/raw/.gitkeep
+data/calib/
 runs/*
 !runs/.gitkeep
+Claude outputs/

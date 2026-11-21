@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "assets": {
+    "completejourney/demographics.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/demographics.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:45:45.329027+00:00",
+      "bytes": 4237,
+      "sha256": "8b80455bc841003b64e47f5e5c2221f6093b995e923d59e72a1f852c7e268980",
+      "local_path": "data/raw/completejourney/demographics.rda",
+      "table": {
+        "rows": 801,
+        "columns": [
+          "household_id",
+          "age",
+          "income",
+          "home_ownership",
+          "marital_status",
+          "household_size",
+          "household_comp",
+          "kids_count"
+        ]
+      }
+    },
+    "completejourney/campaigns.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/campaigns.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:20.921239+00:00",
+      "bytes": 8264,
+      "sha256": "33c7b3dc1bc722d465f97416fb1327c6a9a640190e464c73e354bce8c001a772",
+      "local_path": "data/raw/completejourney/campaigns.rda",
+      "table": {
+        "rows": 6589,
+        "columns": [
+          "campaign_id",
+          "household_id"
+        ]
+      }
+    },
+    "completejourney/campaign_descriptions.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/campaign_descriptions.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:20.938723+00:00",
+      "bytes": 496,
+      "sha256": "601bd17ea1a6de92cc288f393164813fbaf293b997d44054dcf1f3ebbe8dacee",
+      "local_path": "data/raw/completejourney/campaign_descriptions.rda",
+      "table": {
+        "rows": 27,
+        "columns": [
+          "campaign_id",
+          "campaign_type",
+          "start_date",
+          "end_date"
+        ]
+      }
+    },
+    "completejourney/coupons.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/coupons.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:21.089322+00:00",
+      "bytes": 324969,
+      "sha256": "4d87effce5b8813c0934b581a83292707347577743320ca746878de89cc16f34",
+      "local_path": "data/raw/completejourney/coupons.rda",
+      "table": {
+        "rows": 116204,
+        "columns": [
+          "coupon_upc",
+          "product_id",
+          "campaign_id"
+        ]
+      }
+    },
+    "completejourney/products.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/products.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:21.102319+00:00",
+      "bytes": 869019,
+      "sha256": "a80c6df33623b4af296ae9f317a6647e369db7e8ce7e7baed0e1bf44b9d979e5",
+      "local_path": "data/raw/completejourney/products.rda",
+      "table": {
+        "rows": 92331,
+        "columns": [
+          "product_id",
+          "manufacturer_id",
+          "department",
+          "brand",
+          "product_category",
+          "product_type",
+          "package_size"
+        ]
+      }
+    },
+    "completejourney/coupon_redemptions.rda": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/coupon_redemptions.rda",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:21.125323+00:00",
+      "bytes": 8370,
+      "sha256": "4b68148175ed19300bb2615d68d1a0300a5f971db3240819ab5d92e5919e1598",
+      "local_path": "data/raw/completejourney/coupon_redemptions.rda",
+      "table": {
+        "rows": 2102,
+        "columns": [
+          "household_id",
+          "coupon_upc",
+          "campaign_id",
+          "redemption_date"
+        ]
+      }
+    },
+    "completejourney/DESCRIPTION": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/DESCRIPTION",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0",
+      "retrieved_at": "2026-11-21T04:47:22.264262+00:00",
+      "bytes": 993,
+      "sha256": "99cd6f9e8391b50b26f4d07d0ae81f1cfae32fe875a79c0d5425e68df3855073",
+      "local_path": "data/raw/completejourney/DESCRIPTION"
+    },
+    "twin2k/question_catalog_README.md": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/resolve/main/question_catalog_and_human_response_csv/question_catalog_README.md",
+      "source_page": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500",
+      "license": "CC-BY-4.0",
+      "retrieved_at": "2026-11-21T04:47:23.172990+00:00",
+      "bytes": 10078,
+      "sha256": "eaf3ccb2a5a0382723a057d8e05a0d3a9464c8c9cef1a675205eb55f739689f8",
+      "local_path": "data/raw/twin2k/question_catalog_README.md"
+    },
+    "twin2k/question_catalog.json": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/resolve/main/question_catalog_and_human_response_csv/question_catalog.json",
+      "source_page": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500",
+      "license": "CC-BY-4.0",
+      "retrieved_at": "2026-11-21T04:47:23.435680+00:00",
+      "bytes": 214137,
+      "sha256": "e72e305f0c7c83bb990e97de4c0cf2c718ead18cc197239b7feeb354c9ac1bef",
+      "local_path": "data/raw/twin2k/question_catalog.json"
+    },
+    "completejourney/transactions.rds": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/transactions.rds",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:31.368102+00:00",
+      "bytes": 12775661,
+      "sha256": "1fa0700033f1e5d9bb6b09e2be063d8d68474d346e95c50f2833e09d083e0007",
+      "local_path": "data/raw/completejourney/transactions.rds",
+      "table": {
+        "rows": 1469307,
+        "columns": [
+          "household_id",
+          "store_id",
+          "basket_id",
+          "product_id",
+          "quantity",
+          "sales_value",
+          "retail_disc",
+          "coupon_disc",
+          "coupon_match_disc",
+          "week",
+          "transaction_timestamp"
+        ]
+      }
+    },
+    "twin2k/README.md": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/resolve/main/README.md",
+      "source_page": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500",
+      "license": "CC-BY-4.0",
+      "retrieved_at": "2026-11-21T04:47:32.677990+00:00",
+      "bytes": 10970,
+      "sha256": "9f71a028d2510476cdb3dd365f4525e7b7cc0736f17939adcfeae9bf91a52d4b",
+      "local_path": "data/raw/twin2k/README.md"
+    },
+    "twin2k/wave4_response.csv": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/resolve/main/question_catalog_and_human_response_csv/wave4_response.csv",
+      "source_page": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500",
+      "license": "CC-BY-4.0",
+      "retrieved_at": "2026-11-21T04:47:34.410675+00:00",
+      "bytes": 633807,
+      "sha256": "09ec1a88bdd48fec95963da3102df0ca467378bf729cbc1c0b869b0f1e4fb942",
+      "local_path": "data/raw/twin2k/wave4_response.csv",
+      "table": {
+        "rows": 2058,
+        "column_count": 127
+      }
+    },
+    "completejourney/promotions.rds": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://raw.githubusercontent.com/bradleyboehmke/completejourney/master/data/promotions.rds",
+      "source_page": "https://bradleyboehmke.github.io/completejourney/",
+      "license": "CC0 (completejourney package); retain upstream attribution",
+      "retrieved_at": "2026-11-21T04:47:38.484767+00:00",
+      "bytes": 24976951,
+      "sha256": "15a729fdad31b10d3afedb058da31bcd6e9e68cb0207a43b3121264cd80198ba",
+      "local_path": "data/raw/completejourney/promotions.rds",
+      "normalization": "deferred_large_table_use_normalize_promotions_flag"
+    },
+    "twin2k/wave1_3_response.csv": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500/resolve/main/question_catalog_and_human_response_csv/wave1_3_response.csv",
+      "source_page": "https://huggingface.co/datasets/LLM-Digital-Twin/Twin-2K-500",
+      "license": "CC-BY-4.0",
+      "retrieved_at": "2026-11-21T04:47:40.543097+00:00",
+      "bytes": 5462260,
+      "sha256": "fc227b1682e2654fd4b2a8152294b68118c0e3be4d83f4a9af5f3e96df56d3f0",
+      "local_path": "data/raw/twin2k/wave1_3_response.csv",
+      "table": {
+        "rows": 2058,
+        "column_count": 761
+      }
+    },
+    "breakfast/breakfast_at_the_frat.zip": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://downloads.ctfassets.net/psj0p18eh7z1/7B4xI3FKcgMLak9Wm95IHC/3b63fe3d37bc7122d13524514be4ab51/dunnhumby_Breakfast-at-the-Frat.zip",
+      "source_page": "https://www.dunnhumby.com/source-files/",
+      "license": "Not specified on source page; retain dunnhumby attribution",
+      "retrieved_at": "2026-11-21T04:47:52.409397+00:00",
+      "bytes": 30714553,
+      "sha256": "74cb41cb8b19dc61bb8a5731c3774b802e9a8da3b64cdd1872640890d0b54216",
+      "local_path": "data/raw/breakfast/breakfast_at_the_frat.zip",
+      "archive_members": [
+        "dunnhumby_Breakfast-at-the-Frat/dunnhumby - Breakfast at the Frat User Guide.pdf",
+        "dunnhumby_Breakfast-at-the-Frat/dunnhumby - Breakfast at the Frat.xlsx"
+      ],
+      "worksheets": [
+        {
+          "sheet": "Glossary",
+          "worksheet_rows": 41,
+          "columns": 15,
+          "readable": true,
+          "sample_rows_read": 3,
+          "header": [
+            "Unnamed: 0",
+            "Unnamed: 1",
+            "Unnamed: 2",
+            "Breakfast at the Frat: A Time Series Analysis"
+          ]
+        },
+        {
+          "sheet": "dh Store Lookup",
+          "worksheet_rows": 81,
+          "columns": 15,
+          "readable": true,
+          "sample_rows_read": 3,
+          "header": [
+            "Unnamed: 0",
+            "Unnamed: 1",
+            "Unnamed: 2",
+            "Breakfast at the Frat: A Time Series Analysis",
+            "Unnamed: 4",
+            "Unnamed: 5",
+            "Unnamed: 6",
+            "Unnamed: 7",
+            "Unnamed: 8"
+          ]
+        },
+        {
+          "sheet": "dh Products Lookup",
+          "worksheet_rows": 76,
+          "columns": 15,
+          "readable": true,
+          "sample_rows_read": 3,
+          "header": [
+            "Unnamed: 0",
+            "Unnamed: 1",
+            "Unnamed: 2",
+            "Breakfast at the Frat: A Time Series Analysis",
+            "Unnamed: 4",
+            "Unnamed: 5"
+          ]
+        },
+        {
+          "sheet": "dh Transaction Data",
+          "worksheet_rows": 682323,
+          "columns": 15,
+          "readable": true,
+          "sample_rows_read": 3,
+          "header": [
+            "Unnamed: 0",
+            "Unnamed: 1",
+            "Unnamed: 2",
+            "Breakfast at the Frat: A Time Series Analysis",
+            "Unnamed: 4",
+            "Unnamed: 5",
+            "Unnamed: 6",
+            "Unnamed: 7",
+            "Unnamed: 8",
+            "Unnamed: 9",
+            "Unnamed: 10",
+            "Unnamed: 11"
+          ]
+        }
+      ]
+    },
+    "hillstrom/hillstrom.csv.gz": {
+      "status": "downloaded",
+      "source": "data",
+      "url": "https://hillstorm1.s3.us-east-2.amazonaws.com/hillstorm_no_indices.csv.gz",
+      "source_page": "https://www.uplift-modeling.com/en/latest/api/datasets/fetch_hillstrom.html",
+      "license": "Not specified on the author's page; retain Kevin Hillstrom attribution",
+      "retrieved_at": "2026-11-21T04:48:12.298752+00:00",
+      "bytes": 443070,
+      "sha256": "bab6578f60db5d792f1c2372c502f029152a5249cf5ea84390f3b7f885d7234f",
+      "local_path": "data/raw/hillstrom/hillstrom.csv.gz",
+      "table": {
+        "rows": 64000,
+        "columns": [
+          "recency",
+          "history_segment",
+          "history",
+          "mens",
+          "womens",
+          "zip_code",
+          "newbie",
+          "channel",
+          "segment",
+          "visit",
+          "conversion",
+          "spend"
+        ],
+        "treatment_counts": {
+          "Womens E-Mail": 21387,
+          "Mens E-Mail": 21307,
+          "No E-Mail": 21306
+        },
+        "publisher_checksum_verified": true
+      }
+    }
+  },
+  "notes": [
+    "Raw and normalized household/respondent data stay in ignored data/raw/.",
+    "Existing processed engine inputs remain synthetic fixtures (source=default).",
+    "US grocery and survey data have not been reweighted to Thailand.",
+    "Downloading data is not model calibration, causal validation, or a back-test."
+  ],
+  "updated_at": "2026-11-21T04:48:21.534730+00:00"
+}
