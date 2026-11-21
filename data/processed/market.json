@@ -15,7 +15,7 @@
       "share": 0.059280169371912494,
       "weekly_buy_rate": 0.055735930735930736,
       "households": 84,
-      "price_elasticity": -2.765,
+      "price_elasticity": -2.695,
       "price_elasticity_observed": 0.0939586129725973
     },
     {
@@ -25,7 +25,7 @@
       "share": 0.25335215243472126,
       "weekly_buy_rate": 0.22486705495062043,
       "households": 359,
-      "price_elasticity": -1.258454,
+      "price_elasticity": -1.259273,
       "price_elasticity_observed": -0.27906386320134713
     },
     {
@@ -35,7 +35,7 @@
       "share": 0.305575158786168,
       "weekly_buy_rate": 0.06272307369305061,
       "households": 433,
-      "price_elasticity": -1.853143,
+      "price_elasticity": -1.822949,
       "price_elasticity_observed": -0.0978144203083116
     },
     {
@@ -45,7 +45,7 @@
       "share": 0.2081863091037403,
       "weekly_buy_rate": 0.044530046224961484,
       "households": 295,
-      "price_elasticity": -0.877949,
+      "price_elasticity": -0.821695,
       "price_elasticity_observed": -0.29890583434018153
     },
     {
@@ -55,7 +55,7 @@
       "share": 0.17360621030345802,
       "weekly_buy_rate": 0.0291019955654102,
       "households": 246,
-      "price_elasticity": -2.228621,
+      "price_elasticity": -2.262134,
       "price_elasticity_observed": -0.5585600024380348
     }
   ],
@@ -132,6 +132,7 @@
     },
     "persona_fields": {
       "demographics": "data",
+      "imputed_demographics": "default",
       "weight": "data",
       "channels": "default"
     },

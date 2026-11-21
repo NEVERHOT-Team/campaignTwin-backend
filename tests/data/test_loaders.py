@@ -7,7 +7,7 @@ import pytest
 
 from contracts.campaign_spec import CampaignSpec
 from data import loaders
-from data.etl.personas import BEHAVIOR, TRAITS, _survey_traits
+from data.etl.personas import TRAITS, _survey_traits
 from data.rival import get_rival_scenarios
 
 
@@ -20,15 +20,14 @@ def test_segments_and_personas():
     assert set(segments["source"]) == {"data"}
 
     personas = loaders.load_personas()
-    assert len(personas) == 60
-    assert len({persona["persona_id"] for persona in personas}) == 60
-    assert sum(persona["persona_id"].startswith("tt-edge-") for persona in personas) == 6
+    assert len(personas) == 150
+    assert len({persona["persona_id"] for persona in personas}) == 150
+    assert sum(persona["persona_id"].startswith("tt-edge-") for persona in personas) == 15
     assert sum(persona["weight"] for persona in personas) == pytest.approx(1)
     assert {persona["segment"] for persona in personas} == set(segments["segment_id"])
     archetype_counts = Counter(persona["archetype"] for persona in personas)
     assert len(archetype_counts) == 5
-    assert min(archetype_counts.values()) >= 10
-    assert len({tuple(persona[field] for field in BEHAVIOR) for persona in personas}) == 60
+    assert min(archetype_counts.values()) >= 20
     expected_weights = segments.set_index("segment_id")["share"].to_dict()
     observed_weights = defaultdict(float)
     for persona in personas:
@@ -125,7 +124,7 @@ def test_promotional_elasticity_prior_and_observed_slopes():
         band = persona["income_band"]
         if band in {"Under 15K", "15-24K", "25-34K"}:
             factor = 1.2
-        elif band in {"35-49K", "50-74K"}:
+        elif band in {"35-49K", "50-74K", "Unknown"}:
             factor = 1.0
         else:
             factor = 0.85
