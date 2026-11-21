@@ -35,6 +35,13 @@ DEFAULT_MAX_DISCOUNT_PCT = 50.0
 # data/rival.py; a floor for our own plans comes from spec.constraints.margin_floor_pct.
 DEFAULT_MARGIN_FLOOR_PCT = 0.0
 DEFAULT_UNITS_PER_ORDER = 1.1
+# Households the simulated market stands for: engine.shopper.ShopperParams
+# households_per_agent (50) x SimulationPlan.n_agents (5000). Label: default.
+DEFAULT_MARKET_HOUSEHOLDS = 250_000.0
+DEFAULT_COST_PER_REACH = 0.32
+# Paid impressions per targeted household. Two reach about 90% of the target with the
+# engine's reach curve (30% organic); spending beyond that buys almost nothing.
+MEDIA_FREQUENCY = 2.0
 DEFAULT_SPLIT = {"discount": 0.7, "media": 0.25, "fees": 0.05}
 PERCENT_MECHANICS = {"percent_off", "voucher", "flash_sale", "coins_cashback"}
 DEFAULT_EXTRA_MECHANICS = ("percent_off", "voucher", "free_shipping", "bundle", "flash_sale")
@@ -60,9 +67,20 @@ class Bounds:
     segments_locked: bool
     user_segments: tuple[str, ...]
     labels: dict[str, str] = field(default_factory=dict)
+    segment_shares: dict[str, float] = field(default_factory=dict)
+    market_households: float = 0.0
+    cost_per_reach: float = 0.0
 
     def label_note(self) -> str:
         return ", ".join(f"{name}: {label}" for name, label in sorted(self.labels.items()))
+
+    def media_needed(self, target_segments: list[str]) -> float:
+        """THB to show the offer MEDIA_FREQUENCY times to every targeted household."""
+        if not target_segments:
+            share = 1.0
+        else:
+            share = sum(self.segment_shares.get(s, 0.0) for s in set(target_segments))
+        return share * self.market_households * self.cost_per_reach * MEDIA_FREQUENCY
 
 
 # ---------------------------------------------------------------- bounds
@@ -195,6 +213,9 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
 
     unit_limit, margin_labels = _max_unit_discount(spec)
     labels.update(margin_labels)
+    shares, labels["segment_shares"] = _segment_shares(context)
+    cost_per_reach, labels["cost_per_reach"] = _cost_per_reach()
+    labels["market_households"] = "default"
     return Bounds(
         discount_min=round(low, 1),
         discount_max=round(high, 1),
@@ -206,7 +227,33 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         segments_locked=bool(given and given.segments_locked),
         user_segments=_user_segments(spec, context),
         labels=labels,
+        segment_shares=shares,
+        market_households=DEFAULT_MARKET_HOUSEHOLDS,
+        cost_per_reach=cost_per_reach,
     )
+
+
+def _segment_shares(context: ContextPack) -> tuple[dict[str, float], str]:
+    """Share of households per segment: market.json (the engine's population), else context."""
+    try:
+        shares = {str(s["name"]): float(s["share"]) for s in load_market()["segments"]}
+        if shares:
+            return shares, "data"
+    except Exception:
+        pass
+    shares = {
+        str(s["segment_id"]): float(s.get("share", 0.0))
+        for s in context.segments if "segment_id" in s
+    }
+    return shares, "default"
+
+
+def _cost_per_reach() -> tuple[float, str]:
+    try:
+        econ = load_unit_econ()
+        return float(econ["media_cost_per_reach_thb"]), econ["source"]["media_cost_per_reach_thb"]
+    except Exception:
+        return DEFAULT_COST_PER_REACH, "default"
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -479,6 +526,17 @@ def enforce(
     if abs(fixed_budget - budget) > 0.5:
         notes.append(f"budget {budget:,.0f}->{fixed_budget:,.0f} THB (flex)")
     base_timing = _timing(spec, fixed_budget, timing.get("flash_days"))
+
+    # Media beyond what reaches the target audience buys almost no extra reach, so cap
+    # it at MEDIA_FREQUENCY impressions per targeted household and move the rest to the
+    # discount pool (which is only spent when shoppers actually redeem).
+    needed = bounds.media_needed(targets)
+    if fixed_budget > 0 and needed > 0 and split.get("media", 0.0) * fixed_budget > needed + 0.5:
+        before = split["media"] * fixed_budget
+        media_share = needed / fixed_budget
+        split["discount"] = split.get("discount", 0.0) + split["media"] - media_share
+        split["media"] = media_share
+        notes.append(f"media {before:,.0f}->{needed:,.0f} THB (enough to reach the target)")
 
     cap = strategy.cap_per_user if strategy.cap_per_user and strategy.cap_per_user >= 1 else None
 

@@ -191,3 +191,20 @@ def test_explicit_zero_budget_flex_locks_the_budget(context):
     assert bounds.budget_min == bounds.budget_max == spec.budget.total_thb
     for plan in _generated(propose(spec, context)):
         assert plan.timing["budget_thb"] == pytest.approx(spec.budget.total_thb)
+
+
+def test_media_is_capped_at_what_reaches_the_target(context):
+    raw = deepcopy(load_mock("campaign_spec")["spec"])
+    raw["budget"]["total_thb"] = 500_000
+    spec = CampaignSpec.model_validate(raw)
+    bounds = resolve_bounds(spec, context)
+    plans = {plan.id: plan for plan in _generated(propose(spec, context))}
+    for plan in plans.values():
+        media = plan.budget_split.get("media", 0.0) * plan.timing["budget_thb"]
+        assert media <= bounds.media_needed(plan.target_segments) + 1
+        assert sum(plan.budget_split.values()) == pytest.approx(1)
+    targeted = plans["g0-targeted"]
+    # A plan for a few segments needs far less media than the 25% template share.
+    assert targeted.budget_split["media"] < 0.25
+    assert "media" in targeted.rationale and "enough to reach the target" in targeted.rationale
+    assert bounds.media_needed(["deal_hunter"]) < bounds.media_needed([])
