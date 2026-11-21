@@ -42,7 +42,7 @@ def test_health_parse_and_context(client):
     parsed = BriefParseResponse.model_validate(response.json())
     assert parsed == BriefParseResponse.model_validate(load_mock("campaign_spec"))
 
-    response = client.post("/api/plan/context", json=parsed.spec.model_dump())
+    response = client.post("/api/plan/context", json=parsed.spec.model_dump(mode="json"))
     assert response.status_code == 200
     assert ContextPack.model_validate(response.json()).rivals
 
@@ -69,7 +69,7 @@ def test_start_run_poll_report_and_replay(client, monkeypatch):
             "strategies": [],
         }
     )
-    response = client.post("/api/runs", json=plan.model_dump())
+    response = client.post("/api/runs", json=plan.model_dump(mode="json"))
     assert response.status_code == 200
     run_id = RunCreated.model_validate(response.json()).run_id
 
@@ -84,7 +84,7 @@ def test_start_run_poll_report_and_replay(client, monkeypatch):
     mock_status = RunStatus.model_validate(load_mock("run_status"))
     assert status.partial_results == mock_status.partial_results
     assert progress_calls == [step / 10 for step in range(11)]
-    assert db.get_run(run_id)["plan"] == plan.model_dump()
+    assert db.get_run(run_id)["plan"] == plan.model_dump(mode="json")
 
     response = client.get(f"/api/runs/{run_id}/report")
     assert response.status_code == 200

@@ -1,23 +1,61 @@
 {
   "spec": {
-    "goal": "Grow incremental coffee profit during the 11.11 campaign",
-    "target_segments": [
-      "loyal",
-      "deal_hunter",
-      "waiter"
-    ],
-    "budget_thb": 80000,
-    "discount_pct": 40,
-    "mechanic": "seller_voucher",
-    "channel": [
-      "Shopee",
-      "LINE"
-    ],
-    "start": "2027-10-25",
-    "end": "2027-11-21",
-    "kpi_target": null,
-    "missing_fields": [
-      "kpi_target"
+    "spec_version": "0.1",
+    "campaign_id": "cmp_demo_coffee_1111",
+    "name": "Demo Coffee 11.11",
+    "status": "ready",
+    "brand": {"name": "Demo Coffee", "category": "coffee", "price_tier": "mid"},
+    "objective": {
+      "primary": "incremental_profit",
+      "secondary": ["new_buyers"],
+      "smart_goals": []
+    },
+    "audience": {
+      "description": "Loyal coffee customers, deal hunters and shoppers waiting for promotions",
+      "include_hints": ["loyal", "deal_hunter", "waiter"],
+      "exclude_hints": [],
+      "geo": ["TH"]
+    },
+    "offer": {
+      "mechanics": [
+        {
+          "type": "voucher", "value": 40, "value_unit": "pct",
+          "min_spend_thb": null, "cap_per_user": 1,
+          "eligibility": "all", "duration_days": null
+        }
+      ],
+      "message": null
+    },
+    "budget": {"total_thb": 80000, "split": null, "max_discount_pct": 40},
+    "channels": ["shopee", "line"],
+    "timing": {
+      "start_date": "2027-10-25", "end_date": "2027-11-21",
+      "event": "11.11", "post_window_weeks": 2
+    },
+    "unit_economics": null,
+    "constraints": {
+      "margin_floor_pct": null, "max_loss_prob": 0.2, "must_avoid": [], "must_include": []
+    },
+    "strategist_bounds": null,
+    "competitor_hints": [],
+    "field_meta": {
+      "campaign_id": {"source": "default", "confidence": 1, "evidence": null},
+      "name": {"source": "default", "confidence": 1, "evidence": null},
+      "brand": {"source": "default", "confidence": 1, "evidence": null},
+      "objective": {"source": "default", "confidence": 1, "evidence": null},
+      "audience": {"source": "default", "confidence": 1, "evidence": null},
+      "offer": {"source": "default", "confidence": 1, "evidence": null},
+      "budget": {"source": "default", "confidence": 1, "evidence": null},
+      "channels": {"source": "default", "confidence": 1, "evidence": null},
+      "timing": {"source": "default", "confidence": 1, "evidence": null},
+      "constraints": {"source": "default", "confidence": 1, "evidence": null}
+    },
+    "open_questions": [
+      {
+        "field": "objective.smart_goals",
+        "question": "What incremental profit target should the campaign hit?",
+        "blocking": false
+      }
     ]
   },
   "questions": [
