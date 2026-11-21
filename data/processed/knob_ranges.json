@@ -1,0 +1,39 @@
+{
+  "discount_pct": {
+    "min": 3.039514,
+    "p50": 22.222222,
+    "p90": 38.71577,
+    "max": 100.0
+  },
+  "duration_days": {
+    "min": 7,
+    "max": 28
+  },
+  "mechanics": [
+    "percentage_discount",
+    "seller_voucher",
+    "loyalty_voucher",
+    "bundle",
+    "free_shipping"
+  ],
+  "cap_per_user": {
+    "min": 1,
+    "max": 4
+  },
+  "calendar": [
+    "12.12",
+    "payday"
+  ],
+  "channels": [
+    "Shopee",
+    "LINE"
+  ],
+  "source": {
+    "discount_pct": "data",
+    "duration_days": "default",
+    "mechanics": "default",
+    "cap_per_user": "default",
+    "calendar": "default",
+    "channels": "default"
+  }
+}

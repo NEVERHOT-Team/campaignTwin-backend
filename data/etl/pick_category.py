@@ -93,14 +93,14 @@ def main() -> None:
 
     print(
         f"{len(ranked):,} sub-categories have ≥3 manufacturers at "
-        f"≥{MIN_MANUFACTURER_SHARE:.0%} of paid sales and a median repeat gap of 1–6 weeks."
+        f"≥{MIN_MANUFACTURER_SHARE:.0%} of retailer sales and a median repeat gap of 1–6 weeks."
     )
     print(
         f"Coupon evidence: {matched:,}/{len(redemptions.drop_duplicates()):,} redemption events "
         "matched a same-day coupon-discounted eligible purchase in a known sub-category. "
         "Each event counts once per matched sub-category."
     )
-    print("Promo share is the share of paid sales on lines with a retail or coupon discount.")
+    print("Promo share is the share of retailer sales on lines with a retail or coupon discount.")
     print("Ranking uses coupon redemptions, then promo share, then material manufacturer count.")
 
     for index, (category, row) in enumerate(ranked.head(5).iterrows(), start=1):
@@ -112,13 +112,13 @@ def main() -> None:
             f"Median repeat: {row.median_repeat_weeks:g} weeks | "
             f"Promo sales: {row.promo_sales_share:.1%}"
         )
-        print(f"   {'Manufacturer ID':<18} {'Paid sales (USD)':>18} {'Category share':>16}")
+        print(f"   {'Manufacturer ID':<18} {'Retailer sales (USD)':>22} {'Category share':>16}")
         makers = material.loc[category].sort_values("share", ascending=False)
         for maker_id, maker in makers.iterrows():
-            print(f"   {maker_id:<18} {maker.sales:>18,.2f} {maker.share:>15.1%}")
+            print(f"   {maker_id:<18} {maker.sales:>22,.2f} {maker.share:>15.1%}")
         remaining_share = max(0, 1 - makers["share"].sum())
         remaining_sales = max(0, row.sales - makers["sales"].sum())
-        print(f"   {'All other':<18} {remaining_sales:>18,.2f} {remaining_share:>15.1%}")
+        print(f"   {'All other':<18} {remaining_sales:>22,.2f} {remaining_share:>15.1%}")
 
 
 if __name__ == "__main__":

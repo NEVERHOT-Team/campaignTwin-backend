@@ -1,22 +1,28 @@
 {
-  "category": "instant_coffee",
+  "category": "toilet_tissue",
   "currency": "THB",
   "usd_thb": 35.1,
-  "price_thb": 169.0,
-  "margin_pct": 44.0,
+  "price_thb": 315.55,
+  "margin_pct": 40.0,
   "shopee_commission_pct": 7.0,
   "shopee_txn_fee_pct": 3.0,
   "media_cost_per_reach_thb": 0.32,
-  "collected_at": "2026-11-21",
+  "shipping_cost_per_order": 25.0,
+  "unit_cost": 189.33,
+  "margin_floor_pct": 10.0,
+  "collected_at": "2018-01-01",
   "source": {
-    "category": "default",
+    "category": "data",
     "currency": "default",
     "usd_thb": "default",
-    "price_thb": "default",
+    "price_thb": "data",
     "margin_pct": "default",
     "shopee_commission_pct": "default",
     "shopee_txn_fee_pct": "default",
     "media_cost_per_reach_thb": "default",
-    "collected_at": "default"
+    "shipping_cost_per_order": "default",
+    "unit_cost": "default",
+    "margin_floor_pct": "default",
+    "collected_at": "data"
   }
 }

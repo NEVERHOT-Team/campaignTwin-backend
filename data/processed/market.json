@@ -1,0 +1,102 @@
+{
+  "category": "toilet_tissue",
+  "currency": "THB",
+  "ref_price": 315.55,
+  "unit_cost": 189.33,
+  "platform_fee_pct": 7.0,
+  "payment_fee_pct": 3.0,
+  "shipping_cost_per_order": 25.0,
+  "margin_floor_pct": 10.0,
+  "segments": [
+    {
+      "name": "deal_hunter",
+      "share": 0.05680317040951123,
+      "weekly_buy_rate": 0.058578323826239585,
+      "households": 86
+    },
+    {
+      "name": "frequent_replenisher",
+      "share": 0.2760898282694848,
+      "weekly_buy_rate": 0.2056964882188318,
+      "households": 418
+    },
+    {
+      "name": "high_spender",
+      "share": 0.31241743725231175,
+      "weekly_buy_rate": 0.05321313175635247,
+      "households": 473
+    },
+    {
+      "name": "occasional",
+      "share": 0.15125495376486128,
+      "weekly_buy_rate": 0.02644805141303452,
+      "households": 229
+    },
+    {
+      "name": "steady_shopper",
+      "share": 0.20343461030383092,
+      "weekly_buy_rate": 0.03816466552315609,
+      "households": 308
+    }
+  ],
+  "weeks": {
+    "campaign": 4,
+    "post": 2
+  },
+  "source_notes": {
+    "fields": {
+      "category": "data",
+      "currency": "default",
+      "ref_price": "data",
+      "unit_cost": "default",
+      "platform_fee_pct": "default",
+      "payment_fee_pct": "default",
+      "shipping_cost_per_order": "default",
+      "margin_floor_pct": "default",
+      "segments": "data",
+      "weeks": "default"
+    },
+    "usd_thb": {
+      "value": 35.1,
+      "source": "default"
+    },
+    "manufacturers": {
+      "751": {
+        "role": "our_brand",
+        "source": "default"
+      },
+      "764": {
+        "role": "leader",
+        "source": "default"
+      },
+      "595": {
+        "role": "peer",
+        "source": "default"
+      },
+      "69": {
+        "role": "private_label",
+        "source": "default"
+      }
+    },
+    "archetype_segments": {
+      "values": {
+        "deal_hunter": "deal_hunter",
+        "frequent_replenisher": "frequent_replenisher",
+        "high_spender": "high_spender",
+        "occasional": "occasional",
+        "steady_shopper": "steady_shopper"
+      },
+      "source": "data"
+    },
+    "pooled_price_elasticity": {
+      "value": -0.346719,
+      "source": "data"
+    },
+    "persona_fields": {
+      "demographics": "data",
+      "weight": "data",
+      "channels": "default"
+    },
+    "dataset": "Complete Journey as packaged by completejourney_py (simulated)"
+  }
+}
