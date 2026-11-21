@@ -19,15 +19,14 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pyarrow>=17",
     "pydantic>=2.9",
-    "pytest>=8",
     "python-dotenv>=1.0",
-    "ruff>=0.7",
     "scikit-learn>=1.5",
     "tzdata; sys_platform == 'win32'",
     "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.7"]
 data = ["pyreadr>=0.5.9", "openpyxl>=3.1"]
 
 [tool.setuptools]

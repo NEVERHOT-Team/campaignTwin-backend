@@ -11,7 +11,7 @@ targeted loyalty plan stays profitable relative to baseline in every scenario.
 From this repo root, use Python 3.11 and an activated virtual environment.
 
 ```sh
-pip install -e .
+pip install -e ".[dev]"
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 pytest -q
 ruff check .
@@ -30,6 +30,55 @@ poll `GET /api/runs/{run_id}` until it reports `done`, and then
 request `GET /api/runs/{run_id}/report`. A mock run takes about ten seconds.
 The submitted plan is validated and stored. Every legacy run returns the same demo
 results while the engine is under development. The replay endpoint is immediate.
+
+## Deploy
+
+### Render
+
+1. In the Render Dashboard, select **New → Blueprint**, connect this backend repository,
+   select `dev`, and use the root `render.yaml`. It defines one free Docker web service.
+   [Render Blueprint setup](https://render.com/docs/infrastructure-as-code)
+2. Supply `OPENAI_API_KEY` in Render's secret prompt for live model calls. The app also
+   runs with the key unset, using cached responses and local fallbacks. Select
+   **Deploy Blueprint**.
+3. Copy the service's HTTPS URL from Render and check its health. The expected response
+   is `{"ok":true,"db_mode":"json"}`.
+
+   ```sh
+   BACKEND_URL=https://your-service.onrender.com
+   curl -fsS "$BACKEND_URL/api/health"
+   ```
+
+4. Set the frontend's `VITE_API_BASE_URL` to that service origin and rebuild the frontend.
+   Local development on port 5173 and HTTPS Vercel previews are already allowed. For a
+   custom frontend domain, set `CORS_ORIGINS` on the backend to a comma-separated list of
+   exact origins, such as `https://planner.example.com,https://demo.example.com`.
+
+Render builds from the Git checkout. Docker includes the processed data, demo and LLM
+cache, plus any calibration files present in the build context. The local calibration
+panel is Git-ignored, so a Render build starts with an empty `data/calib/`.
+With `DB_MODE=json`, reviews, approvals, runs and new cache entries are lost when the
+free instance restarts, redeploys or spins down. [Render free service limits](https://render.com/docs/free)
+
+### Cloudflare Tunnel fallback
+
+With Docker and `cloudflared` installed, start the backend from the repository root.
+
+```sh
+docker build -t campaigntwin-backend .
+docker run --rm -p 127.0.0.1:8000:8000 -e DB_MODE=json campaigntwin-backend
+```
+
+In a second terminal, confirm the health response and start a temporary public tunnel.
+
+```sh
+curl -fsS http://127.0.0.1:8000/api/health
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Use the printed `https://…trycloudflare.com` origin as `VITE_API_BASE_URL` and rebuild
+the frontend. Keep both processes running for the demo. Each new tunnel gets its own
+URL. [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
 
 ## Configure the AI interview
 
@@ -75,7 +124,7 @@ questions. The parser and context endpoints still return synthetic fixtures.
 
 On Windows, use a Python 3.11+ virtual environment. If the default `python`
 points to an older interpreter, create `.venv` with an explicit supported Python
-path. Once it exists, use `.venv/Scripts/python.exe -m pip install -e .`,
+path. Once it exists, use `.venv/Scripts/python.exe -m pip install -e ".[dev]"`,
 `.venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000`,
 `.venv/Scripts/python.exe -m pytest -q`, and
 `.venv/Scripts/python.exe -m ruff check .`.

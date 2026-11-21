@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: campaigntwin-backend
+    runtime: docker
+    plan: free
+    branch: dev
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_MODE
+        value: json
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MODEL_STRONG
+        value: gpt-4.1-mini
+      - key: MODEL_FAST
+        value: gpt-4.1-mini
+      - key: EMBED_MODEL
+        value: text-embedding-3-small
