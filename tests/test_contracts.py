@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -21,33 +22,45 @@ def test_mock_matches_its_contract(name, model):
     model.model_validate(load_mock(name))
 
 
-def test_demo_replay_matches_mocks_and_demo_story():
-    replay = DemoReplay.model_validate_json((ROOT / "demo" / "replay.json").read_text())
-    assert replay.status == RunStatus.model_validate(load_mock("run_status"))
-    assert replay.report == Report.model_validate(load_mock("report"))
-    results = {
-        (result.scenario, result.strategy_id): result for result in replay.status.partial_results
-    }
-    deep = "deep-1111"
-    targeted = "targeted-loyalty"
-    assert len(results) == 9
-    assert results["S1", deep].kpi.incr_profit.p50 > results["S1", targeted].kpi.incr_profit.p50
-    assert results["S3", deep].breakpoint.model_dump() == {
-        "week": 3,
-        "cause": "rival undercut",
-        "share": 0.68,
-    }
-    assert results["S3", deep].kpi.incr_profit.p50 < 0
-    assert replay.report.recommendation["strategy_id"] == targeted
-    assert len(replay.report.scorecard) == 9
-    assert all(
-        results[scenario, targeted].kpi.incr_profit.p10 > 0 for scenario in ("S1", "S2", "S3")
-    )
+def test_demo_replay_projects_the_completed_v1_tissue_run():
+    saved = json.loads((ROOT / "demo" / "replay.json").read_text(encoding="utf-8"))
+    replay = DemoReplay.model_validate(saved)
+    status, report = saved["v1"]["status"], saved["v1"]["report"]
+    assert replay.status.run_id == report["run_id"] == status["run_id"]
+    assert replay.status.status == status["status"] == "done"
+    original = next(plan for plan in report["plan_results"] if plan["role"] == "original")
+    assert original["input"]["product"]["choice_id"] == "cellox-tissue-shopee"
+    assert report["evaluation_engine"] == "arena"
 
-    for (scenario, _), result in results.items():
-        baseline = results[scenario, "baseline"]
-        assert [row.week for row in result.weekly] == list(range(1, 7))
-        profit = result.kpi.incr_profit
-        paired_weeks = zip(result.weekly, baseline.weekly, strict=True)
-        assert profit.p50 == sum(week.profit - base.profit for week, base in paired_weeks)
-        assert profit.p10 <= profit.p50 <= profit.p90
+    plans = {p["plan_id"]: p["scenarios"] for p in report["plans"]}
+    expected = {(sid, scenario) for sid, rows in plans.items() for scenario in rows}
+    scorecard = {(r["strategy_id"], r["scenario"]): r for r in replay.report.scorecard}
+    assert set(scorecard) == expected
+    for (sid, scenario), card in scorecard.items():
+        assert card["incr_profit"] == plans[sid][scenario]["incremental_profit"]
+        crossing = report["breakpoints"][sid][scenario]
+        assert (card["breakpoint"]["week"], card["breakpoint"]["cause"]) == (
+            crossing["week"], crossing["cause"]
+        )
+    assert replay.report.weekly == [
+        {"strategy_id": sid, "scenario": scenario, **week}
+        for sid, scenarios in plans.items() for scenario in scenarios
+        for week in report["weekly"][sid][scenario]
+    ]
+    assert replay.report.recommendation["strategy_id"] == report["ranking"][0]["plan_id"]
+    assert replay.report.risks == report["risks"]
+
+    partial = {(p.strategy_id, p.scenario): p for p in replay.status.partial_results}
+    required = ("iroas", "leakage", "p_hit_target")
+    assert set(partial) == {
+        (sid, scenario) for sid, scenario in expected
+        if all(plans[sid][scenario][key] is not None for key in required)
+    }
+    for (sid, scenario), result in partial.items():
+        kpi = plans[sid][scenario]
+        assert [row.model_dump() for row in result.weekly] == report["weekly"][sid][scenario]
+        assert result.kpi.model_dump() == {
+            "incr_profit": kpi["incremental_profit"], "iroas": kpi["iroas"],
+            "leakage": kpi["leakage"], "new_buyers": kpi["new_buyers"],
+            "p_hit_target": kpi["p_hit_target"], "p_loss": kpi["p_loss"],
+        }

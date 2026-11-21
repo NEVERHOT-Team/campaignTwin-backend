@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 import pytest
@@ -92,8 +93,11 @@ def test_start_run_poll_report_and_replay(client, monkeypatch):
     response = client.get("/api/demo/replay")
     assert response.status_code == 200
     replay = DemoReplay.model_validate(response.json())
-    assert replay.report == report
-    assert replay.status.partial_results == status.partial_results
+    assert report == Report.model_validate(load_mock("report"))
+    saved = json.loads(routes.REPLAY_PATH.read_text(encoding="utf-8"))
+    assert response.json() == {key: saved[key] for key in ("status", "report")}
+    assert replay.status.run_id == saved["v1"]["status"]["run_id"]
+    assert replay.report.risks == saved["v1"]["report"]["risks"]
 
 
 def test_unknown_and_queued_run(client):

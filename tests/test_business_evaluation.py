@@ -9,8 +9,8 @@ from api.v1_evaluation import business_evaluation
 from main import app
 
 
-@pytest.mark.parametrize("budget,expected", [(1000, "hold"), (1, "insufficient_evidence")])
-def test_planner_can_verify_decision_against_run(monkeypatch, tmp_path, budget, expected):
+@pytest.mark.parametrize("budget", [1000, 1])
+def test_planner_can_verify_decision_against_run(monkeypatch, tmp_path, budget):
     monkeypatch.setenv("DB_MODE", "json")
     monkeypatch.setattr(db, "RUNS_DIR", tmp_path)
     reviews = "/api/v1/campaign-reviews"
@@ -32,12 +32,11 @@ def test_planner_can_verify_decision_against_run(monkeypatch, tmp_path, budget, 
         result = response.json()
         validator("BusinessEvaluation").validate(result)
         assert result["decision"] == report["decision"]
-        assert result["decision"]["status"] == expected
         for comparison, plan in zip(result["comparisons"], report["plan_results"], strict=True):
             assert comparison["scenario_results"] == plan["scenario_results"]
             assert comparison["plan_id"] == plan["input"]["plan_id"]
         metrics = {m["metric"]: m for m in report["scenario_results"][0]["metrics"]}
-        gates = {g["metric"]: g for g in result["checks"]}
+        gates = {g["metric"]: g for g in result["checks"] if g["scenario"] == "S1"}
         risk = gates["probability_loss"]
         assert risk["observed"] == metrics["probability_loss"]["value"]
         assert risk["threshold"] == review["evaluation"]["max_loss_probability"]
@@ -46,12 +45,17 @@ def test_planner_can_verify_decision_against_run(monkeypatch, tmp_path, budget, 
         assert profit["observed"] == metrics["incremental_profit"]["value"]["p50"]
         assert (profit["status"] == "pass") == (profit["observed"] >= profit["threshold"])
         leakage = gates["subsidy_leakage"]
-        if budget == 1:
+        if metrics["subsidy_leakage"]["status"] == "unavailable":
             assert leakage["status"] == "unavailable"
             assert leakage["observed"] is None
             assert leakage["unavailable_reason"] == "undefined_denominator"
         else:
             assert leakage["status"] == "pass"
+            assert leakage["observed"] == metrics["subsidy_leakage"]["value"]["p50"]
+        expected = "hold" if any(gate["status"] == "fail" for gate in gates.values()) else "proceed"
+        if leakage["status"] == "unavailable":
+            expected = "insufficient_evidence"
+        assert result["decision"]["status"] == expected
 
 
 def test_older_report_retains_results_and_explains_missing_thresholds():

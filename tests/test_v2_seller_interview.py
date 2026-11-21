@@ -258,7 +258,8 @@ def test_submission_replay_and_reports_stay_in_their_own_version(api):
     fields = example("syntheticRehearsal")
     commercial = {**fields, "order_fee_thb": 2, "profit_target_thb": 25}
     assert api.post(legacy_reviews, json={"fields": commercial}).status_code == 422
-    v1 = api.post(legacy_reviews, json={"fields": fields}).json()
+    v1_fields = {**fields, "product_choice_id": "cellox-tissue-shopee"}
+    v1 = api.post(legacy_reviews, json={"fields": v1_fields}).json()
     legacy_validator("Review").validate(v1)
     consent = {"revision": 1, "confirmed": True}
     receipt1 = api.post(f"{legacy_reviews}/{v1['review_id']}/approvals", json=consent).json()
@@ -269,7 +270,7 @@ def test_submission_replay_and_reports_stay_in_their_own_version(api):
     status1 = accepted1.headers["Location"]
     report1 = api.get(status1 + "/report").json()
     legacy_validator("RunReport").validate(report1)
-    assert report1["data_versions"]["evaluation_policy"] == "synthetic-tissue-v1"
+    assert report1["data_versions"]["evaluation_policy"] == "arena-tissue-v1"
     assert "recommendation" not in report1
     stored1 = (db.RUNS_DIR / "v1-workspace.json").read_bytes()
 
@@ -341,7 +342,10 @@ def test_combined_server_keeps_dev_arena_choice_on_v1(api):
     assert arena["status"] == "ready_for_approval"
     assert arena["evaluation"]["scenarios"] == ["S1", "S2", "S3", "S4"]
 
-    seller = start(api, **payload)
+    # v1 promotional channels/event are not v2 seller intake fields.
+    assert api.post(REVIEWS, json=payload).status_code == 422
+    common = {k: v for k, v in payload["fields"].items() if k not in {"channels", "event"}}
+    seller = start(api, fields=common)
     assert seller["review"]["status"] == "blocked"
     assert seller["review"]["resolved_product"] is None
     assert api.get(REVIEWS + "/" + arena["review_id"]).status_code == 404

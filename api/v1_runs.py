@@ -10,7 +10,7 @@ import db
 from api import v1_arena
 from api.historical_prediction import compare_prediction
 from api.historical_reference import pin_reference
-from api.v1_catalog import ARENA_POLICY, resolve
+from api.v1_catalog import resolve
 from api.v1_contract import V1Error, validate_request
 from api.v1_evaluation import business_evaluation
 from engine.synthetic import evaluate
@@ -43,8 +43,7 @@ def submit_run(payload: dict, background_tasks: BackgroundTasks):
     approval_id = inputs["approval_id"]
     submission_id = inputs["submission_id"]
     parent_id = inputs.get("retry_of_run_id")
-    # The local screen is bounded. Commit admission, output and submission identity together,
-    # so process interruption rolls back and transport retries cannot strand a queued run.
+    # Commit the admission and submission identity before scheduling the arena.
     with db.v1_transaction() as state:
         existing_id = state["submissions"].get(submission_id)
         if existing_id:
@@ -74,23 +73,10 @@ def submit_run(payload: dict, background_tasks: BackgroundTasks):
 
         run = {"request": inputs, "review": review, "report": None, "failure": None,
                "historical_snapshot": pin_reference(review)}
-        # The arena takes tens of seconds, so it runs after admission and reports progress.
-        arena_run = review["data_versions"].get("evaluation_policy") == ARENA_POLICY
-        if arena_run:
-            run["status"], run["progress"] = "queued", 0
-        else:
-            try:
-                run["report"] = evaluate(run_id, approval_id, review)
-            except (KeyError, TypeError, ValueError):
-                logger.exception("Invalid approved simulation input for %s", run_id)
-                run["failure"] = dict(INVALID_INPUT)
-            except Exception:
-                logger.exception("Evaluation failed for %s", run_id)
-                run["failure"] = dict(EVALUATION_FAILED)
+        run["status"], run["progress"] = "queued", 0
         state["runs"][run_id] = run
         state["submissions"][submission_id] = run_id
-    if arena_run:
-        background_tasks.add_task(run_arena, run_id)
+    background_tasks.add_task(run_arena, run_id)
     return _accepted(run_id, 202)
 
 
@@ -114,6 +100,20 @@ def run_arena(run_id):
 
     try:
         report = v1_arena.evaluate(run_id, approval_id, review, progress)
+    except v1_arena.ArenaRunError:
+        logger.exception("Arena failed for %s; checking the approved input against fallback policy",
+                         run_id)
+        try:
+            # The synthetic policy validates its own product, costs, scenarios and offer.
+            # Incompatible frozen approvals must remain retryable rather than be repriced.
+            fallback = evaluate(run_id, approval_id, review)
+        except Exception:
+            logger.exception("No compatible synthetic fallback for %s", run_id)
+            _update(run_id, status="error", failure=dict(EVALUATION_FAILED))
+        else:
+            report = {**fallback, "evaluation_engine": "synthetic_fallback",
+                      "fallback_reason": "arena_simulation_failed"}
+            _update(run_id, status="done", progress=1, report=report)
     except (KeyError, TypeError, ValueError):
         logger.exception("Invalid approved arena input for %s", run_id)
         _update(run_id, status="error", failure=dict(INVALID_INPUT))

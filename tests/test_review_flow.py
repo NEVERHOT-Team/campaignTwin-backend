@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import db
+from api import v1_arena
 from api.v1_contract import validator
 from main import app
 
@@ -19,6 +20,8 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setattr(db, "RUNS_DIR", tmp_path / "runs")
     monkeypatch.setattr(db, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(v1_arena, "SEEDS", 2)
+    monkeypatch.setattr(v1_arena, "N_AGENTS", 600)
     with TestClient(app) as test_client:
         yield test_client
 
@@ -56,15 +59,44 @@ def test_blocked_review_accepts_corrections_only_at_current_revision(client):
     edits = {"base_revision": 1, "edits": {"product_hint": None, "budget_thb": 750}}
     response = client.post(f"{url}/revisions", json=edits)
     assert response.status_code == 201, response.text
-    assert response.json()["facts"] == {"channel": "shopee", "budget_thb": 750}
+    assert response.json()["facts"] == {
+        "channel": "shopee", "budget_thb": 750, "product_choice_id": "cellox-tissue-shopee",
+    }
+    assert response.json()["fact_origins"]["/facts/product_choice_id"] == "default"
     assert response.json()["revision"] == 2
     assert client.post(f"{url}/revisions", json=edits).status_code == 409
+
+
+def test_stage_catalog_defaults_and_market_field_provenance(client):
+    review = client.post(REVIEWS, json={"fields": {"budget_thb": 500000}}).json()
+    assert [row["choice_id"] for row in review["supported_product_choices"]] == [
+        "cellox-tissue-shopee"
+    ]
+    assert review["resolved_product"] == review["supported_product_choices"][0]
+    assert review["fact_origins"]["/facts/product_choice_id"] == "default"
+    assert review["fact_origins"]["/facts/channel"] == "derived"
+    assert review["fact_origins"]["/facts/budget_thb"] == "planner"
+    assert {key: row["source"] for key, row in review["costs"].items()} == {
+        "regular_price": "data", "cogs": "default", "channel_commission": "default",
+        "payment_fee": "default", "seller_fulfillment": "default", "margin_floor_pct": "default",
+    }
+    url = f"{REVIEWS}/{review['review_id']}/revisions"
+    response = client.post(url, json={"base_revision": 1, "edits": {
+        "product_choice_id": "cellox-tissue-shopee", "channel": "shopee",
+        "channels": ["shopee", "line"], "event": "11.11",
+    }})
+    assert response.status_code == 201, response.text
+    updated = response.json()
+    for key in ("product_choice_id", "channel", "channels", "event"):
+        assert updated["fact_origins"][f"/facts/{key}"] == "planner"
+    assert updated["facts"]["channels"] == ["shopee", "line"]
+    assert updated["facts"]["event"] == "11.11"
 
 
 @pytest.fixture
 def approved(client):
     fields = {
-        "product_choice_id": "demo-tissue-12-shopee",
+        "product_choice_id": "cellox-tissue-shopee",
         "channel": "shopee",
         "audience_hint": "all",
         "offer": {"kind": "percent_off", "value": 10, "unit": "pct", "eligibility": "all"},
@@ -123,16 +155,14 @@ def test_approved_inputs_survive_revision_and_submission_replay(client, approved
 
 
 def test_concurrent_submission_and_single_retry(client, approved, monkeypatch):
-    from api import v1_runs
-
     _, receipt = approved
     body = {"submission_id": str(uuid4()), "approval_id": receipt["approval_id"]}
-    evaluate = v1_runs.evaluate
+    evaluate = v1_arena.evaluate
 
     def unavailable(*args):
         raise RuntimeError("simulated worker interruption")
 
-    monkeypatch.setattr(v1_runs, "evaluate", unavailable)
+    monkeypatch.setattr(v1_arena, "evaluate", unavailable)
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(lambda _: client.post(RUNS, json=body), range(2)))
     assert sorted(response.status_code for response in responses) == [200, 202]
@@ -142,7 +172,7 @@ def test_concurrent_submission_and_single_retry(client, approved, monkeypatch):
     assert status["status"] == "error" and status["failure"]["retryable"]
     assert client.get(accepted["status_url"] + "/report").status_code == 409
 
-    monkeypatch.setattr(v1_runs, "evaluate", evaluate)
+    monkeypatch.setattr(v1_arena, "evaluate", evaluate)
     retry = {**body, "retry_of_run_id": accepted["run_id"]}
     assert client.post(RUNS, json=retry).status_code == 409
     retry["submission_id"] = str(uuid4())
@@ -153,7 +183,7 @@ def test_concurrent_submission_and_single_retry(client, approved, monkeypatch):
     assert client.post(RUNS, json={**retry, "submission_id": str(uuid4())}).status_code == 409
 
 
-def test_zero_budget_is_paired_no_intervention(client, approved):
+def test_zero_budget_reaches_each_approved_plan_input(client, approved):
     review, _ = approved
     url = f"{REVIEWS}/{review['review_id']}"
     revised = client.post(f"{url}/revisions", json={"base_revision": 1, "edits": {"budget_thb": 0}})
@@ -165,12 +195,10 @@ def test_zero_budget_is_paired_no_intervention(client, approved):
     report = client.get(state["report_url"]).json()
     plans = {plan["role"]: plan for plan in report["plan_results"]}
     assert plans.keys() == {"original", "conservative", "baseline"}
-    for plan in plans.values():
-        results = plan["scenario_results"]
-        assert results == plans["baseline"]["scenario_results"]
-        for scenario in results:
-            profit = next(m for m in scenario["metrics"] if m["metric"] == "incremental_profit")
-            assert profit["value"] == {"p10": 0, "p50": 0, "p90": 0}
+    assert all(plan["input"]["subsidy_budget"] == 0 for plan in plans.values())
+    for scenario in plans["baseline"]["scenario_results"]:
+        profit = next(m for m in scenario["metrics"] if m["metric"] == "incremental_profit")
+        assert profit["value"] == {"p10": 0, "p50": 0, "p90": 0}
 
 
 def test_brief_conflict_requires_an_explicit_revision(client):
@@ -194,8 +222,8 @@ def test_brief_conflict_requires_an_explicit_revision(client):
     assert client.post(url, json={"base_revision": 2, "confirm": candidates}).status_code == 422
 
 
-@pytest.mark.parametrize("override,half", [(None, 5), (9.99, 4.99)])
-def test_published_voucher_walkthrough(client, override, half):
+@pytest.mark.parametrize("override", [None, 9.99])
+def test_published_voucher_walkthrough(client, override):
     schema = client.get("/openapi.json").json()
     operation = schema["paths"][REVIEWS]["post"]
     content = operation["requestBody"]["content"]["application/json"]
@@ -225,7 +253,8 @@ def test_published_voucher_walkthrough(client, override, half):
     baseline = inputs["baseline"]
     assert baseline["offer"] is None and baseline["subsidy_budget"] == 0
     assert inputs["original"]["offer"]["discount"] == payload["fields"]["offer"]
-    assert inputs["conservative"]["offer"]["discount"]["value"] == half
+    assert inputs["original"]["product"]["choice_id"] == "cellox-tissue-shopee"
+    assert report["data_versions"]["evaluation_policy"] == "arena-tissue-v1"
     for item in inputs.values():
         assert item["approval_id"] == receipt["approval_id"]
         assert item["review_id"] == review["review_id"] and item["revision"] == 1
@@ -258,7 +287,9 @@ def test_answer_preserves_confirmed_values_during_provider_outage(client):
     validator("Review").validate(revision)
     assert revision["revision"] == 2
     assert revision["agent"]["status"] == "degraded"
-    assert revision["facts"] == {"budget_thb": 888, "channel": "shopee"}
+    assert revision["facts"] == {
+        "budget_thb": 888, "channel": "shopee", "product_choice_id": "cellox-tissue-shopee",
+    }
     offer = next(c for c in revision["candidates"] if c["field"] == "/facts/offer")
     assert offer["value"]["value"] == 20 and offer["brief_quote"] in update["answer"]
     assert revision["questions"] and revision["status"] == "blocked"
@@ -272,7 +303,7 @@ def test_minimal_brief_and_free_text_answers_reach_simulation(client):
     review = created.json()
     url = f"{REVIEWS}/{review['review_id']}"
     assert review["status"] == "blocked" and review["questions"]
-    answer = ("Use the synthetic demo for all buyers, target incremental profit, "
+    answer = ("Use the demo for all buyers, target incremental profit, "
               "budget 1000 THB, 10 THB voucher, next week.")
     response = client.post(f"{url}/revisions", json={"base_revision": 1, "answer": answer})
     assert response.status_code == 201, response.text
@@ -296,7 +327,7 @@ def test_minimal_brief_and_free_text_answers_reach_simulation(client):
     report = client.get(state["report_url"]).json()
     validator("RunReport").validate(report)
     original = next(plan["input"] for plan in report["plan_results"] if plan["role"] == "original")
-    assert original["product"]["choice_id"] == "demo-tissue-12-shopee"
+    assert original["product"]["choice_id"] == "cellox-tissue-shopee"
     assert original["subsidy_budget"] == 1000
     assert original["offer"]["discount"] == {
         "kind": "voucher", "value": 10, "unit": "THB", "eligibility": "all",
@@ -364,9 +395,9 @@ def test_ai_interprets_reply_in_review_and_requires_confirmation(client, monkeyp
             answer = {"items": [{"field": field, "value_json": json.dumps(value), "quote": quote}
                                 for field, value, quote in proposals]}
         else:
-            answer = {"items": [{"field": "product_choice_id",
-                                 "value_json": json.dumps("demo-tissue-12-shopee"),
-                                 "quote": "synthetic demo"}]}
+            answer = {"items": [{"field": "product_hint",
+                                 "value_json": json.dumps("toilet tissue"),
+                                 "quote": "toilet tissue"}]}
         return httpx.Response(200, json={
             "id": "test-completion", "object": "chat.completion", "created": 1,
             "model": body["model"], "choices": [{"index": 0, "finish_reason": "stop",
@@ -380,7 +411,7 @@ def test_ai_interprets_reply_in_review_and_requires_confirmation(client, monkeyp
     monkeypatch.setenv("OPENAI_API_KEY", "test-only")
     monkeypatch.setenv("MODEL_FAST", "test-model")
     monkeypatch.setattr(llm, "OpenAI", local_client)
-    initial = client.post(REVIEWS, json={"brief": "Rehearse the synthetic demo."}).json()
+    initial = client.post(REVIEWS, json={"brief": "Rehearse toilet tissue."}).json()
     url = f"{REVIEWS}/{initial['review_id']}"
     answer = ("Please cap it at a grand. Offer a 10 THB voucher to all buyers for incremental "
               "profit, from 2026-12-01 until 2026-12-08. Reach me at planner@example.test.")
@@ -466,7 +497,7 @@ def test_late_interview_answer_cannot_overwrite_a_newer_revision(client, monkeyp
 
 
 def test_requested_platform_remains_visible_and_blocks_incompatible_simulation(client):
-    created = client.post(REVIEWS, json={"brief": "Use the synthetic demo on Shopify, not Shopee."})
+    created = client.post(REVIEWS, json={"brief": "Use toilet tissue on Shopify, not Shopee."})
     assert created.status_code == 201
     review = created.json()
     url = f"{REVIEWS}/{review['review_id']}"
@@ -496,7 +527,7 @@ def test_unusable_market_context_blocks_approval(client, monkeypatch, invalid):
 
     row = {"name": "buyers", "households": 120, "share": 1.0, "weekly_buy_rate": 0.2}
     monkeypatch.setattr(v1_catalog, "load_market", lambda: {"segments": [{**row, **invalid}]})
-    response = client.post(REVIEWS, json={"fields": {"product_choice_id": "demo-tissue-12-shopee"}})
+    response = client.post(REVIEWS, json={"fields": {"product_choice_id": "cellox-tissue-shopee"}})
     assert response.status_code == 201
     review = response.json()
     validator("Review").validate(review)

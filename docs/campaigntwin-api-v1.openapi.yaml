@@ -6,8 +6,8 @@ info:
     Local single-planner workflow. A review ID identifies the interaction
     session. GET the review to resume, submit answers as revisions, approve
     its exact revision, then submit the approval ID and a client submission ID.
-    The runnable example requires explicit selection of demo-tissue-12-shopee.
-    It uses synthetic commercial terms and aggregate purchase rates.
+    The stage catalog defaults to cellox-tissue-shopee. Its arena rehearsal
+    uses the tissue dataset and labeled assumptions for commercial terms.
     Seller-specific rehearsals require verified catalog and fee evidence.
 
     The planner can submit a short brief, fill a few fields, or do both.
@@ -33,7 +33,7 @@ x-current-backend:
     - {method: POST, path: /api/runs, status: existing, behavior: 'SimulationPlan with ready CampaignSpec, then a fixture run'}
     - {method: GET, path: '/api/runs/{run_id}', status: existing, behavior: 'RunStatus with fixture partial results'}
     - {method: GET, path: '/api/runs/{run_id}/report', status: existing, behavior: 'Shared fixture Report after done'}
-    - {method: GET, path: /api/demo/replay, status: existing, behavior: Fixture replay}
+    - {method: GET, path: /api/demo/replay, status: existing, behavior: Stage replay}
   mapping: |
     The unversioned routes above serve legacy fixtures. V1 persists review revisions,
     approvals and per-run results. The separate campaign-review-approval draft is historical.
@@ -48,7 +48,7 @@ x-data-sources:
     load_brands supplies manufacturer-level records. The current loaders
     supply no approved seller catalog joining exact SKUs, pack sizes,
     channels, supported offers and the applicable seller cost terms.
-    The single synthetic catalog choice is labeled and must be selected explicitly.
+    The listed stage choice is the Cellox tissue rehearsal on Shopee.
     load_demo_brief supplies a scripted toilet-tissue rehearsal as an
     intake example. It supplies no verified seller catalog or cost schedule.
   segments: |
@@ -81,11 +81,25 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/CreateReview'}
             examples:
-              syntheticRehearsal:
-                summary: Runnable synthetic comparison
+              arenaRehearsal:
+                summary: AI-vs-AI arena rehearsal for the Cellox listing (S1-S4)
                 value:
                   fields:
-                    product_choice_id: demo-tissue-12-shopee
+                    product_choice_id: cellox-tissue-shopee
+                    channel: shopee
+                    channels: [shopee, line]
+                    event: '11.11'
+                    objective: incremental_profit
+                    audience_hint: all
+                    budget_thb: 500000
+                    start_date: '2026-11-07'
+                    end_date: '2026-12-04'
+                    offer: {kind: percent_off, value: 40, unit: pct, eligibility: all}
+              syntheticRehearsal:
+                summary: Cellox tissue voucher comparison (legacy example key)
+                value:
+                  fields:
+                    product_choice_id: cellox-tissue-shopee
                     channel: shopee
                     objective: incremental_profit
                     audience_hint: all
@@ -93,18 +107,6 @@ paths:
                     start_date: '2026-12-01'
                     end_date: '2026-12-08'
                     offer: {kind: voucher, value: 10, unit: THB, eligibility: all}
-              arenaRehearsal:
-                summary: AI-vs-AI arena rehearsal for the Cellox listing (S1-S4)
-                value:
-                  fields:
-                    product_choice_id: cellox-tissue-shopee
-                    channel: shopee
-                    objective: incremental_profit
-                    audience_hint: all
-                    budget_thb: 500000
-                    start_date: '2026-11-07'
-                    end_date: '2026-12-05'
-                    offer: {kind: percent_off, value: 40, unit: pct, eligibility: all}
               toiletTissue:
                 summary: A toilet-tissue brief with a partial form
                 value:
@@ -330,7 +332,7 @@ paths:
       x-implementation-status: implemented
       summary: Poll the run
       description: |
-        The local synthetic evaluator completes during submission.
+        New Cellox runs queue the arena evaluation after admission.
         Poll the submitted run at the indicated interval while queued or
         running. Progress is a nondecreasing fraction for this run. Done
         means its immutable report is available. Error is a terminal run
@@ -420,7 +422,10 @@ paths:
         pinned input versions. Scenario results compare the approved campaign
         to a paired no-campaign baseline with shared seeds and scope.
         Evaluator output supplies all numbers and decision codes. Agent
-        commentary may summarize them. A completed run can have missing
+        commentary may summarize them. Arena reports also expose each strategy and
+        its paired weekly results, scenario outcomes, ranking and event counts.
+        The competitive outlook links historical campaign examples for the user
+        and the highest-ranked plan. A completed run can have missing
         metrics or insufficient decision evidence. Execution or report
         generation failure instead leaves the run in error.
       responses:
@@ -648,6 +653,15 @@ components:
       maxLength: 80
       pattern: '\S'
       description: Requested sales platform. Unsupported platforms stay visible in review and block simulation.
+    CampaignEvent:
+      type: string
+      enum: ['1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '8.8', '9.9', '10.10', '11.11', '12.12', payday, none]
+    CampaignChannels:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      description: Campaign channels across which the strategy allocates its budget. The listing's sales platform is recorded separately in channel.
+      items: {type: string, enum: [shopee, line]}
     Channel:
       type: string
       enum: [shopee, lazada, tiktok_shop, line, meta, google, offline]
@@ -708,6 +722,8 @@ components:
           $ref: '#/components/schemas/Text'
           description: Optional selection of an exact, server-supplied product choice.
         channel: {$ref: '#/components/schemas/RequestedChannel'}
+        channels: {$ref: '#/components/schemas/CampaignChannels'}
+        event: {$ref: '#/components/schemas/CampaignEvent'}
         offer: {$ref: '#/components/schemas/OfferInput'}
         audience_hint: {$ref: '#/components/schemas/Text'}
         objective: {$ref: '#/components/schemas/Objective'}
@@ -747,6 +763,8 @@ components:
         pack_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         product_choice_id: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         channel: {oneOf: [{$ref: '#/components/schemas/RequestedChannel'}, {type: 'null'}]}
+        channels: {oneOf: [{$ref: '#/components/schemas/CampaignChannels'}, {type: 'null'}]}
+        event: {oneOf: [{$ref: '#/components/schemas/CampaignEvent'}, {type: 'null'}]}
         offer: {oneOf: [{$ref: '#/components/schemas/OfferInput'}, {type: 'null'}]}
         audience_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         objective: {oneOf: [{$ref: '#/components/schemas/Objective'}, {type: 'null'}]}
@@ -909,6 +927,7 @@ components:
         reference-only material costs block approval. A confirmed zero
         requires evidence covering that charge and scope.
       properties:
+        margin_floor_pct: {$ref: '#/components/schemas/CostEvidence'}
         regular_price: {$ref: '#/components/schemas/CostEvidence'}
         cogs: {$ref: '#/components/schemas/CostEvidence'}
         channel_commission: {$ref: '#/components/schemas/CostEvidence'}
@@ -967,7 +986,7 @@ components:
       else: {properties: {reason: {type: 'null'}}}
     FactOrigin:
       type: string
-      enum: [planner, planner_confirmed_extraction, data, default]
+      enum: [planner, planner_confirmed_extraction, data, default, derived]
     DateWindow:
       type: object
       additionalProperties: false
@@ -1378,6 +1397,125 @@ components:
               threshold: {type: [number, 'null']}
               status: {enum: [pass, fail, unavailable]}
               unavailable_reason: {type: [string, 'null']}
+    ArenaPlanMetrics:
+      type: object
+      required: [incremental_profit, iroi, iroas, leakage, leakage_label, new_buyers, p_loss, p_hit_target]
+      properties:
+        incremental_profit:
+          $ref: '#/components/schemas/Percentiles'
+          description: Net incremental profit over the paired baseline, in THB.
+        iroi:
+          oneOf: [{$ref: '#/components/schemas/Percentiles'}, {type: 'null'}]
+          description: Incremental profit divided by campaign spend, as a ratio.
+        iroas:
+          oneOf: [{$ref: '#/components/schemas/Percentiles'}, {type: 'null'}]
+          description: Incremental revenue divided by campaign spend, as a ratio.
+        leakage:
+          oneOf: [{$ref: '#/components/schemas/Percentiles'}, {type: 'null'}]
+          description: Fraction of discounted units estimated to sell without the offer.
+        leakage_label: {enum: [data, unavailable]}
+        new_buyers: {$ref: '#/components/schemas/Percentiles'}
+        p_loss: {$ref: '#/components/schemas/Fraction'}
+        p_hit_target:
+          oneOf: [{$ref: '#/components/schemas/Fraction'}, {type: 'null'}]
+    ArenaReportPlan:
+      type: object
+      required: [plan_id, name, role, discount_pct, mechanic, scenarios]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Text'}
+        name: {$ref: '#/components/schemas/Text'}
+        role: {enum: [user, ai, baseline]}
+        discount_pct: {type: number, minimum: 0, maximum: 100}
+        mechanic: {type: string}
+        scenarios:
+          type: object
+          propertyNames: {$ref: '#/components/schemas/ScenarioId'}
+          additionalProperties: {$ref: '#/components/schemas/ArenaPlanMetrics'}
+    ArenaRankingRow:
+      type: object
+      required: [plan_id, rank, weighted_profit, rank_reason]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Text'}
+        rank: {type: [integer, 'null'], minimum: 1}
+        weighted_profit: {type: number, description: 'Likelihood-weighted incremental profit in THB across S1–S3. S4 is a stress test.'}
+        rank_reason: {$ref: '#/components/schemas/Text'}
+    ArenaWeeklyRow:
+      type: object
+      required: [week, sales, profit, buyers, from_rival, waiting]
+      properties:
+        week: {type: integer, minimum: 1}
+        sales: {type: number, description: Weekly gross sales in THB.}
+        profit: {type: number, description: Weekly gross profit in THB.}
+        buyers: {type: integer}
+        from_rival: {type: integer}
+        waiting: {type: integer}
+    ArenaBreakpoint:
+      type: object
+      required: [week, cause, peak_week]
+      properties:
+        week: {type: [integer, 'null'], minimum: 1}
+        cause:
+          type: [string, 'null']
+          description: The evaluator uses never_profitable when cumulative incremental profit never crossed above zero.
+        peak_week: {type: [integer, 'null'], minimum: 1}
+    ArenaScenarioEvents:
+      type: object
+      required: [rival_reactions, own_rule_firings, rival_notices]
+      properties:
+        rival_reactions: {type: integer, minimum: 0}
+        own_rule_firings: {type: integer, minimum: 0}
+        rival_notices: {type: integer, minimum: 0}
+    ArenaRivalEstimate:
+      type: object
+      required: [reaction, likelihood, ci_low, ci_high, depth, delay_weeks, duration_weeks, evidence_ids]
+      properties:
+        reaction: {enum: [none, match, undercut, non_price]}
+        likelihood: {$ref: '#/components/schemas/Fraction'}
+        ci_low: {$ref: '#/components/schemas/Fraction'}
+        ci_high: {$ref: '#/components/schemas/Fraction'}
+        depth: {type: number, minimum: 0, maximum: 100, description: Discount depth ceiling in percentage points.}
+        delay_weeks: {type: integer, minimum: 0}
+        duration_weeks: {type: integer, minimum: 0}
+        evidence_ids: {type: array, items: {type: string}}
+    ArenaRivalOutlook:
+      type: object
+      required: [rival, display_name, rival_score, scenarios]
+      properties:
+        rival: {type: string}
+        display_name: {type: string}
+        rival_score: {type: number}
+        scenarios:
+          type: object
+          required: [S1, S2, S3]
+          propertyNames: {enum: [S1, S2, S3]}
+          additionalProperties: {$ref: '#/components/schemas/ArenaRivalEstimate'}
+    ArenaSimilarCampaign:
+      type: object
+      required: [campaign_id, brand, brand_name, platform, mechanic, discount_depth, description, source_url, confidence, similarity]
+      properties:
+        campaign_id: {type: string}
+        brand: {type: string}
+        brand_name: {type: string}
+        platform: {type: string}
+        mechanic: {type: string}
+        discount_depth: {type: number, minimum: 0, maximum: 100}
+        description: {type: string}
+        source_url: {type: string, format: uri}
+        confidence: {type: string}
+        similarity: {type: number}
+    ArenaPlanOutlook:
+      type: object
+      required: [plan_id, prior_label, rivals, similar_campaigns]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Text'}
+        prior_label: {type: string, description: Category prior provenance, such as data+default.}
+        rivals:
+          type: array
+          items: {$ref: '#/components/schemas/ArenaRivalOutlook'}
+        similar_campaigns:
+          type: array
+          maxItems: 5
+          items: {$ref: '#/components/schemas/ArenaSimilarCampaign'}
     RunReport:
       type: object
       additionalProperties: false
@@ -1416,6 +1554,61 @@ components:
                 items: {$ref: '#/components/schemas/ScenarioResult'}
         decision: {$ref: '#/components/schemas/Decision'}
         commentary: {$ref: '#/components/schemas/Text'}
+        evaluation_engine: {type: string, enum: [arena, synthetic_fallback]}
+        fallback_reason: {type: string, description: Why the run used the internal fallback evaluator.}
+        field_sources:
+          type: object
+          description: Effective spec paths mapped to their evidence source.
+          additionalProperties: {enum: [user, data, default, derived]}
+        plans:
+          type: array
+          description: All strategies including the paired baseline. A plan has an S4 entry if the arena evaluated its red-team stress scenario.
+          items: {$ref: '#/components/schemas/ArenaReportPlan'}
+        ranking:
+          type: array
+          description: Arena order with the baseline comparator last. Its rank is null.
+          items: {$ref: '#/components/schemas/ArenaRankingRow'}
+        weekly:
+          type: object
+          description: Weekly medians across seeds, keyed by plan ID then scenario. The baseline contains the paired no-campaign trajectory.
+          additionalProperties:
+            type: object
+            propertyNames: {$ref: '#/components/schemas/ScenarioId'}
+            additionalProperties: {type: array, items: {$ref: '#/components/schemas/ArenaWeeklyRow'}}
+        breakpoints:
+          type: object
+          description: Loss crossings and peak weeks keyed by plan ID then scenario.
+          additionalProperties:
+            type: object
+            propertyNames: {$ref: '#/components/schemas/ScenarioId'}
+            additionalProperties: {$ref: '#/components/schemas/ArenaBreakpoint'}
+        risks:
+          type: array
+          description: Statements derived from the evaluated run's results.
+          items: {type: string}
+        events:
+          type: object
+          description: Middle-seed event counts summed across plans in each evaluated scenario. A grouped rival action counts once.
+          propertyNames: {$ref: '#/components/schemas/ScenarioId'}
+          additionalProperties: {$ref: '#/components/schemas/ArenaScenarioEvents'}
+        competitive_outlook:
+          type: object
+          required: [user_plan, top_ranked_plan]
+          properties:
+            user_plan: {$ref: '#/components/schemas/ArenaPlanOutlook'}
+            top_ranked_plan: {$ref: '#/components/schemas/ArenaPlanOutlook'}
+        customer_voice:
+          type: object
+          required: [status, reason]
+          properties:
+            status: {const: unavailable}
+            reason: {type: string}
+      allOf:
+        - if: {required: [evaluation_engine], properties: {evaluation_engine: {const: arena}}}
+          then:
+            required: [field_sources, plans, ranking, weekly, breakpoints, risks, events, competitive_outlook, customer_voice]
+        - if: {required: [evaluation_engine], properties: {evaluation_engine: {const: synthetic_fallback}}}
+          then: {required: [fallback_reason]}
     Error:
       type: object
       additionalProperties: false
