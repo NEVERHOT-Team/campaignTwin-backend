@@ -1,6 +1,6 @@
 {
   "status": {
-    "run_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5",
+    "run_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6",
     "status": "done",
     "progress": 1,
     "generation": 0,
@@ -3919,6 +3919,7 @@
     },
     "customer_voice": [],
     "risks": [
+      "User plan sells below cost by ฿38.98 per unit",
       "The user plan loses money at P50 in every evaluated scenario.",
       "User-plan P50 subsidy leakage in S1 is 15.34%.",
       "User-plan P50 subsidy leakage in S2 is 14.18%.",
@@ -3933,11 +3934,11 @@
   },
   "v1": {
     "status": {
-      "run_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5",
+      "run_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6",
       "status": "done",
       "progress": 1,
       "poll_after_seconds": null,
-      "report_url": "/api/v1/runs/c4482d39-4106-494b-8609-1f0dbe7b86c5/report",
+      "report_url": "/api/v1/runs/e3698844-0e37-45e7-a9ad-d2f084e4d6a6/report",
       "failure": null
     },
     "report": {
@@ -3973,6 +3974,7 @@
           "plan_id": "baseline",
           "name": "No campaign",
           "role": "baseline",
+          "below_cost": false,
           "discount_pct": 0.0,
           "mechanic": "none",
           "scenarios": {
@@ -4054,6 +4056,7 @@
           "plan_id": "user-plan",
           "name": "Your plan",
           "role": "user",
+          "below_cost": true,
           "discount_pct": 40.0,
           "mechanic": "percent_off",
           "scenarios": {
@@ -4183,6 +4186,7 @@
           "plan_id": "g0-deep",
           "name": "Deep discount for everyone",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 17.057134358898352,
           "mechanic": "percent_off",
           "scenarios": {
@@ -4312,6 +4316,7 @@
           "plan_id": "g0-newbuyer",
           "name": "Welcome voucher for new buyers only (lean media)",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 17.057134358898352,
           "mechanic": "voucher",
           "scenarios": {
@@ -4441,6 +4446,7 @@
           "plan_id": "g0-targeted",
           "name": "Targeted voucher for price-sensitive shoppers",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 17.057134358898352,
           "mechanic": "voucher",
           "scenarios": {
@@ -4540,6 +4546,7 @@
           "plan_id": "g0-loyalty",
           "name": "Member voucher for loyal shoppers",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 17.057134358898352,
           "mechanic": "voucher",
           "scenarios": {
@@ -4639,6 +4646,7 @@
           "plan_id": "g0-shipping",
           "name": "Free shipping to win new buyers",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 10.0,
           "mechanic": "free_shipping",
           "scenarios": {
@@ -4738,6 +4746,7 @@
           "plan_id": "g0-flash",
           "name": "Short flash sale",
           "role": "ai",
+          "below_cost": false,
           "discount_pct": 17.057134358898352,
           "mechanic": "flash_sale",
           "scenarios": {
@@ -6449,6 +6458,7 @@
         }
       },
       "risks": [
+        "User plan sells below cost by ฿38.98 per unit",
         "The user plan loses money at P50 in every evaluated scenario.",
         "User-plan P50 subsidy leakage in S1 is 15.34%.",
         "User-plan P50 subsidy leakage in S2 is 14.18%.",
@@ -6841,9 +6851,9 @@
         "status": "unavailable",
         "reason": "rule-based appeal table (label default)"
       },
-      "run_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5",
-      "approval_id": "9c3e60df-bffc-4264-9d9d-51d59cb0fd7e",
-      "review_id": "357fb302-3461-4d99-a372-794d64e21dc7",
+      "run_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6",
+      "approval_id": "c72bfb49-514f-46bb-a4ba-9872c144bfb3",
+      "review_id": "05e43ebd-224f-4f7d-89a1-d9e386c6e7b1",
       "revision": 1,
       "data_versions": {
         "catalog": "arena-tissue-v1",
@@ -6852,7 +6862,7 @@
         "evaluation_policy": "arena-tissue-v1"
       },
       "comparator": "paired_no_campaign",
-      "evaluated_at": "2026-11-21T09:04:36.543664+00:00",
+      "evaluated_at": "2026-11-21T09:35:39.351950+00:00",
       "measurement_window": {
         "start_date": "2026-11-07",
         "end_date": "2026-12-18"
@@ -7115,13 +7125,13 @@
         {
           "role": "original",
           "input": {
-            "plan_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/original",
+            "plan_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/original",
             "role": "original",
             "parent_plan_id": null,
-            "paired_baseline_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/baseline",
+            "paired_baseline_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/baseline",
             "changes": [],
-            "approval_id": "9c3e60df-bffc-4264-9d9d-51d59cb0fd7e",
-            "review_id": "357fb302-3461-4d99-a372-794d64e21dc7",
+            "approval_id": "c72bfb49-514f-46bb-a4ba-9872c144bfb3",
+            "review_id": "05e43ebd-224f-4f7d-89a1-d9e386c6e7b1",
             "revision": 1,
             "data_versions": {
               "catalog": "arena-tissue-v1",
@@ -7560,10 +7570,10 @@
         {
           "role": "conservative",
           "input": {
-            "plan_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/conservative",
+            "plan_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/conservative",
             "role": "conservative",
-            "parent_plan_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/original",
-            "paired_baseline_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/baseline",
+            "parent_plan_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/original",
+            "paired_baseline_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/baseline",
             "changes": [
               {
                 "field": "/offer/discount/value",
@@ -7572,8 +7582,8 @@
                 "reason": "Win shoppers who do not buy us yet with almost no paid media; loyal buyers keep paying full price, so the discount does not leak to sales we would make anyway."
               }
             ],
-            "approval_id": "9c3e60df-bffc-4264-9d9d-51d59cb0fd7e",
-            "review_id": "357fb302-3461-4d99-a372-794d64e21dc7",
+            "approval_id": "c72bfb49-514f-46bb-a4ba-9872c144bfb3",
+            "review_id": "05e43ebd-224f-4f7d-89a1-d9e386c6e7b1",
             "revision": 1,
             "data_versions": {
               "catalog": "arena-tissue-v1",
@@ -8013,13 +8023,13 @@
         {
           "role": "baseline",
           "input": {
-            "plan_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/baseline",
+            "plan_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/baseline",
             "role": "baseline",
             "parent_plan_id": null,
-            "paired_baseline_id": "c4482d39-4106-494b-8609-1f0dbe7b86c5/baseline",
+            "paired_baseline_id": "e3698844-0e37-45e7-a9ad-d2f084e4d6a6/baseline",
             "changes": [],
-            "approval_id": "9c3e60df-bffc-4264-9d9d-51d59cb0fd7e",
-            "review_id": "357fb302-3461-4d99-a372-794d64e21dc7",
+            "approval_id": "c72bfb49-514f-46bb-a4ba-9872c144bfb3",
+            "review_id": "05e43ebd-224f-4f7d-89a1-d9e386c6e7b1",
             "revision": 1,
             "data_versions": {
               "catalog": "arena-tissue-v1",

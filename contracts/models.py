@@ -62,6 +62,7 @@ class Strategy(BaseModel):
     rationale: str
     is_user_plan: bool = False
     is_baseline: bool = False
+    below_cost: bool = False
 
 
 class SimulationPlan(BaseModel):

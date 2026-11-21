@@ -1427,6 +1427,9 @@ components:
         role: {enum: [user, ai, baseline]}
         discount_pct: {type: number, minimum: 0, maximum: 100}
         mechanic: {type: string}
+        below_cost:
+          type: boolean
+          description: True when the discounted unit price after fees falls below unit cost plus shipping per unit. Older stored reports can omit this field.
         scenarios:
           type: object
           propertyNames: {$ref: '#/components/schemas/ScenarioId'}
@@ -1584,7 +1587,7 @@ components:
             additionalProperties: {$ref: '#/components/schemas/ArenaBreakpoint'}
         risks:
           type: array
-          description: Statements derived from the evaluated run's results.
+          description: Statements derived from the evaluated run's results and the user offer's per-unit economics.
           items: {type: string}
         events:
           type: object

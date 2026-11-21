@@ -90,6 +90,8 @@ def test_arena_report_preserves_every_plan_scenario_and_legacy_values(tissue_run
     assert sum(key.startswith("g0-") for key in plans) == 6
     assert plans["user-plan"]["role"] == "user"
     assert plans["user-plan"]["discount_pct"] == 40
+    assert {sid for sid, plan in plans.items() if plan["below_cost"]} == {"user-plan"}
+    assert "User plan sells below cost by ฿38.98 per unit" in report["risks"]
     for strategy in simulation.strategies:
         assert plans[strategy.id]["mechanic"] == strategy.mechanic
         assert plans[strategy.id]["discount_pct"] == strategy.discount_pct

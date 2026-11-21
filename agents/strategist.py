@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import Any
 
-from contracts.campaign_spec import CampaignSpec
+from contracts.campaign_spec import CampaignSpec, Mechanic
 from contracts.models import ContextPack, Strategy
 from data.loaders import load_knobs, load_market, load_personas, load_unit_econ
 
@@ -34,6 +34,7 @@ DEFAULT_MAX_DISCOUNT_PCT = 50.0
 # Break-even by default. market.json's margin_floor_pct caps *rival* discounts in
 # data/rival.py; a floor for our own plans comes from spec.constraints.margin_floor_pct.
 DEFAULT_MARGIN_FLOOR_PCT = 0.0
+DISCOUNT_SAFETY_POINTS = 1.0
 DEFAULT_UNITS_PER_ORDER = 1.1
 # Households the simulated market stands for: engine.shopper.ShopperParams
 # households_per_agent (50) x SimulationPlan.n_agents (5000). Label: default.
@@ -66,6 +67,7 @@ class Bounds:
     budget_max: float
     segments_locked: bool
     user_segments: tuple[str, ...]
+    margin_floor_discount: float
     labels: dict[str, str] = field(default_factory=dict)
     segment_shares: dict[str, float] = field(default_factory=dict)
     market_households: float = 0.0
@@ -86,11 +88,11 @@ class Bounds:
 # ---------------------------------------------------------------- bounds
 
 
-def _user_discount(spec: CampaignSpec) -> float | None:
-    for mechanic in spec.offer.mechanics:
-        if mechanic.percentage is not None:
-            return float(mechanic.percentage)
-    return None
+def _discount_pct(mechanic: Mechanic) -> float | None:
+    if mechanic.type == "voucher" and mechanic.value_unit == "thb" and mechanic.value is not None:
+        price, *_ = _unit_costs()
+        return min(100.0, 100 * mechanic.value / price)
+    return mechanic.percentage
 
 
 def _user_segments(spec: CampaignSpec, context: ContextPack) -> tuple[str, ...]:
@@ -119,12 +121,10 @@ def _units_per_order() -> tuple[float, str]:
     return DEFAULT_UNITS_PER_ORDER, "default"
 
 
-def _unit_costs(spec: CampaignSpec) -> tuple[float, float, float, float, dict[str, str]]:
-    """(price, unit cost, fee share, shipping per unit) from the spec, else market data.
-
-    Same unit economics the engine uses in shopper.week_row, so a plan the strategist
-    allows never loses money per unit by construction.
-    """
+def _unit_costs(
+    spec: CampaignSpec | None = None,
+) -> tuple[float, float, float, float, dict[str, str]]:
+    """Market price, cost, fee share and shipping per unit, with optional brief overrides."""
     labels: dict[str, str] = {}
     try:
         market = load_market()
@@ -153,7 +153,7 @@ def _unit_costs(spec: CampaignSpec) -> tuple[float, float, float, float, dict[st
         shipping = 0.0
         labels.update(price="default", unit_cost="default", fee_pct="default",
                       shipping="default")
-    economics = spec.unit_economics
+    economics = spec.unit_economics if spec else None
     if economics and economics.avg_price_thb is not None:
         price, labels["price"] = float(economics.avg_price_thb), "data"
     if economics and economics.margin_pct is not None:
@@ -164,8 +164,21 @@ def _unit_costs(spec: CampaignSpec) -> tuple[float, float, float, float, dict[st
     return price, cost, fees, shipping / max(units, 0.1), labels
 
 
-def _max_unit_discount(spec: CampaignSpec) -> tuple[float, dict[str, str]]:
-    """Largest discount (%) whose unit contribution stays at or above the margin floor.
+def unit_contribution_thb(discount_pct: float) -> float:
+    """Market contribution per unit after the price discount, fees and shipping."""
+    price, cost, fees, shipping, _ = _unit_costs()
+    return price * (1 - discount_pct / 100) * (1 - fees) - cost - shipping
+
+
+def break_even_discount_pct() -> float:
+    """Market discount at which contribution per unit reaches zero."""
+    price, cost, fees, shipping, _ = _unit_costs()
+    net_price = price * (1 - fees)
+    return 100 * (1 - (cost + shipping) / net_price) if net_price > 0 else 0.0
+
+
+def _margin_floor_discount(spec: CampaignSpec) -> tuple[float, dict[str, str]]:
+    """Largest discount (%) whose unit contribution meets the brief's margin floor.
 
     contribution = price (1 - d)(1 - fees) - unit_cost - shipping_per_unit
     and it must be >= floor x price (1 - d), so
@@ -196,7 +209,8 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         cap, labels["max_discount_pct"] = _knob_cap()
     else:
         labels["max_discount_pct"] = "data"
-    user_discount = _user_discount(spec)
+    discounts = (_discount_pct(mechanic) for mechanic in spec.offer.mechanics)
+    user_discount = next((discount for discount in discounts if discount is not None), None)
 
     if given and given.discount_pct:
         low, high = given.discount_pct
@@ -225,7 +239,8 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         flex, labels["budget_flex_pct"] = DEFAULT_BUDGET_FLEX_PCT, "default"
     total = float(spec.budget.total_thb)
 
-    unit_limit, margin_labels = _max_unit_discount(spec)
+    floor_limit, margin_labels = _margin_floor_discount(spec)
+    safe_limit = break_even_discount_pct() - DISCOUNT_SAFETY_POINTS
     labels.update(margin_labels)
     shares, labels["segment_shares"] = _segment_shares(context)
     cost_per_reach, labels["cost_per_reach"] = _cost_per_reach()
@@ -233,13 +248,14 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
     return Bounds(
         discount_min=round(low, 1),
         discount_max=round(high, 1),
-        max_unit_discount=unit_limit,
+        max_unit_discount=min(floor_limit, safe_limit),
         mechanics=mechanics,
         budget_thb=total,
         budget_min=total * (1 - flex / 100),
         budget_max=total * (1 + flex / 100),
         segments_locked=bool(given and given.segments_locked),
         user_segments=_user_segments(spec, context),
+        margin_floor_discount=floor_limit,
         labels=labels,
         segment_shares=shares,
         market_households=DEFAULT_MARKET_HOUSEHOLDS,
@@ -357,18 +373,19 @@ def baseline(spec: CampaignSpec) -> Strategy:
         contingency_rules=[],
         rationale="No-campaign twin. Every plan is measured against it on the same seeds.",
         is_baseline=True,
+        below_cost=unit_contribution_thb(0) < 0,
     )
 
 
 def user_plan(spec: CampaignSpec, bounds: Bounds) -> Strategy:
     """The marketer's own plan, kept as written. Notes flag anything outside the bounds."""
     first = spec.offer.mechanics[0] if spec.offer.mechanics else None
-    discount = float(first.percentage) if first and first.percentage is not None else 0.0
+    discount = (_discount_pct(first) or 0.0) if first else 0.0
     notes = []
     if discount > bounds.max_unit_discount:
         notes.append(
-            f"{discount:g}% is above the {bounds.max_unit_discount:.1f}% that keeps unit "
-            "contribution above the margin floor"
+            f"{discount:g}% is above the {bounds.max_unit_discount:.1f}% planning limit "
+            "after the margin floor and break-even safety margin"
         )
     split = DEFAULT_SPLIT
     if spec.budget.split is not None:
@@ -392,6 +409,7 @@ def user_plan(spec: CampaignSpec, bounds: Bounds) -> Strategy:
         contingency_rules=[],
         rationale=rationale,
         is_user_plan=True,
+        below_cost=unit_contribution_thb(discount) < 0,
     )
 
 
@@ -402,8 +420,8 @@ def template_strategies(
     spec: CampaignSpec, context: ContextPack, bounds: Bounds
 ) -> list[Strategy]:
     """Six archetype plans built from rules. Also the fallback when the LLM fails."""
-    # Whole-number discounts that already respect the margin floor, so messages match.
-    high = float(math.floor(min(bounds.discount_max, bounds.max_unit_discount)))
+    # Size candidates using the brief, then cap each individually to preserve shallower offers.
+    high = float(math.floor(min(bounds.discount_max, bounds.margin_floor_discount)))
     low = float(math.ceil(min(bounds.discount_min, high)))
     low = min(low, high)
     mid = round((low + high) / 2)
@@ -429,7 +447,7 @@ def template_strategies(
             split={"discount": 0.8, "media": 0.15, "fees": 0.05}, mix=mix,
             rules=["if week>=3 and loss then end_early"],
             why="Maximise reach and volume with the deepest allowed discount.",
-            text=f"{high:g}% off everything",
+            text="{discount:g}% off everything",
         ),
         dict(
             key="newbuyer", name="Welcome voucher for new buyers only (lean media)",
@@ -441,7 +459,7 @@ def template_strategies(
             why="Win shoppers who do not buy us yet with almost no paid media; loyal buyers "
                 "keep paying full price, so the discount does not leak to sales we would "
                 "make anyway.",
-            text=f"{low:g}% off your first order",
+            text="{discount:g}% off your first order",
         ),
         dict(
             key="targeted", name="Targeted voucher for price-sensitive shoppers", discount=mid,
@@ -449,7 +467,7 @@ def template_strategies(
             split={"discount": 0.7, "media": 0.25, "fees": 0.05}, mix=mix,
             rules=[f"if rival_undercuts then shift_budget:{loyal}"],
             why="Spend the discount only where promo response is highest, one use per shopper.",
-            text=f"{mid:g}% voucher, one per customer",
+            text="{discount:g}% voucher, one per customer",
         ),
         dict(
             key="loyalty", name="Member voucher for loyal shoppers",
@@ -474,14 +492,14 @@ def template_strategies(
             split={"discount": 0.75, "media": 0.2, "fees": 0.05}, mix=flash_mix,
             rules=["if week>=3 and loss then end_early"], flash_days=2,
             why="Concentrate the discount in two days to limit pull-forward and rival response.",
-            text=f"{round(high * 0.9):g}% flash sale, 48 hours only",
+            text="{discount:g}% flash sale, 48 hours only",
         ),
         dict(
             key="conservative", name="Conservative small discount", discount=low,
             mechanic="percent_off", targets=[], cap=None, budget=bounds.budget_min,
             split={"discount": 0.6, "media": 0.35, "fees": 0.05}, mix=mix, rules=[],
             why="Lowest-risk option: small discount, smallest budget.",
-            text=f"{low:g}% off",
+            text="{discount:g}% off",
         ),
     ]
 
@@ -491,13 +509,15 @@ def template_strategies(
         note = ""
         if mechanic not in bounds.mechanics:
             mechanic, note = bounds.mechanics[0], f" ({item['mechanic']} not allowed)"
+        discount = min(float(item["discount"]), math.floor(bounds.max_unit_discount))
+        discount = _bounded_discount(discount, mechanic, bounds)
         plans.append(Strategy(
             id=f"g0-{item['key']}",
             name=item["name"],
-            discount_pct=float(item["discount"]),
+            discount_pct=discount,
             mechanic=mechanic,
             target_segments=list(item["targets"]),
-            message=_message(spec, item["text"]),
+            message=_message(spec, item["text"].format(discount=discount)),
             channel_mix=dict(item["mix"]),
             timing=_timing(spec, item["budget"], item.get("flash_days"), item.get("eligibility")),
             cap_per_user=item["cap"],
@@ -516,6 +536,12 @@ def violates_must_avoid(strategy: Strategy, spec: CampaignSpec) -> bool:
     return any(term.strip().lower() in haystack for term in spec.constraints.must_avoid if term)
 
 
+def _bounded_discount(discount: float, mechanic: str, bounds: Bounds) -> float:
+    high = min(bounds.discount_max, bounds.max_unit_discount)
+    low = min(bounds.discount_min, high) if mechanic in PERCENT_MECHANICS else 0.0
+    return min(max(round(discount, 1), low), high)
+
+
 def enforce(
     strategy: Strategy, spec: CampaignSpec, context: ContextPack, bounds: Bounds
 ) -> Strategy:
@@ -531,15 +557,11 @@ def enforce(
         mechanic = bounds.mechanics[0]
 
     discount = float(strategy.discount_pct) if math.isfinite(strategy.discount_pct) else 0.0
-    low = bounds.discount_min if mechanic in PERCENT_MECHANICS else 0.0
-    high = min(bounds.discount_max, bounds.max_unit_discount)
-    low = min(low, high)
-    clamped = min(max(discount, low), high)
+    clamped = _bounded_discount(discount, mechanic, bounds)
     if abs(clamped - discount) > 1e-9:
-        reason = "margin floor" if discount > bounds.max_unit_discount else "bounds"
-        notes.append(f"discount {discount:g}->{clamped:.1f} ({reason})")
-    # Round for readability, then clamp again so rounding never crosses a limit.
-    discount = min(max(round(clamped, 1), low), high)
+        reason = "unit economics limit" if discount > bounds.max_unit_discount else "bounds"
+        notes.append(f"discount {discount:g}->{clamped:g} ({reason})")
+    discount = clamped
 
     if bounds.segments_locked:
         targets = list(bounds.user_segments)
@@ -598,6 +620,7 @@ def enforce(
     return strategy.model_copy(update={
         "mechanic": mechanic,
         "discount_pct": discount,
+        "below_cost": unit_contribution_thb(discount) < 0,
         "target_segments": targets,
         "channel_mix": mix,
         "budget_split": split,
@@ -644,6 +667,9 @@ def propose(
     """Return [baseline, user plan, up to n generated plans], deterministic for fixed inputs."""
     bounds = resolve_bounds(spec, context)
     fixed = [baseline(spec), user_plan(spec, bounds)]
+    if bounds.max_unit_discount < 0:
+        # Even a zero discount would miss the required headroom.
+        return fixed
 
     proposed: list[Strategy] = []
     if proposer is not None:
