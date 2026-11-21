@@ -1,4 +1,4 @@
-"""Validate and load the checked-in synthetic data."""
+"""Read local source tables and validate the engine inputs."""
 
 import json
 from functools import lru_cache
@@ -7,7 +7,51 @@ from typing import Any
 
 import pandas as pd
 
-PROCESSED = Path(__file__).resolve().parent / "processed"
+DATA_DIR = Path(__file__).resolve().parent
+PROCESSED = DATA_DIR / "processed"
+RAW = DATA_DIR / "raw"
+CALIB = DATA_DIR / "calib"
+RAW_TABLES = (
+    "transactions",
+    "products",
+    "demographics",
+    "campaigns",
+    "campaign_descriptions",
+    "coupons",
+    "coupon_redemptions",
+    "promotions",
+)
+
+
+def load_raw_table(
+    name: str,
+    *,
+    columns: list[str] | None = None,
+    filters: list[tuple[str, str, Any]] | None = None,
+) -> pd.DataFrame:
+    if name not in RAW_TABLES:
+        raise ValueError(f"Unknown Complete Journey table: {name}")
+    path = RAW / f"{name}.parquet"
+    try:
+        return pd.read_parquet(path, columns=columns, filters=filters)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.download_raw first."
+        ) from error
+
+
+def load_twin_responses(columns: list[str]) -> pd.DataFrame | None:
+    filename = "wave1_3_response.csv"
+    response_directory = "question_catalog_and_human_response_csv"
+    candidates = (
+        RAW / filename,
+        RAW / response_directory / filename,
+        RAW / "Twin-2K-500" / response_directory / filename,
+    )
+    for path in candidates:
+        if path.is_file():
+            return pd.read_csv(path, usecols=columns)
+    return None
 
 
 def _require_keys(record, expected: str, location: str) -> None:
@@ -28,7 +72,8 @@ def load_segments() -> pd.DataFrame:
     _require_keys(
         frame.columns,
         "segment_id name archetype households share weekly_purchase_prob avg_basket_thb "
-        "price_elasticity coupon_rate promo_response private_label_share source",
+        "cluster_label price_elasticity price_elasticity_observed price_elasticity_source "
+        "price_elasticity_observed_source coupon_rate promo_response private_label_share source",
         filename,
     )
     return frame
@@ -55,27 +100,73 @@ def load_personas() -> list[dict[str, Any]]:
         location = f"{filename}[{index}]"
         _require_keys(
             record,
-            "persona_id segment_id archetype demo behavior psycho "
-            "story channels weight edge labels",
+            "persona_id segment archetype cluster_label weight age_band income_band household_size "
+            "kids homeowner weekly_buy_rate purchase_cycle_weeks avg_units avg_price_paid "
+            "price_elasticity price_elasticity_observed promo_share coupon_rate brand_loyalty "
+            "traits channels backstory source",
             location,
         )
         _require_keys(
-            record["demo"],
-            "age_band income_band hh_size kids homeowner gender urban",
-            f"{location}.demo",
+            record["traits"], "impulsiveness risk_aversion time_preference", f"{location}.traits"
         )
         _require_keys(
-            record["behavior"],
-            "purchase_every_days aov_thb elasticity coupon_rate promo_sensitivity",
-            f"{location}.behavior",
+            record["source"],
+            "behavior traits backstory price_elasticity price_elasticity_observed",
+            f"{location}.source",
         )
-        _require_keys(
-            record["psycho"],
-            "deal_proneness impulsiveness brand_consciousness risk_aversion digital",
-            f"{location}.psycho",
-        )
-        _require_keys(record["labels"], "demo behavior psycho story", f"{location}.labels")
     return records
+
+
+@lru_cache(maxsize=1)
+def load_market() -> dict[str, Any]:
+    filename = "market.json"
+    market = _read_json(filename)
+    _require_keys(
+        market,
+        "category currency ref_price unit_cost platform_fee_pct payment_fee_pct "
+        "shipping_cost_per_order margin_floor_pct segments weeks source_notes",
+        filename,
+    )
+    _require_keys(market["weeks"], "campaign post", f"{filename}.weeks")
+    for index, segment in enumerate(market["segments"]):
+        _require_keys(
+            segment,
+            "name archetype cluster_label share weekly_buy_rate households "
+            "price_elasticity price_elasticity_observed",
+            f"{filename}.segments[{index}]",
+        )
+    return market
+
+
+@lru_cache(maxsize=1)
+def load_knobs() -> dict[str, Any]:
+    filename = "knob_ranges.json"
+    knobs = _read_json(filename)
+    _require_keys(
+        knobs,
+        "discount_pct duration_days mechanics cap_per_user calendar channels source",
+        filename,
+    )
+    _require_keys(knobs["discount_pct"], "min p50 p90 max raw_max", f"{filename}.discount_pct")
+    return knobs
+
+
+def load_household_behavior() -> pd.DataFrame:
+    """Load local-only household data for calibration runs."""
+    path = CALIB / "household_behavior.parquet"
+    try:
+        panel = pd.read_parquet(path)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"{path} is missing. Run python -m data.etl.build_tissue after downloading raw data."
+        ) from error
+    _require_keys(
+        panel.columns,
+        "household_key archetype segment week bought units price_paid shelf_price on_promo "
+        "discount_pct coupon_used in_mailer on_display brand",
+        path.name,
+    )
+    return panel
 
 
 @lru_cache(maxsize=1)
