@@ -7,24 +7,42 @@
     "max": 50.0
   },
   "duration_days": {
-    "min": 7,
+    "min": 1,
     "max": 28
   },
   "mechanics": [
-    "percentage_discount",
-    "seller_voucher",
-    "loyalty_voucher",
+    "percent_off",
+    "voucher",
     "bundle",
-    "free_shipping"
+    "free_shipping",
+    "flash_sale"
+  ],
+  "voucher_eligibility": [
+    "all",
+    "members",
+    "new_only"
   ],
   "cap_per_user": {
     "min": 1,
     "max": 4
   },
   "calendar": [
+    "11.11",
     "12.12",
     "payday"
   ],
+  "calendar_dates": {
+    "11.11": [
+      "2026-11-11"
+    ],
+    "12.12": [
+      "2026-12-12"
+    ],
+    "payday": [
+      "2026-11-25",
+      "2026-12-25"
+    ]
+  },
   "channels": [
     "Shopee",
     "LINE"
@@ -33,13 +51,17 @@
     "discount_pct": "data",
     "duration_days": "default",
     "mechanics": "default",
+    "voucher_eligibility": "default",
     "cap_per_user": "default",
     "calendar": "default",
+    "calendar_dates": "default",
     "channels": "default",
     "discount_pct.raw_max": "data",
     "discount_pct.max": "default"
   },
   "source_notes": {
-    "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases."
+    "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases.",
+    "voucher_eligibility": "A new-buyer voucher uses type voucher and eligibility new_only.",
+    "calendar_dates": "November and December 2026 demo dates assume payday on the 25th."
   }
 }

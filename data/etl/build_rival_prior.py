@@ -18,7 +18,7 @@ from data.etl.config import (
     ROLE_PRICE_TIERS,
     SEED,
 )
-from data.loaders import PROCESSED, load_category_products, load_raw_table
+from data.loaders import DEFAULT_UNDERCUT_GAP_PP, PROCESSED, load_category_products, load_raw_table
 
 BRAND_DISPLAY_NAMES = {
     751: "Cellox",
@@ -267,6 +267,9 @@ def base_rate(events: pd.DataFrame) -> dict:
     }
     responses = matched.loc[matched["reaction_type"].ne("none")]
     priced = responses.loc[responses["reaction_type"].isin(["match", "undercut"]), "reaction_depth"]
+    undercuts = responses.loc[responses["reaction_type"].eq("undercut")]
+    gaps = undercuts["reaction_depth"] - undercuts["trigger_depth"]
+    positive_gaps = gaps[gaps.gt(0)]
     delay = responses["lag_weeks"]
     return {
         **probabilities,
@@ -281,6 +284,10 @@ def base_rate(events: pd.DataFrame) -> dict:
         "background_seed": SEED,
         "depth_p50": float(priced.median()) if len(priced) else 25.0,
         "depth_p90": float(priced.quantile(0.9)) if len(priced) else 44.0,
+        "undercut_gap_p90": (
+            float(positive_gaps.quantile(0.9)) if len(positive_gaps) else DEFAULT_UNDERCUT_GAP_PP
+        ),
+        "undercut_gap_source": "data" if len(positive_gaps) else "default",
         "delay_median": float(delay.median()) if len(delay) else 1,
         "delay_min": int(delay.min()) if len(delay) else 1,
         "duration_weeks": float(responses["duration_weeks"].median()) if len(responses) else 2,

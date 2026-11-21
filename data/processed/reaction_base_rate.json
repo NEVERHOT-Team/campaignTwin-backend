@@ -29,6 +29,8 @@
     "background_seed": 42,
     "depth_p50": 30.155642,
     "depth_p90": 30.155642,
+    "undercut_gap_p90": 30.155642,
+    "undercut_gap_source": "data",
     "delay_median": 3.0,
     "delay_min": 3,
     "duration_weeks": 3.0,

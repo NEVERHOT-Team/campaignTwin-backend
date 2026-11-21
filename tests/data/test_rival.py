@@ -16,6 +16,8 @@ from data.etl.build_rival_prior import (
     brand_catalog,
     reaction_events,
 )
+from data.loaders import load_demo_brief
+from engine.rival import RivalBook
 from mocks import load_mock
 
 
@@ -112,6 +114,30 @@ def test_no_discount_is_deterministically_passive(spec, discount):
         assert row.evidence_ids == []
 
 
+def test_tissue_user_plan_and_adaptive_rivals_respect_offer_caps():
+    spec = CampaignSpec.model_validate(load_demo_brief()["user_plan_spec"])
+    assert flat(spec).discount_pct == 40
+    rows = rival.get_rival_scenarios(spec)
+    for row in rows:
+        if row.scenario == "S1":
+            assert row.reaction == "none" and row.depth == 0
+            continue
+        if row.scenario == "S2":
+            assert row.reaction == "match" and row.depth == 40
+        else:
+            assert row.reaction == "undercut" and 40 < row.depth <= 50
+        book = RivalBook([row])
+        for week in range(row.delay_weeks + 1):
+            depth, _, _ = book.react(week, our_posted_pct=40)
+            assert depth <= row.depth
+        if row.scenario == "S2":
+            assert depth == 40
+        else:
+            assert 40 < depth <= row.depth
+        # A subsequent, deeper offer during the response window must still respect the cap.
+        assert book.react(week + 1, our_posted_pct=70)[0] == row.depth
+
+
 def test_competitor_score_ranks_all_configured_rivals_even_below_threshold(spec):
     catalog = rival.load_brands().copy()
     catalog.loc[catalog["is_ours"], ["price_tier", "geo"]] = ["mid", "TH"]
@@ -205,7 +231,8 @@ def test_all_unknown_reactions_use_category_prior(spec, monkeypatch):
         assert row.likelihood == pytest.approx(prior["p"][row.reaction])
         assert row.evidence_ids == []
         if row.scenario == "S3":
-            assert row.depth == pytest.approx(min(prior["depth_p90"], flat(spec).discount_pct + 10))
+            extra = min(10, prior["undercut_gap_p90"])
+            assert row.depth == pytest.approx(flat(spec).discount_pct + extra)
             assert row.delay_weeks == prior["delay_weeks_min"]
 
 
@@ -332,6 +359,7 @@ def test_background_subtraction_and_both_blend_conditions(n, strong, blend):
             "background_week": range(n),
             "background_reaction_type": controls,
             "reaction_depth": 25,
+            "trigger_depth": 10,
             "lag_weeks": 2,
             "duration_weeks": 1,
         }
@@ -346,9 +374,12 @@ def test_background_subtraction_and_both_blend_conditions(n, strong, blend):
         assert prior[label] == pytest.approx(expected)
     assert prior["source"] == ("data+default" if blend else "data")
     assert prior["none"] >= 0.2 and prior["delay_median"] >= 1
+    assert prior["undercut_gap_p90"] == (5 if strong else 15)
+    assert prior["undercut_gap_source"] == ("default" if strong else "data")
     empty = base_rate(pd.DataFrame(columns=EVENT_COLUMNS))
     assert empty["none"] == pytest.approx((1 + 0.45) / 2)
     assert empty["delay_median"] == 1
+    assert empty["undercut_gap_p90"] == 5 and empty["undercut_gap_source"] == "default"
 
 
 def test_neighbour_limit_and_stable_ties():
@@ -407,19 +438,41 @@ def test_brand_specific_evidence_can_make_price_response_modal(spec, monkeypatch
     )
     monkeypatch.setattr(rival, "load_library", lambda: rows)
     result = [r for r in rival.get_rival_scenarios(spec) if r.rival == "764"]
-    assert result[1].reaction == label and result[1].depth == 42
+    extra = min(10, rival.load_rival_prior()["undercut_gap_p90"])
+    expected = 20 if label == "match" else 20 + extra
+    assert result[1].reaction == label and result[1].depth == pytest.approx(expected)
     assert result[1].delay_weeks == 2 and result[1].likelihood > result[0].likelihood
     assert result[2].depth <= 30
 
 
-@pytest.mark.parametrize(
-    "discount,response,expected", [(95, 0.99, 90), (50, 0.24, 24), (5, 0.80, 15)]
-)
-def test_s3_caps_take_smallest_percent_bound(spec, monkeypatch, discount, response, expected):
-    library = rival.load_library().assign(reaction_type="undercut", discount_depth=response)
+@pytest.mark.parametrize("offer,match,undercut", [(40, 40, 47), (88, 88, 90), (95, 90, 90)])
+def test_caps_and_positive_linked_gaps(monkeypatch, offer, match, undercut):
+    template = rival.load_library().iloc[0].to_dict()
+    launch = {
+        **template, "campaign_id": "launch", "brand": "751",
+        "discount_depth": 0.20, "reaction_type": "", "reaction_to_campaign_id": "",
+    }
+    # One negative, one zero, two positive linked undercut gaps. A deeper unlinked
+    # response has no known trigger and cannot contribute to the gap estimate.
+    observations = [
+        ("low", 0.18, "launch"), ("equal", 0.20, "launch"), ("small", 0.22, "launch"),
+        ("large", 0.27, "launch"), ("unlinked", 0.80, ""),
+    ]
+    responses = [
+        {
+            **launch, "campaign_id": name, "brand": "764", "reaction_type": "undercut",
+            "discount_depth": price, "reaction_to_campaign_id": parent,
+        }
+        for name, price, parent in observations
+    ]
+    library = pd.DataFrame([launch, *responses])
+    probabilities = {"none": 0.1, "match": 0.9, "undercut": 0.0, "non_price": 0.0}
+    prior = {**rival.load_rival_prior(), "p": probabilities}
     monkeypatch.setattr(rival, "load_library", lambda: library)
-    results = rival.get_rival_scenarios(make_spec(discount_pct=discount))
-    assert all(row.depth == expected for row in results if row.scenario == "S3")
+    monkeypatch.setattr(rival, "load_rival_prior", lambda: prior)
+    rows = [r for r in rival.get_rival_scenarios(make_spec(discount_pct=offer)) if r.rival == "764"]
+    assert rows[1].reaction == "match" and rows[1].depth == match
+    assert rows[2].reaction == "undercut" and rows[2].depth == pytest.approx(undercut)
 
 
 def test_tiers_use_area_and_targets_use_relative_buyer_share():
