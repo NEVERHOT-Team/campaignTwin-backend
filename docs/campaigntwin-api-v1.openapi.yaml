@@ -93,6 +93,18 @@ paths:
                     start_date: '2026-12-01'
                     end_date: '2026-12-08'
                     offer: {kind: voucher, value: 10, unit: THB, eligibility: all}
+              arenaRehearsal:
+                summary: AI-vs-AI arena rehearsal for the Cellox listing (S1-S4)
+                value:
+                  fields:
+                    product_choice_id: cellox-tissue-shopee
+                    channel: shopee
+                    objective: incremental_profit
+                    audience_hint: all
+                    budget_thb: 500000
+                    start_date: '2026-11-07'
+                    end_date: '2026-12-05'
+                    offer: {kind: percent_off, value: 40, unit: pct, eligibility: all}
               toiletTissue:
                 summary: A toilet-tissue brief with a partial form
                 value:
@@ -1267,7 +1279,7 @@ components:
     PlanInput:
       type: object
       additionalProperties: false
-      description: Frozen effective input for one evaluated plan under the synthetic S1 policy.
+      description: Frozen effective input for one evaluated plan under the pinned evaluation policy (synthetic S1 or the arena S1-S4).
       required: [plan_id, role, parent_plan_id, paired_baseline_id, changes, approval_id,
         review_id, revision, data_versions, product, offer, currency, subsidy_budget, costs,
         campaign_window, segments, target_segment_ids, evaluation, seeds, contingency_rules]
@@ -1395,7 +1407,7 @@ components:
             properties:
               role: {enum: [original, conservative, baseline]}
               input: {$ref: '#/components/schemas/PlanInput'}
-              discount_pct: {type: number, minimum: 0, maximum: 30}
+              discount_pct: {type: number, minimum: 0, maximum: 100}
               scenario_results:
                 type: array
                 items: {$ref: '#/components/schemas/ScenarioResult'}

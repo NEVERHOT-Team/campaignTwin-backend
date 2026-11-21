@@ -1,4 +1,10 @@
-"""Resolve the explicitly selected synthetic rehearsal and its approved assumptions."""
+"""Resolve the selected product choice and its approved assumptions.
+
+Two choices are offered:
+- the synthetic rehearsal (engine/synthetic.py, S1 only, fixed 100/60 THB economics);
+- the Cellox toilet-tissue listing on Shopee, evaluated by the AI-vs-AI arena
+  (api/v1_arena.py) with market.json economics and rival scenarios S1-S4.
+"""
 
 import hashlib
 import json
@@ -15,6 +21,25 @@ PRODUCT = {
     "pack_label": "12 rolls", "channel": "shopee", "timezone": "Asia/Bangkok",
     "offer_kinds": ["percent_off", "voucher"],
 }
+ARENA_POLICY = "arena-tissue-v1"
+ARENA_PRODUCT = {
+    "choice_id": "cellox-tissue-shopee", "product_id": "751",
+    "pack_id": "cellox-reference-pack", "label": "Cellox toilet tissue",
+    "pack_label": "Reference pack", "channel": "shopee", "timezone": "Asia/Bangkok",
+    "offer_kinds": ["percent_off", "voucher"],
+}
+CHOICES = {PRODUCT["choice_id"]: PRODUCT, ARENA_PRODUCT["choice_id"]: ARENA_PRODUCT}
+ARENA_MAX_DISCOUNT_PCT = 50
+ARENA_SCENARIOS = ["S1", "S2", "S3", "S4"]
+ARENA_ASSUMPTIONS = [
+    "AI-vs-AI rehearsal for the Cellox reference pack on Shopee, priced from market.json.",
+    "The strategist proposes alternatives within the approved discount and budget bounds.",
+    "Rivals react per scenario: S1 passive, S2 most likely, S3 aggressive, S4 red team.",
+    "Shopper agents come from household personas; message appeal uses SSR or the fallback.",
+    "Plans are compared with a paired no-campaign baseline on the same seeds.",
+    "Proceed requires median S1 incremental profit of at least zero and loss risk at most 25%.",
+    "Includes a two-week post-campaign window to capture pull-forward.",
+]
 ASSUMPTIONS = [
     "Synthetic rehearsal for one 12-roll pack. Price 100 THB, cost 60 THB per pack.",
     "The seller funds percentage discounts or fixed THB vouchers up to 30% of pack price.",
@@ -67,7 +92,7 @@ def released_segments():
     return segments
 
 
-def resolve(facts):
+def _resolve_synthetic(facts):
     blockers = []
 
     def block(code, field, message):
@@ -134,7 +159,8 @@ def resolve(facts):
             block("evaluation_unsupported", "/facts/end_date",
                   "Select 1 to 42 campaign days with room for 14 post-campaign days.")
     return {
-        "category": CATEGORY if demo else None, "supported_product_choices": [PRODUCT],
+        "category": CATEGORY if demo else None,
+        "supported_product_choices": list(CHOICES.values()),
         "resolved_product": PRODUCT if demo else None, "resolved_offer": resolved_offer,
         "data_versions": {"catalog": POLICY if demo else None, "market": POLICY if demo else None,
                           "segments": fingerprint if segments else None,
@@ -144,3 +170,120 @@ def resolve(facts):
         "segments": segments, "target_segment_ids": [] if demo else None,
         "evaluation": evaluation, "blockers": blockers,
     }
+
+
+# ---------------------------------------------------------------- AI-vs-AI arena choice
+
+
+def _arena_cost(value, unit, basis, source="default"):
+    return {
+        "status": "confirmed", "value": float(value), "unit": unit, "source": source,
+        "basis": basis, "evidence_ref": f"{ARENA_POLICY}:market.json", "reason": None,
+    }
+
+
+def arena_costs(market=None):
+    market = market or load_market()
+    sources = market.get("source", {}) if isinstance(market.get("source"), dict) else {}
+
+    def label(key):
+        return "data" if sources.get(key) == "data" else "default"
+
+    return {
+        "regular_price": _arena_cost(market["ref_price"], "THB_per_pack",
+                                     "Reference shelf price per pack", label("ref_price")),
+        "cogs": _arena_cost(market["unit_cost"], "THB_per_pack", "Unit cost per pack",
+                            label("unit_cost")),
+        "channel_commission": _arena_cost(market["platform_fee_pct"], "pct",
+                                          "Percent of the discounted order value"),
+        "payment_fee": _arena_cost(market["payment_fee_pct"], "pct",
+                                   "Percent of the discounted order value"),
+        "seller_fulfillment": _arena_cost(market["shipping_cost_per_order"], "THB_per_order",
+                                          "Shipping cost per order"),
+    }
+
+
+def _resolve_arena(facts):
+    blockers = []
+
+    def block(code, field, message):
+        blockers.append({"code": code, "field": field, "message": message})
+
+    if "channel" in facts and facts["channel"] != ARENA_PRODUCT["channel"]:
+        block("unsupported_choice", "/facts/channel",
+              "The Cellox rehearsal is listed on Shopee only.")
+    objective = facts.get("objective")
+    if objective and objective not in {"incremental_profit", "revenue", "new_buyers"}:
+        block("unsupported_choice", "/facts/objective",
+              "The arena measures incremental profit, revenue and new buyers.")
+
+    segments = released_segments()
+    if not segments:
+        block("evaluation_unsupported", "/segments", "Released aggregate segments unavailable.")
+    fingerprint = hashlib.sha256(json.dumps(segments, sort_keys=True).encode()).hexdigest()
+
+    resolved_offer = None
+    offer = facts.get("offer", {})
+    if offer:
+        try:
+            market = load_market()
+            price = float(market["ref_price"])
+        except (OSError, ValueError, KeyError, TypeError):
+            price = None
+        kind, unit, value = offer.get("kind"), offer.get("unit"), offer.get("value", 0)
+        pct = value if unit == "pct" else (100 * value / price if price else None)
+        supported = (kind, unit) in {("percent_off", "pct"), ("voucher", "pct"), ("voucher", "THB")}
+        eligibility = offer.get("eligibility", "all")
+        if (supported and pct is not None and 0 < pct <= ARENA_MAX_DISCOUNT_PCT
+                and eligibility in {"all", "new_only", "members"}
+                and "min_spend_thb" not in offer):
+            resolved_offer = {
+                "offer_id": f"arena-{kind}-{value}{unit}",
+                "discount": {**offer, "eligibility": eligibility},
+                "funder": "seller", "stackable": False, "min_spend_basis": None,
+                "max_redemptions_per_order": 1, "eligible_order_scope": "One pack per purchase",
+            }
+        else:
+            block("offer_terms_unverified", "/facts/offer",
+                  f"Select up to {ARENA_MAX_DISCOUNT_PCT}% off or a THB voucher for all, new or "
+                  "member buyers, without a minimum spend.")
+
+    evaluation = None
+    if "start_date" in facts and "end_date" in facts:
+        start, end = (date.fromisoformat(facts[field]) for field in ("start_date", "end_date"))
+        if 1 <= (end - start).days <= 56 and end <= date.max - timedelta(days=14):
+            evaluation = {
+                "comparator": "paired_no_campaign", "scenarios": list(ARENA_SCENARIOS),
+                "measurement_window": {"start_date": start.isoformat(),
+                                       "end_date": (end + timedelta(days=14)).isoformat()},
+                "max_loss_probability": 0.25,
+                "goal_target": {"metric": "incremental_profit", "minimum": 0, "unit": "THB"},
+                "assumptions": ARENA_ASSUMPTIONS,
+            }
+        else:
+            block("evaluation_unsupported", "/facts/end_date",
+                  "Select 1 to 56 campaign days with room for 14 post-campaign days.")
+
+    hint = str(facts.get("audience_hint", "")).strip().casefold()
+    targets = [s["segment_id"] for s in segments if s["segment_id"].casefold() == hint]
+    try:
+        costs = arena_costs()
+    except (OSError, ValueError, KeyError, TypeError):
+        costs = {}
+        block("evaluation_unsupported", "/costs", "Market economics unavailable.")
+    return {
+        "category": CATEGORY, "supported_product_choices": list(CHOICES.values()),
+        "resolved_product": ARENA_PRODUCT, "resolved_offer": resolved_offer,
+        "data_versions": {"catalog": ARENA_POLICY, "market": ARENA_POLICY,
+                          "segments": fingerprint if segments else None,
+                          "evaluation_policy": ARENA_POLICY},
+        "costs": costs, "segments": segments, "target_segment_ids": targets,
+        "evaluation": evaluation, "blockers": blockers,
+    }
+
+
+def resolve(facts):
+    """Dispatch on the selected product choice. No choice keeps the synthetic prompts."""
+    if facts.get("product_choice_id") == ARENA_PRODUCT["choice_id"]:
+        return _resolve_arena(facts)
+    return _resolve_synthetic(facts)

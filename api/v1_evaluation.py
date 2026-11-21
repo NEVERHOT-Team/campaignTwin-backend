@@ -2,7 +2,10 @@
 
 import operator
 
+from api.v1_catalog import ARENA_POLICY
 from engine.synthetic import POLICY
+
+SUPPORTED_POLICIES = {POLICY, ARENA_POLICY}
 
 
 def _check(metrics, name, statistic, unit, condition, threshold=None):
@@ -45,7 +48,7 @@ def business_evaluation(report):
     reason = None
     if original is None:
         reason = "This report has no stored original plan input with approved thresholds."
-    elif policy != POLICY:
+    elif policy not in SUPPORTED_POLICIES:
         reason = "Decision checks are unavailable for this evaluation policy."
     else:
         evaluation = original["input"]["evaluation"]
