@@ -2,7 +2,7 @@
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 import numpy as np
@@ -10,7 +10,7 @@ import pandas as pd
 from scipy.stats import beta
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from contracts.models import CampaignSpec, RivalScenario
+from contracts.models import CampaignSpec, RivalScenario, Strategy
 from data.etl.config import MANUFACTURERS
 from data.loaders import load_brands, load_library, load_rival_prior
 
@@ -244,8 +244,26 @@ def _interval(alpha: np.ndarray, index: int) -> tuple[float, float]:
     return float(low), float(high)
 
 
-def get_rival_scenarios(spec: CampaignSpec) -> list[RivalScenario]:
-    spec = spec_inputs(spec)
+def strategy_inputs(spec: CampaignSpec, strategy: Strategy) -> RivalInput:
+    """The brief's inputs with one strategy's offer, so each plan gets its own S1-S3.
+
+    The baseline (or any zero discount) yields no price discount, so every rival is `none`.
+    """
+    base = spec_inputs(spec)
+    return replace(
+        base,
+        discount_pct=None if strategy.is_baseline else float(strategy.discount_pct),
+        mechanic="" if strategy.mechanic == "none" else strategy.mechanic,
+        target_segments=list(strategy.target_segments) or base.target_segments,
+        channels=list(strategy.channel_mix) or base.channels,
+    )
+
+
+def get_rival_scenarios(
+    spec: CampaignSpec, strategy: Strategy | None = None
+) -> list[RivalScenario]:
+    """S1-S3 per top rival. Pass a strategy to price the rival response to that plan."""
+    spec = spec_inputs(spec) if strategy is None else strategy_inputs(spec, strategy)
     ours, rivals = _competitors(spec, load_brands())
     prior = load_rival_prior()
     library = load_library()

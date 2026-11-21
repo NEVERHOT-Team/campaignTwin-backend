@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from scipy.stats import beta
 
-from contracts.models import CampaignSpec
+from contracts.models import CampaignSpec, Strategy
 from data import rival
 from data.etl.build_rival_prior import (
     DEFAULT_PROBABILITY,
@@ -418,3 +418,43 @@ def test_timing_event_sets_season():
     nested = make_spec()
     nested.timing.event = "12.12"
     assert rival.spec_inputs(nested).event == "12.12"
+
+
+def _strategy(discount, mechanic="percent_off", baseline=False):
+    return Strategy(
+        id="baseline" if baseline else f"plan-{discount:g}",
+        name="test",
+        discount_pct=discount,
+        mechanic="none" if baseline else mechanic,
+        target_segments=["deal_hunter"],
+        message="",
+        channel_mix={} if baseline else {"shopee": 1.0},
+        timing={},
+        cap_per_user=None,
+        budget_split={},
+        contingency_rules=[],
+        rationale="test",
+        is_baseline=baseline,
+    )
+
+
+def test_strategy_inputs_replace_the_brief_offer():
+    spec = make_spec(discount_pct=40)
+    inputs = rival.strategy_inputs(spec, _strategy(15))
+    assert inputs.discount_pct == 15
+    assert inputs.mechanic == "percent_off"
+    assert inputs.target_segments == ["deal_hunter"]
+    assert inputs.channels == ["shopee"]
+    assert inputs.start == flat(spec).start  # timing still comes from the brief
+
+
+def test_baseline_strategy_is_passive_for_every_rival():
+    rows = rival.get_rival_scenarios(make_spec(discount_pct=40), _strategy(0, baseline=True))
+    assert rows and all(row.reaction == "none" and row.depth == 0 for row in rows)
+
+
+def test_each_strategy_gets_its_own_s3_cap():
+    spec = make_spec(discount_pct=40)
+    for row in rival.get_rival_scenarios(spec, _strategy(10)):
+        if row.scenario == "S3":
+            assert 0 <= row.depth <= 10 + 10  # S3 caps at the plan's discount + 10 points
