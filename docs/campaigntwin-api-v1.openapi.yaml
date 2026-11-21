@@ -1,0 +1,1320 @@
+openapi: 3.1.0
+info:
+  title: CampaignTwin API
+  version: 1.0.0-draft
+  description: |
+    Draft for five workflows under /api/v1. Submit and track uses two HTTP
+    operations. All v1 routes are proposed. The current FastAPI contract is
+    published at /openapi.json and the existing routes are listed below.
+
+    The planner can submit a short brief, fill a few fields, or do both.
+    CampaignTwin resolves catalog choices, data versions, cost evidence,
+    aggregate audience statistics, and simulation settings. This draft
+    covers one exact product, pack, channel and offer per campaign, in THB.
+    A review can be saved with unresolved fields. Only an explicit approval
+    of a complete revision can authorize a run.
+
+servers:
+  - url: http://localhost:8000
+
+tags:
+  - name: Campaign reviews
+  - name: Runs
+
+x-current-backend:
+  sources: [api/routes.py, contracts/models.py, contracts/campaign_spec.py, data/loaders.py]
+  operations:
+    - {method: GET, path: /api/health, status: existing, behavior: Storage health}
+    - {method: POST, path: /api/brief/parse, status: existing, behavior: Fixture BriefParseResponse}
+    - {method: POST, path: /api/plan/context, status: existing, behavior: Fixture ContextPack}
+    - {method: POST, path: /api/runs, status: existing, behavior: 'SimulationPlan with ready CampaignSpec, then a fixture run'}
+    - {method: GET, path: '/api/runs/{run_id}', status: existing, behavior: 'RunStatus with fixture partial results'}
+    - {method: GET, path: '/api/runs/{run_id}/report', status: existing, behavior: 'Shared fixture Report after done'}
+    - {method: GET, path: /api/demo/replay, status: existing, behavior: Fixture replay}
+  mapping: |
+    Brief and form concepts come from CampaignSpec v0.1. Review revisions,
+    catalog matching, approval, submission deduplication, and evaluated
+    per-run reports are new. V1 retains the RunStatus lifecycle names and
+    maps the evaluator metrics from KPI and SimResult. It reports status
+    during polling and publishes evaluated metrics once the report is saved.
+
+x-related-draft:
+  file: docs/campaign-review-approval.openapi.yaml
+  relationship: |
+    The review-and-approval draft on dev also proposes create, revise, and
+    approve at the same paths. This end-to-end draft proposes different
+    intake and review payloads and puts explicit confirmation on the
+    approval request itself. Agree on one wire contract for those paths
+    before implementation or client generation.
+
+x-data-sources:
+  market_and_costs: |
+    load_market and load_unit_econ expose simulated category economics in THB
+    using a default exchange rate. The reference price is per purchased unit.
+    The marketplace fee and cost defaults have no verified seller terms.
+    load_knobs provides category planning ranges and generic mechanics.
+  catalog: |
+    load_brands supplies manufacturer-level records. The current loaders
+    supply no approved seller catalog joining exact SKUs, pack sizes,
+    channels, supported offers and the applicable seller cost terms.
+    The server issues choice IDs only after that join has been verified.
+    load_demo_brief supplies a scripted toilet-tissue rehearsal as an
+    intake example. It supplies no verified seller catalog or cost schedule.
+  segments: |
+    load_segments provides segment IDs, counts, shares and weekly purchase
+    probabilities. load_market exposes the same aggregate counts and rates.
+    Release only household-derived cells with at least 50 distinct households.
+    Keep household-level data out of API responses and agent prompts.
+    The current segment data comes from a simulated US grocery dataset.
+  versions: |
+    Use immutable IDs for the released inputs and evaluation policy.
+    load_source_manifest supports input lineage. The manifest format
+    version alone is insufficient to pin a released dataset.
+
+paths:
+  /api/v1/campaign-reviews:
+    post:
+      tags: [Campaign reviews]
+      operationId: createCampaignReview
+      x-implementation-status: proposed
+      summary: Create a campaign review
+      description: |
+        Save revision 1 from the brief, form, or both. Return supported exact
+        choices, resolved facts, pending suggestions and questions. The
+        deterministic checks run even when brief extraction fails.
+        Explicit form values are preserved. A conflicting extraction becomes
+        a candidate and a field-level blocker until the planner resolves it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateReview'}
+            examples:
+              toiletTissue:
+                summary: A toilet-tissue brief with a partial form
+                value:
+                  brief: Give deal hunters 20% off toilet tissue on Shopee for 12.12.
+                  fields:
+                    channel: shopee
+                    offer: {kind: percent_off, value: 20, unit: pct}
+              fixedDiscount:
+                summary: A form-only request for a fixed discount on a pack
+                value:
+                  fields:
+                    product_hint: Toilet tissue
+                    pack_hint: 12 rolls
+                    offer: {kind: fixed_off, value: 20, unit: THB}
+              briefOnly:
+                value: {brief: Run a payday campaign for toilet tissue on Shopee.}
+              conflictingOffer:
+                summary: The brief and form give different amounts
+                value:
+                  brief: Give shoppers 20% off toilet tissue.
+                  fields:
+                    offer: {kind: percent_off, value: 25, unit: pct}
+      responses:
+        '201':
+          description: Revision 1 was saved with its facts and any blockers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Review'}
+              examples:
+                toiletTissueBlocked:
+                  $ref: '#/components/examples/ToiletTissueBlocked'
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/campaign-reviews/{review_id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    post:
+      tags: [Campaign reviews]
+      operationId: reviseCampaignReview
+      x-implementation-status: proposed
+      summary: Revise a campaign review
+      description: |
+        Compare base_revision with the current revision before saving.
+        Omitted edit keys carry forward. A null clears the named field.
+        A supplied object replaces the whole field, including the offer.
+        Valid input that cannot be matched to a supported choice is saved
+        with a field-level blocker.
+        Confirm only candidate IDs issued for this base revision. An edit
+        to a conflicted field explicitly resolves the conflict. Confirming
+        a candidate adopts its value. Editing and confirming that same
+        field, confirming competing values, or confirming a candidate made
+        inapplicable by an edit returns 422 without saving.
+        Preserve unaffected prior answers. Changes to product, pack, channel,
+        offer, or dates revalidate dependent facts and their evidence.
+        If enrichment fails, save the valid edits and confirmations, keep
+        prior applicable answers and suggestions, and return deterministic
+        questions with agent.status degraded. Reissue reachable candidate
+        IDs for the new revision. Stale writes return 409 with the current
+        review for rebasing.
+        Retain versioned inputs across revisions while they remain applicable.
+        Review newly available evidence in a new revision before approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviseReview'}
+            examples:
+              editPackAndOffer:
+                value:
+                  base_revision: 1
+                  edits:
+                    pack_hint: 12 rolls
+                    offer: {kind: voucher, value: 20, unit: THB}
+              confirmAudience:
+                value: {base_revision: 1, confirm: [candidate-audience]}
+      responses:
+        '201':
+          description: The next revision was saved with its facts and any blockers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Review'}
+              examples:
+                agentFailure:
+                  $ref: '#/components/examples/RevisionWithAgentFailure'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/StaleReview'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/campaign-reviews/{review_id}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    post:
+      tags: [Campaign reviews]
+      operationId: approveCampaignReview
+      x-implementation-status: proposed
+      summary: Approve the exact review revision
+      description: |
+        Require explicit confirmation from an authorized planner. Resolve
+        the actor from server-side caller context. Atomically verify the
+        named revision is current and complete. Record the actor, revision
+        and approval time with the frozen facts, applicable cost evidence,
+        comparison inputs and data versions. An eligible repeat request
+        for the same revision returns the existing receipt. Appending a
+        revision supersedes prior approvals for new submissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ApproveReview'}
+            example: {revision: 3, confirmed: true}
+      responses:
+        '201': {$ref: '#/components/responses/ApprovalReceipt'}
+        '200': {$ref: '#/components/responses/ApprovalReceipt'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: The revision is stale or has unresolved blockers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              examples:
+                stale:
+                  $ref: '#/components/examples/StaleReview'
+                blocked:
+                  value:
+                    code: incomplete_review
+                    message: Approve only after resolving every blocker.
+                    current_revision: 2
+                    blockers:
+                      - code: missing_cost_basis
+                        field: /costs/voucher_service_fee
+                        message: Provide an applicable seller fee schedule through the evidence owner.
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/runs:
+    post:
+      tags: [Runs]
+      operationId: submitRun
+      x-implementation-status: proposed
+      summary: Submit an approved review for simulation
+      description: |
+        Resolve the approved inputs on the server. Atomically bind the
+        submission ID to its approval, optional retry parent, and new run.
+        A submission ID is unique within the caller's workspace. Reusing it
+        with the same normalized inputs returns 200 and the original run ID,
+        even after terminal status or later review edits. Reuse with different
+        inputs returns 409. Concurrent identical submissions create one run.
+
+        For a new submission the approval must still be current and its
+        pinned inputs usable. Withdrawn inputs invalidate new admissions.
+        Retry a terminal error with retryable=true using a
+        fresh submission ID, the same approval ID and retry_of_run_id.
+        Retry creates a separate run using the same approved inputs and
+        random-seed policy. Each failed run permits one direct retry.
+        A repeat of the same retry submission ID returns its existing run.
+        A retry racing with another submission for the same parent returns
+        409 with the existing retry run ID when the winning ID differs.
+        Existing run records and reports keep their saved inputs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SubmitRun'}
+            examples:
+              firstRun:
+                value:
+                  approval_id: '28667642-6a6f-4f80-8e53-d8427c10a946'
+                  submission_id: '0993a4c0-421c-46ba-88f5-14e0244e9e40'
+              retry:
+                value:
+                  approval_id: '28667642-6a6f-4f80-8e53-d8427c10a946'
+                  submission_id: '19af0197-b9bc-4276-aae3-63c95b16ca09'
+                  retry_of_run_id: '942947fc-2b22-41bb-8ee2-2d8fbfd50edd'
+      responses:
+        '202': {$ref: '#/components/responses/RunAccepted'}
+        '200': {$ref: '#/components/responses/RunAccepted'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Submission ID collision, stale approval, or ineligible retry.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              examples:
+                collision:
+                  value: {code: submission_id_conflict, message: This ID is bound to different inputs.}
+                stale:
+                  value: {code: approval_stale, message: Approve the current review before submitting.}
+                retryAlreadySubmitted:
+                  value:
+                    code: retry_already_submitted
+                    message: A retry exists for this failed run.
+                    run_id: 'f0425de1-73c5-4bc4-97eb-bb2fd4230693'
+                retryNotAllowed:
+                  value: {code: retry_not_allowed, message: This run is ineligible for retry under the supplied approval.}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/runs/{run_id}:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Runs]
+      operationId: getRunStatus
+      x-implementation-status: proposed
+      summary: Poll the run
+      description: |
+        Poll the submitted run at the indicated interval while queued or
+        running. Progress is a nondecreasing fraction for this run. Done
+        means its immutable report is available. Error is a terminal run
+        state returned with HTTP 200 and a typed failure. A retry is polled
+        using its own run ID.
+      responses:
+        '200':
+          description: Current state of the requested run.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RunState'}
+              examples:
+                running:
+                  value:
+                    run_id: '942947fc-2b22-41bb-8ee2-2d8fbfd50edd'
+                    status: running
+                    progress: 0.4
+                    poll_after_seconds: 2
+                    report_url: null
+                    failure: null
+                failed:
+                  value:
+                    run_id: '942947fc-2b22-41bb-8ee2-2d8fbfd50edd'
+                    status: error
+                    progress: 0.4
+                    poll_after_seconds: null
+                    report_url: null
+                    failure: {code: worker_timeout, message: The worker timed out., retryable: true}
+                done:
+                  value:
+                    run_id: 'f0425de1-73c5-4bc4-97eb-bb2fd4230693'
+                    status: done
+                    progress: 1
+                    poll_after_seconds: null
+                    report_url: /api/v1/runs/f0425de1-73c5-4bc4-97eb-bb2fd4230693/report
+                    failure: null
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+  /api/v1/runs/{run_id}/report:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Runs]
+      operationId: getRunReport
+      x-implementation-status: proposed
+      summary: Read the evaluated report for the requested run
+      description: |
+        Return evaluated output for this run ID, its approved revision and
+        pinned input versions. Scenario results compare the approved campaign
+        to a paired no-campaign baseline with shared seeds and scope.
+        Evaluator output supplies all numbers and decision codes. Agent
+        commentary may summarize them. A completed run can have missing
+        metrics or insufficient decision evidence. Execution or report
+        generation failure instead leaves the run in error.
+      responses:
+        '200':
+          description: Immutable evaluated report for this run.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RunReport'}
+              examples:
+                hold:
+                  $ref: '#/components/examples/HoldReport'
+                insufficientEvidence:
+                  $ref: '#/components/examples/InsufficientEvidenceReport'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: The run is still queued or running, or it ended in error. Poll its status for details.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              examples:
+                pending:
+                  value: {code: report_pending, message: The run has no completed report yet.}
+                failed:
+                  value: {code: run_failed, message: This run ended before publishing a report.}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
+components:
+  parameters:
+    ReviewId:
+      name: review_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Uuid'}
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Uuid'}
+
+  responses:
+    StaleReview:
+      description: A concurrent edit advanced the review. Rebase against current_review.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          examples:
+            stale:
+              $ref: '#/components/examples/StaleReview'
+    ApprovalReceipt:
+      description: The exact revision was approved. The receipt identifies the frozen input versions.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Approval'}
+          examples:
+            illustrativeApproval:
+              summary: Hypothetical approval after exact terms have been verified
+              value:
+                approval_id: '28667642-6a6f-4f80-8e53-d8427c10a946'
+                review_id: '953c9aa4-57e6-49c7-bbaf-e64f0f0dd168'
+                revision: 3
+                approved_at: '2026-11-21T05:20:00Z'
+                data_versions: {catalog: example-catalog-1, market: example-market-1, segments: example-segments-1, evaluation_policy: example-policy-1}
+    RunAccepted:
+      description: A run was accepted, or an identical submission has already been accepted.
+      headers:
+        Location:
+          description: Relative URL of the run status.
+          required: true
+          schema: {type: string, format: uri-reference}
+      links:
+        pollRun:
+          operationId: getRunStatus
+          parameters:
+            run_id: '$response.body#/run_id'
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/RunAccepted'}
+          example:
+            run_id: '942947fc-2b22-41bb-8ee2-2d8fbfd50edd'
+            status_url: /api/v1/runs/942947fc-2b22-41bb-8ee2-2d8fbfd50edd
+    NotFound:
+      description: A referenced review, run, approval, or retry parent is unavailable in the caller's workspace.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {code: not_found, message: Resource not found.}
+    InvalidRequest:
+      description: Invalid JSON or request fields, including invalid confirmations.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example:
+            code: invalid_request
+            message: A discount with a numeric value needs an explicit unit.
+            issues:
+              - {field: /fields/offer/unit, message: Supply the unit for this discount.}
+
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Text:
+      type: string
+      minLength: 1
+      pattern: '\S'
+    Revision:
+      type: integer
+      minimum: 1
+    Fraction:
+      type: number
+      minimum: 0
+      maximum: 1
+    Channel:
+      type: string
+      enum: [shopee, lazada, tiktok_shop, line, meta, google, offline]
+    Objective:
+      type: string
+      enum: [incremental_profit, revenue, new_buyers, repeat_rate, awareness, leads]
+      description: Planner intent. Approval requires verified measurement support for the selected objective.
+    OfferKind:
+      type: string
+      enum: [percent_off, fixed_off, voucher]
+      description: Candidate mechanics for execution. Exact terms and engine coverage still require verification.
+    RequestedOfferKind:
+      type: string
+      enum: [percent_off, fixed_off, voucher, free_shipping, bundle, gift, coins_cashback, flash_sale]
+      description: CampaignSpec v0.1 mechanics accepted as planner intent.
+    DataVersions:
+      type: object
+      additionalProperties: false
+      required: [catalog, market, segments, evaluation_policy]
+      description: Null means the corresponding input version has yet to be resolved.
+      properties:
+        catalog: {type: [string, 'null'], minLength: 1}
+        market: {type: [string, 'null'], minLength: 1}
+        segments: {type: [string, 'null'], minLength: 1}
+        evaluation_policy: {type: [string, 'null'], minLength: 1}
+    PinnedDataVersions:
+      allOf:
+        - $ref: '#/components/schemas/DataVersions'
+        - properties:
+            catalog: {$ref: '#/components/schemas/Text'}
+            market: {$ref: '#/components/schemas/Text'}
+            segments: {$ref: '#/components/schemas/Text'}
+            evaluation_policy: {$ref: '#/components/schemas/Text'}
+
+    CreateReview:
+      type: object
+      additionalProperties: false
+      anyOf:
+        - required: [brief]
+        - required: [fields]
+      properties:
+        brief:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '\S'
+        fields:
+          $ref: '#/components/schemas/PlannerFields'
+    PlannerFields:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      description: Lightweight planner input. The server assigns IDs and resolves evidence.
+      properties:
+        product_hint: {$ref: '#/components/schemas/Text'}
+        pack_hint: {$ref: '#/components/schemas/Text'}
+        product_choice_id:
+          $ref: '#/components/schemas/Text'
+          description: Optional selection of an exact, server-supplied product choice.
+        channel: {$ref: '#/components/schemas/Channel'}
+        offer: {$ref: '#/components/schemas/OfferInput'}
+        audience_hint: {$ref: '#/components/schemas/Text'}
+        objective: {$ref: '#/components/schemas/Objective'}
+        budget_thb: {type: number, minimum: 0}
+        start_date: {type: string, format: date, description: First active calendar day in the market.}
+        end_date: {type: string, format: date, description: First calendar day after the campaign ends.}
+    OfferInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        kind: {$ref: '#/components/schemas/RequestedOfferKind'}
+        value: {type: number, exclusiveMinimum: 0}
+        unit:
+          type: string
+          enum: [pct, THB]
+          description: pct uses 0 to 100. THB is a fixed currency amount.
+        min_spend_thb: {type: number, minimum: 0}
+        cap_per_user: {type: integer, minimum: 1}
+        eligibility: {type: string, enum: [all, new_only, members, segment_hint]}
+      dependentRequired:
+        value: [kind, unit]
+        unit: [value]
+      allOf:
+        - if: {required: [kind], properties: {kind: {const: percent_off}}}
+          then: {properties: {unit: {const: pct}}}
+        - if: {required: [kind], properties: {kind: {enum: [fixed_off, free_shipping]}}}
+          then: {properties: {unit: {const: THB}}}
+        - if: {required: [unit], properties: {unit: {const: pct}}}
+          then: {properties: {value: {maximum: 100}}}
+    PlannerEdits:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        product_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
+        pack_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
+        product_choice_id: {type: [string, 'null'], minLength: 1, pattern: '\S'}
+        channel: {oneOf: [{$ref: '#/components/schemas/Channel'}, {type: 'null'}]}
+        offer: {oneOf: [{$ref: '#/components/schemas/OfferInput'}, {type: 'null'}]}
+        audience_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
+        objective: {oneOf: [{$ref: '#/components/schemas/Objective'}, {type: 'null'}]}
+        budget_thb: {type: [number, 'null'], minimum: 0}
+        start_date: {type: [string, 'null'], format: date}
+        end_date: {type: [string, 'null'], format: date}
+    ReviseReview:
+      type: object
+      additionalProperties: false
+      required: [base_revision]
+      anyOf:
+        - required: [edits]
+        - required: [confirm]
+      properties:
+        base_revision: {$ref: '#/components/schemas/Revision'}
+        edits: {$ref: '#/components/schemas/PlannerEdits'}
+        confirm:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Text'}
+
+    ProductChoice:
+      type: object
+      additionalProperties: false
+      required: [choice_id, product_id, pack_id, label, pack_label, channel, timezone, offer_kinds]
+      properties:
+        choice_id: {$ref: '#/components/schemas/Text'}
+        product_id: {$ref: '#/components/schemas/Text'}
+        pack_id: {$ref: '#/components/schemas/Text'}
+        label: {$ref: '#/components/schemas/Text'}
+        pack_label: {$ref: '#/components/schemas/Text'}
+        channel: {$ref: '#/components/schemas/Channel'}
+        timezone:
+          $ref: '#/components/schemas/Text'
+          description: IANA time zone for campaign dates, such as Asia/Bangkok.
+        offer_kinds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/OfferKind'}
+    ResolvedOffer:
+      type: object
+      additionalProperties: false
+      required: [offer_id, discount, funder, stackable, min_spend_basis, max_redemptions_per_order, eligible_order_scope]
+      description: |
+        Exact terms for the selected product, pack, channel and campaign
+        dates. The server assigns the offer ID and verifies these terms.
+      properties:
+        offer_id: {$ref: '#/components/schemas/Text'}
+        discount:
+          allOf:
+            - $ref: '#/components/schemas/OfferInput'
+            - required: [kind, value, unit, eligibility]
+              properties:
+                kind: {$ref: '#/components/schemas/OfferKind'}
+        funder: {type: string, enum: [seller, platform, shared]}
+        stackable: {type: boolean}
+        min_spend_basis:
+          type: [string, 'null']
+          minLength: 1
+          description: Applicable subtotal for the threshold, or null if no threshold applies.
+        max_redemptions_per_order: {type: integer, minimum: 1}
+        eligible_order_scope: {$ref: '#/components/schemas/Text'}
+      if:
+        properties:
+          discount: {required: [min_spend_thb]}
+      then:
+        properties:
+          min_spend_basis: {$ref: '#/components/schemas/Text'}
+    Segment:
+      type: object
+      additionalProperties: false
+      required: [segment_id, name, households, share, weekly_purchase_probability, source]
+      properties:
+        segment_id: {$ref: '#/components/schemas/Text'}
+        name: {$ref: '#/components/schemas/Text'}
+        households: {type: integer, minimum: 50}
+        share:
+          $ref: '#/components/schemas/Fraction'
+          description: Fraction of category-buying households in the source dataset.
+        weekly_purchase_probability: {$ref: '#/components/schemas/Fraction'}
+        source: {type: string, const: data}
+    SourceLabel:
+      type: string
+      enum: [data, llm_estimate, default]
+    CostUnit:
+      type: string
+      enum: [THB_per_pack, THB_per_order, THB_per_campaign, THB_per_purchased_unit, THB_per_reach, pct]
+    CostEvidence:
+      type: object
+      additionalProperties: false
+      required: [status, value, unit, basis, source, evidence_ref, reason]
+      properties:
+        status: {type: string, enum: [confirmed, reference_only, unknown]}
+        value: {type: [number, 'null'], minimum: 0}
+        unit:
+          oneOf: [{$ref: '#/components/schemas/CostUnit'}, {type: 'null'}]
+          description: Null when the unit is unknown.
+        basis:
+          type: [string, 'null']
+          minLength: 1
+          description: Basis and scope of the charge, including the denominator for a percentage.
+        source:
+          oneOf: [{$ref: '#/components/schemas/SourceLabel'}, {type: 'null'}]
+        evidence_ref:
+          type: [string, 'null']
+          minLength: 1
+          description: Server-issued reference to the supporting source and its applicable terms.
+        reason: {type: [string, 'null'], minLength: 1}
+      allOf:
+        - if: {properties: {status: {const: confirmed}}}
+          then:
+            properties:
+              value: {type: number}
+              unit: {$ref: '#/components/schemas/CostUnit'}
+              basis: {$ref: '#/components/schemas/Text'}
+              source: {const: data}
+              evidence_ref: {$ref: '#/components/schemas/Text'}
+              reason: {type: 'null'}
+        - if: {properties: {status: {const: reference_only}}}
+          then:
+            properties:
+              value: {type: number}
+              unit: {$ref: '#/components/schemas/CostUnit'}
+              basis: {$ref: '#/components/schemas/Text'}
+              source: {$ref: '#/components/schemas/SourceLabel'}
+              evidence_ref: {$ref: '#/components/schemas/Text'}
+              reason: {$ref: '#/components/schemas/Text'}
+        - if: {properties: {status: {const: unknown}}}
+          then:
+            properties:
+              value: {type: 'null'}
+              reason: {$ref: '#/components/schemas/Text'}
+        - if: {properties: {unit: {const: pct}}}
+          then: {properties: {value: {maximum: 100}}}
+      examples:
+        - status: confirmed
+          value: 0
+          unit: THB_per_order
+          basis: Per eligible redeemed order for the selected offer
+          source: data
+          evidence_ref: example-seller-fee-waiver
+          reason: null
+        - status: unknown
+          value: null
+          unit: null
+          basis: null
+          source: null
+          evidence_ref: null
+          reason: The seller voucher fee schedule is unavailable.
+    Costs:
+      type: object
+      additionalProperties: false
+      description: |
+        The server returns applicable cost categories. Missing or
+        reference-only material costs block approval. A confirmed zero
+        requires evidence covering that charge and scope.
+      properties:
+        regular_price: {$ref: '#/components/schemas/CostEvidence'}
+        cogs: {$ref: '#/components/schemas/CostEvidence'}
+        channel_commission: {$ref: '#/components/schemas/CostEvidence'}
+        payment_fee: {$ref: '#/components/schemas/CostEvidence'}
+        voucher_service_fee: {$ref: '#/components/schemas/CostEvidence'}
+        seller_fulfillment: {$ref: '#/components/schemas/CostEvidence'}
+        paid_media: {$ref: '#/components/schemas/CostEvidence'}
+        reimbursement: {$ref: '#/components/schemas/CostEvidence'}
+        tax: {$ref: '#/components/schemas/CostEvidence'}
+        returns: {$ref: '#/components/schemas/CostEvidence'}
+    FieldPointer:
+      type: string
+      pattern: '^(/([^~/]|~[01])*)*$'
+      description: JSON Pointer relative to the review response or the invalid request.
+    Blocker:
+      type: object
+      additionalProperties: false
+      required: [code, field, message]
+      properties:
+        code:
+          type: string
+          enum: [missing_input, conflicting_values, exact_product_required, exact_pack_required, unsupported_choice, offer_terms_unverified, missing_cost_basis, evaluation_unsupported]
+        field: {$ref: '#/components/schemas/FieldPointer'}
+        message: {$ref: '#/components/schemas/Text'}
+      examples:
+        - code: conflicting_values
+          field: /facts/offer
+          message: The brief says 20% and the form says 25%. Confirm the intended offer.
+    Question:
+      type: object
+      additionalProperties: false
+      required: [field, prompt, blocking]
+      properties:
+        field: {$ref: '#/components/schemas/FieldPointer'}
+        prompt: {$ref: '#/components/schemas/Text'}
+        blocking: {type: boolean}
+    Candidate:
+      type: object
+      additionalProperties: false
+      required: [candidate_id, field, value, brief_quote]
+      description: A pending candidate at a planner field. The server verifies its type against that field and its quote against the brief.
+      properties:
+        candidate_id: {$ref: '#/components/schemas/Text'}
+        field: {$ref: '#/components/schemas/FieldPointer'}
+        value: {type: [string, number, object]}
+        brief_quote: {$ref: '#/components/schemas/Text'}
+    AgentState:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: {type: string, enum: [not_requested, completed, degraded]}
+        reason: {type: [string, 'null'], enum: [null, provider_unavailable, timeout, invalid_response]}
+      if: {properties: {status: {const: degraded}}}
+      then: {properties: {reason: {type: string}}}
+      else: {properties: {reason: {type: 'null'}}}
+    FactOrigin:
+      type: string
+      enum: [planner, planner_confirmed_extraction, data, default]
+    DateWindow:
+      type: object
+      additionalProperties: false
+      required: [start_date, end_date]
+      description: Local market dates with an exclusive end.
+      properties:
+        start_date: {type: string, format: date}
+        end_date: {type: string, format: date}
+    ScenarioId:
+      type: string
+      enum: [S1, S2, S3, S4]
+    EvaluationPlan:
+      type: object
+      additionalProperties: false
+      required: [comparator, measurement_window, scenarios, max_loss_probability, goal_target]
+      description: Backend-resolved evaluation terms shown for review before approval.
+      properties:
+        comparator: {type: string, const: paired_no_campaign}
+        measurement_window: {$ref: '#/components/schemas/DateWindow'}
+        scenarios:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/ScenarioId'}
+        max_loss_probability: {$ref: '#/components/schemas/Fraction'}
+        goal_target:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [metric, minimum, unit]
+          description: A policy-resolved numeric target, or null if no numeric target applies.
+          properties:
+            metric: {$ref: '#/components/schemas/Text'}
+            minimum: {type: number}
+            unit: {$ref: '#/components/schemas/Text'}
+    Review:
+      type: object
+      additionalProperties: false
+      required: [review_id, revision, status, category, facts, fact_origins,
+        supported_product_choices, resolved_product, resolved_offer, data_versions,
+        costs, segments, target_segment_ids, evaluation, candidates, blockers, questions, agent]
+      description: |
+        The server recomputes readiness each revision. A ready revision
+        requires an exact product, commercial pack, channel, confirmed
+        offer and material costs, complete campaign dates, audience, budget,
+        measurement support, and immutable data versions. Dates use the
+        market's local calendar. The end must follow the start by at most
+        56 days, as in CampaignSpec. An unavailable catalog returns empty
+        choices and null resolved product. A generic category or manufacturer
+        match carries contextual evidence only. An unverified offer is
+        retained as planner input while resolved_offer stays null.
+
+        A missing agent never erases answers. Approval can proceed after
+        deterministic resolution of all blockers. Run agent calls through
+        agents/llm.py with relevant sanitized text and permitted aggregates.
+        The backend verifies candidates and evidence before exposing them.
+      properties:
+        review_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        status: {type: string, enum: [blocked, ready_for_approval]}
+        category: {type: [string, 'null']}
+        facts:
+          type: object
+          description: Resolved planner facts and explicit planner input. Pending candidates are separate.
+          oneOf:
+            - $ref: '#/components/schemas/PlannerFields'
+            - maxProperties: 0
+        fact_origins:
+          type: object
+          description: Origins keyed by JSON Pointer. Every populated leaf under facts has an origin directly or via its nearest ancestor.
+          propertyNames: {$ref: '#/components/schemas/FieldPointer'}
+          additionalProperties: {$ref: '#/components/schemas/FactOrigin'}
+        supported_product_choices:
+          type: array
+          items: {$ref: '#/components/schemas/ProductChoice'}
+        resolved_product:
+          oneOf: [{$ref: '#/components/schemas/ProductChoice'}, {type: 'null'}]
+        resolved_offer:
+          oneOf: [{$ref: '#/components/schemas/ResolvedOffer'}, {type: 'null'}]
+        data_versions: {$ref: '#/components/schemas/DataVersions'}
+        costs: {$ref: '#/components/schemas/Costs'}
+        segments:
+          type: array
+          items: {$ref: '#/components/schemas/Segment'}
+        target_segment_ids:
+          type: [array, 'null']
+          description: Resolved IDs from segments. An empty array means all eligible buyers. Null means unresolved.
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/Text'}
+        evaluation:
+          oneOf: [{$ref: '#/components/schemas/EvaluationPlan'}, {type: 'null'}]
+        candidates:
+          type: array
+          items: {$ref: '#/components/schemas/Candidate'}
+        blockers:
+          type: array
+          items: {$ref: '#/components/schemas/Blocker'}
+        questions:
+          type: array
+          items: {$ref: '#/components/schemas/Question'}
+        agent: {$ref: '#/components/schemas/AgentState'}
+      if: {properties: {status: {const: blocked}}}
+      then: {properties: {blockers: {minItems: 1}}}
+      else:
+        properties:
+          category: {$ref: '#/components/schemas/Text'}
+          facts:
+            required: [channel, offer, audience_hint, objective, budget_thb, start_date, end_date]
+          supported_product_choices: {minItems: 1}
+          resolved_product: {type: object}
+          resolved_offer: {type: object}
+          target_segment_ids: {type: array}
+          evaluation: {type: object}
+          data_versions: {$ref: '#/components/schemas/PinnedDataVersions'}
+          costs:
+            required: [regular_price, cogs]
+            properties:
+              regular_price:
+                properties:
+                  status: {const: confirmed}
+                  unit: {const: THB_per_pack}
+                  value: {exclusiveMinimum: 0}
+              cogs:
+                properties:
+                  status: {const: confirmed}
+                  unit: {const: THB_per_pack}
+            additionalProperties:
+              properties:
+                status: {const: confirmed}
+          blockers: {maxItems: 0}
+          questions: {items: {properties: {blocking: {const: false}}}}
+
+    ApproveReview:
+      type: object
+      additionalProperties: false
+      required: [revision, confirmed]
+      properties:
+        revision: {$ref: '#/components/schemas/Revision'}
+        confirmed: {type: boolean, const: true}
+    Approval:
+      type: object
+      additionalProperties: false
+      required: [approval_id, review_id, revision, approved_at, data_versions]
+      properties:
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        review_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        approved_at: {type: string, format: date-time}
+        data_versions: {$ref: '#/components/schemas/PinnedDataVersions'}
+    SubmitRun:
+      type: object
+      additionalProperties: false
+      required: [approval_id, submission_id]
+      properties:
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        submission_id:
+          $ref: '#/components/schemas/Uuid'
+          description: Client-generated submission ID. Reuse it after transport failure.
+        retry_of_run_id: {$ref: '#/components/schemas/Uuid'}
+    RunAccepted:
+      type: object
+      additionalProperties: false
+      required: [run_id, status_url]
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        status_url: {type: string, format: uri-reference}
+    RunFailure:
+      type: object
+      additionalProperties: false
+      required: [code, message, retryable]
+      properties:
+        code: {type: string, enum: [worker_timeout, worker_unavailable, invalid_approved_input, evaluation_failed, report_generation_failed]}
+        message: {$ref: '#/components/schemas/Text'}
+        retryable: {type: boolean}
+      if: {properties: {code: {const: invalid_approved_input}}}
+      then: {properties: {retryable: {const: false}}}
+    RunState:
+      type: object
+      additionalProperties: false
+      required: [run_id, status, progress, poll_after_seconds, report_url, failure]
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        status: {type: string, enum: [queued, running, done, error]}
+        progress: {$ref: '#/components/schemas/Fraction'}
+        poll_after_seconds: {type: [integer, 'null'], minimum: 1}
+        report_url: {type: [string, 'null'], format: uri-reference}
+        failure:
+          oneOf: [{$ref: '#/components/schemas/RunFailure'}, {type: 'null'}]
+      allOf:
+        - if: {properties: {status: {enum: [queued, running]}}}
+          then:
+            properties:
+              progress: {exclusiveMaximum: 1}
+              poll_after_seconds: {type: integer}
+              report_url: {type: 'null'}
+              failure: {type: 'null'}
+        - if: {properties: {status: {const: queued}}}
+          then: {properties: {progress: {const: 0}}}
+        - if: {properties: {status: {const: done}}}
+          then:
+            properties:
+              progress: {const: 1}
+              poll_after_seconds: {type: 'null'}
+              report_url: {type: string}
+              failure: {type: 'null'}
+        - if: {properties: {status: {const: error}}}
+          then:
+            properties:
+              poll_after_seconds: {type: 'null'}
+              report_url: {type: 'null'}
+              failure: {type: object}
+
+    Percentiles:
+      type: object
+      additionalProperties: false
+      required: [p10, p50, p90]
+      description: Seed-wise percentiles in ascending order, within one scenario.
+      properties:
+        p10: {type: number}
+        p50: {type: number}
+        p90: {type: number}
+    EvaluatedMetric:
+      type: object
+      additionalProperties: false
+      required: [metric, unit, status, value, unavailable_reason]
+      description: |
+        Incremental profit and new buyers are campaign-minus-baseline.
+        Incremental ROAS is incremental revenue divided by evaluated
+        campaign spend. Leakage is the share of evaluated subsidy going to
+        purchases that would occur in the paired baseline. Probability
+        metrics use fractions across paired seeds. The pinned evaluation
+        policy defines denominators, horizon, and aggregation details.
+      properties:
+        metric:
+          type: string
+          enum: [incremental_profit, incremental_roas, subsidy_leakage, incremental_new_buyers, probability_hit_target, probability_loss]
+        unit: {type: string, enum: [THB, ratio, fraction, buyers]}
+        status: {type: string, enum: [available, unavailable]}
+        value:
+          oneOf: [{$ref: '#/components/schemas/Percentiles'}, {type: number}, {type: 'null'}]
+        unavailable_reason:
+          type: [string, 'null']
+          enum: [null, missing_evidence, insufficient_sample, undefined_denominator, measurement_unsupported]
+      allOf:
+        - if: {properties: {status: {const: unavailable}}}
+          then: {properties: {value: {type: 'null'}, unavailable_reason: {type: string}}}
+          else: {properties: {unavailable_reason: {type: 'null'}}}
+        - if: {properties: {metric: {enum: [probability_hit_target, probability_loss]}}}
+          then:
+            properties:
+              unit: {const: fraction}
+              value: {type: [number, 'null'], minimum: 0, maximum: 1}
+          else:
+            properties:
+              value: {type: [object, 'null']}
+        - if: {properties: {status: {const: available}}}
+          then: {properties: {value: {type: [number, object]}}}
+        - if: {properties: {metric: {const: incremental_profit}}}
+          then: {properties: {unit: {const: THB}}}
+        - if: {properties: {metric: {const: incremental_roas}}}
+          then: {properties: {unit: {const: ratio}}}
+        - if: {properties: {metric: {const: incremental_new_buyers}}}
+          then: {properties: {unit: {const: buyers}}}
+        - if: {properties: {metric: {const: subsidy_leakage}}}
+          then:
+            properties:
+              unit: {const: fraction}
+              value:
+                properties:
+                  p10: {$ref: '#/components/schemas/Fraction'}
+                  p50: {$ref: '#/components/schemas/Fraction'}
+                  p90: {$ref: '#/components/schemas/Fraction'}
+    ScenarioResult:
+      type: object
+      additionalProperties: false
+      required: [scenario, metrics]
+      properties:
+        scenario: {$ref: '#/components/schemas/ScenarioId'}
+        metrics:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/EvaluatedMetric'}
+    Decision:
+      type: object
+      additionalProperties: false
+      required: [status, reason_code, explanation]
+      properties:
+        status:
+          type: string
+          enum: [proceed, hold, insufficient_evidence]
+          description: |
+            Proceed when decision evidence passes the pinned gates. Hold
+            when sufficient evidence shows a target or guardrail failure.
+            Insufficient evidence when any decision-critical check cannot
+            be evaluated to the policy's required coverage.
+        reason_code:
+          type: string
+          enum: [passed, target_missed, guardrail_failed, missing_decision_evidence]
+        explanation: {$ref: '#/components/schemas/Text'}
+      allOf:
+        - if: {properties: {status: {const: proceed}}}
+          then: {properties: {reason_code: {const: passed}}}
+        - if: {properties: {status: {const: hold}}}
+          then: {properties: {reason_code: {enum: [target_missed, guardrail_failed]}}}
+        - if: {properties: {status: {const: insufficient_evidence}}}
+          then: {properties: {reason_code: {const: missing_decision_evidence}}}
+    RunReport:
+      type: object
+      additionalProperties: false
+      required: [run_id, approval_id, review_id, revision, data_versions, comparator, evaluated_at, measurement_window, scenario_results, decision]
+      description: |
+        Include each evaluated scenario once, with each policy-required
+        metric present exactly once even when unavailable. Percentiles are
+        model outputs for the pinned run. Scenario labels refer to its
+        configured rival scenarios.
+      properties:
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        review_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        data_versions: {$ref: '#/components/schemas/PinnedDataVersions'}
+        comparator: {type: string, const: paired_no_campaign}
+        evaluated_at: {type: string, format: date-time}
+        measurement_window:
+          $ref: '#/components/schemas/DateWindow'
+          description: Includes any approved post-campaign window.
+        scenario_results:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/ScenarioResult'}
+        decision: {$ref: '#/components/schemas/Decision'}
+        commentary: {$ref: '#/components/schemas/Text'}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [invalid_request, not_found, stale_review, incomplete_review, submission_id_conflict, approval_stale, retry_not_allowed, retry_already_submitted, report_pending, run_failed]
+        message: {$ref: '#/components/schemas/Text'}
+        current_revision: {$ref: '#/components/schemas/Revision'}
+        current_review: {$ref: '#/components/schemas/Review'}
+        run_id: {$ref: '#/components/schemas/Uuid'}
+        blockers:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/Blocker'}
+        issues:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, message]
+            properties:
+              field: {$ref: '#/components/schemas/FieldPointer'}
+              message: {$ref: '#/components/schemas/Text'}
+      allOf:
+        - if: {properties: {code: {const: stale_review}}}
+          then: {required: [current_revision, current_review]}
+        - if: {properties: {code: {const: incomplete_review}}}
+          then: {required: [current_revision, blockers]}
+        - if: {properties: {code: {const: retry_already_submitted}}}
+          then: {required: [run_id]}
+
+  examples:
+    ToiletTissueBlocked:
+      summary: Current toilet-tissue context with no verified commercial selection
+      description: |
+        Category observations and fee assumptions come from the current
+        loaders. The repo version labels illustrate server-issued pins.
+        Manufacturer 751 is the configured focal brand, not a catalog SKU.
+      value:
+        review_id: '953c9aa4-57e6-49c7-bbaf-e64f0f0dd168'
+        revision: 1
+        status: blocked
+        category: toilet_tissue
+        facts:
+          channel: shopee
+          offer: {kind: percent_off, value: 20, unit: pct}
+        fact_origins: {'/facts/channel': planner, '/facts/offer': planner}
+        supported_product_choices: []
+        resolved_product: null
+        resolved_offer: null
+        data_versions: {catalog: null, market: repo-7d57c93b5a80, segments: repo-7d57c93b5a80, evaluation_policy: null}
+        costs:
+          regular_price:
+            status: reference_only
+            value: 315.55
+            unit: THB_per_purchased_unit
+            basis: Median regular price per purchased unit for manufacturer 751, converted from simulated USD at the default rate
+            source: data
+            evidence_ref: load_unit_econ.price_thb
+            reason: No link to the requested seller SKU and pack.
+          channel_commission:
+            status: reference_only
+            value: 7
+            unit: pct
+            basis: Category planning rate for Shopee commission
+            source: default
+            evidence_ref: load_unit_econ.shopee_commission_pct
+            reason: Applicable seller rate, charge base and effective dates are unverified.
+          cogs:
+            status: unknown
+            value: null
+            unit: THB_per_pack
+            basis: null
+            source: null
+            evidence_ref: null
+            reason: The category unit cost estimate does not establish the seller's cost for this pack.
+        segments:
+          - segment_id: deal_hunter
+            name: deal_hunter
+            households: 84
+            share: 0.059280169371912494
+            weekly_purchase_probability: 0.055735930735930736
+            source: data
+        target_segment_ids: null
+        evaluation: null
+        candidates:
+          - candidate_id: candidate-audience
+            field: /facts/audience_hint
+            value: deal hunters
+            brief_quote: deal hunters
+        blockers:
+          - {code: exact_product_required, field: /resolved_product/product_id, message: Identify the seller SKU.}
+          - {code: exact_pack_required, field: /resolved_product/pack_id, message: Identify the exact commercial pack.}
+          - {code: offer_terms_unverified, field: /resolved_offer, message: Exact eligibility and redemption terms are unverified.}
+          - {code: missing_cost_basis, field: /costs/cogs, message: Applicable seller cost per pack is unavailable.}
+          - {code: missing_cost_basis, field: /costs/channel_commission, message: The seller commission basis is unverified.}
+          - {code: missing_input, field: /facts/start_date, message: Confirm the campaign start date.}
+          - {code: missing_input, field: /facts/end_date, message: Confirm the campaign end date.}
+          - {code: missing_input, field: /facts/audience_hint, message: Confirm the audience.}
+          - {code: missing_input, field: /facts/objective, message: Select the primary objective.}
+          - {code: missing_input, field: /facts/budget_thb, message: Confirm the campaign budget.}
+        questions:
+          - {field: /facts/product_hint, prompt: 'Which Shopee listing should the campaign use?', blocking: true}
+          - {field: /facts/pack_hint, prompt: 'How many rolls are in the selling pack?', blocking: true}
+          - {field: /facts/offer/eligibility, prompt: 'Who is eligible for the 20% discount?', blocking: true}
+          - {field: /facts/audience_hint, prompt: 'Should this campaign target deal hunters?', blocking: true}
+        agent: {status: completed, reason: null}
+    RevisionWithAgentFailure:
+      summary: A saved edit retains earlier answers even when assistance fails
+      description: |
+        The revision keeps Shopee and saves the new pack hint and fixed-THB
+        offer. The seller choice and fee still require backend evidence.
+      value: &revisedTissueReview
+        review_id: '953c9aa4-57e6-49c7-bbaf-e64f0f0dd168'
+        revision: 2
+        status: blocked
+        category: toilet_tissue
+        facts:
+          channel: shopee
+          pack_hint: 12 rolls
+          offer: {kind: voucher, value: 20, unit: THB}
+        fact_origins: {'/facts/channel': planner, '/facts/pack_hint': planner, '/facts/offer': planner}
+        supported_product_choices: []
+        resolved_product: null
+        resolved_offer: null
+        data_versions: {catalog: null, market: repo-7d57c93b5a80, segments: repo-7d57c93b5a80, evaluation_policy: null}
+        costs:
+          voucher_service_fee:
+            status: unknown
+            value: null
+            unit: null
+            basis: null
+            source: null
+            evidence_ref: null
+            reason: The seller voucher fee schedule is unavailable.
+        segments:
+          - segment_id: deal_hunter
+            name: deal_hunter
+            households: 84
+            share: 0.059280169371912494
+            weekly_purchase_probability: 0.055735930735930736
+            source: data
+        target_segment_ids: null
+        evaluation: null
+        candidates:
+          - candidate_id: candidate-audience-revision-2
+            field: /facts/audience_hint
+            value: deal hunters
+            brief_quote: deal hunters
+        blockers:
+          - {code: unsupported_choice, field: /resolved_product, message: No verified Shopee SKU and 12-roll pack match this request.}
+          - {code: offer_terms_unverified, field: /resolved_offer, message: The seller voucher terms are unavailable.}
+          - {code: missing_cost_basis, field: /costs/voucher_service_fee, message: The seller voucher fee and charge basis are unknown.}
+        questions:
+          - {field: /facts/product_hint, prompt: 'Which Shopee listing contains this pack?', blocking: true}
+          - {field: /costs/voucher_service_fee, prompt: 'Who can supply the applicable seller voucher fee schedule?', blocking: true}
+          - {field: /facts/audience_hint, prompt: 'Should this campaign target deal hunters?', blocking: true}
+        agent: {status: degraded, reason: provider_unavailable}
+    StaleReview:
+      summary: A concurrent edit advanced the review to revision 2
+      value:
+        code: stale_review
+        message: Review has advanced.
+        current_revision: 2
+        current_review: *revisedTissueReview
+    HoldReport:
+      summary: Illustrative evaluated run with evidence of a guardrail failure
+      description: Hypothetical results after catalog, inputs and evaluator support have been added.
+      value:
+        run_id: 'f0425de1-73c5-4bc4-97eb-bb2fd4230693'
+        approval_id: '28667642-6a6f-4f80-8e53-d8427c10a946'
+        review_id: '953c9aa4-57e6-49c7-bbaf-e64f0f0dd168'
+        revision: 3
+        data_versions: {catalog: example-catalog-1, market: example-market-1, segments: example-segments-1, evaluation_policy: example-policy-1}
+        comparator: paired_no_campaign
+        evaluated_at: '2026-11-21T05:30:00Z'
+        measurement_window: {start_date: '2026-12-08', end_date: '2026-12-29'}
+        scenario_results:
+          - scenario: S1
+            metrics:
+              - {metric: incremental_profit, unit: THB, status: available, value: {p10: -600, p50: -200, p90: 100}, unavailable_reason: null}
+              - {metric: probability_loss, unit: fraction, status: available, value: 0.7, unavailable_reason: null}
+              - {metric: incremental_roas, unit: ratio, status: unavailable, value: null, unavailable_reason: undefined_denominator}
+        decision:
+          status: hold
+          reason_code: guardrail_failed
+          explanation: The evaluated probability of a loss is 0.7 and exceeds the 0.2 guardrail.
+    InsufficientEvidenceReport:
+      summary: Illustrative evaluated run with insufficient decision evidence
+      value:
+        run_id: '353e208c-7744-44c6-93ac-8aec0bc5a385'
+        approval_id: '28667642-6a6f-4f80-8e53-d8427c10a946'
+        review_id: '953c9aa4-57e6-49c7-bbaf-e64f0f0dd168'
+        revision: 3
+        data_versions: {catalog: example-catalog-1, market: example-market-1, segments: example-segments-1, evaluation_policy: example-policy-1}
+        comparator: paired_no_campaign
+        evaluated_at: '2026-11-21T05:35:00Z'
+        measurement_window: {start_date: '2026-12-08', end_date: '2026-12-29'}
+        scenario_results:
+          - scenario: S1
+            metrics:
+              - {metric: incremental_profit, unit: THB, status: unavailable, value: null, unavailable_reason: insufficient_sample}
+              - {metric: probability_loss, unit: fraction, status: unavailable, value: null, unavailable_reason: insufficient_sample}
+              - {metric: incremental_roas, unit: ratio, status: unavailable, value: null, unavailable_reason: insufficient_sample}
+        decision:
+          status: insufficient_evidence
+          reason_code: missing_decision_evidence
+          explanation: Too few valid paired seeds remained to evaluate the required loss guardrail.
