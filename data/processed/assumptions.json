@@ -257,6 +257,22 @@
     ]
   },
   {
+    "name": "income_elasticity_factors",
+    "value": {
+      "low": 1.2,
+      "middle": 1.0,
+      "high": 0.85
+    },
+    "unit": "multiplier by annual USD income group",
+    "label": "default",
+    "source": "Annual USD income is low below 35,000, middle from 35,000 to below 75,000, and high from 75,000. Apply the factor once to each persona's archetype base prior. Unclassified income retains the base prior. The factors are modelling defaults. Maier et al. (2025), §4.3, report lower purchase intent under budget pressure. https://arxiv.org/html/2510.08338v2#S4.SS3",
+    "used_by": [
+      "personas.price_elasticity",
+      "market.segments.price_elasticity",
+      "segments.price_elasticity"
+    ]
+  },
+  {
     "name": "elasticity_prior_least_promo",
     "value": -0.8,
     "unit": "elasticity",
@@ -279,18 +295,17 @@
   {
     "name": "price_elasticity_by_archetype",
     "value": {
-      "deal_hunter": -2.8,
-      "explorer": -1.3,
-      "indifferent": -1.8,
-      "loyal": -0.8,
-      "waiter": -2.3
+      "deal_hunter": -2.765,
+      "explorer": -1.258454,
+      "indifferent": -1.853143,
+      "loyal": -0.877949,
+      "waiter": -2.228621
     },
     "unit": "elasticity",
     "label": "default",
-    "source": "data/etl/config.py and data/etl/build_tissue.py: observational slope biased toward 0 by promo endogeneity",
+    "source": "data/etl/build_tissue.py: within-segment weighted mean of income-adjusted persona priors",
     "used_by": [
       "market.segments.price_elasticity",
-      "personas.price_elasticity",
       "segments.price_elasticity"
     ]
   },

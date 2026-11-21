@@ -58,7 +58,7 @@ def test_weighted_ks_sd_and_correlation_match_replicated_observations():
     expanded = np.repeat(rows, [3, 1, 1], axis=0)
     reference = pd.DataFrame(rows, columns=quality.ATTRIBUTES)
     marginal, variance, corr = quality._reference_checks(personas, reference)
-    assert marginal["weekly_buy_rate"]["value"] == pytest.approx(1 - (3 / 5 - 1 / 3))
+    assert marginal["weekly_buy_rate"]["profile_value"] == pytest.approx(1 - (3 / 5 - 1 / 3))
     assert marginal["weekly_buy_rate"]["status"] == "fail"
     assert variance["value"] == pytest.approx(expanded[:, 0].std() / rows[:, 0].std())
     for data, key in [(expanded, "persona_mean_abs_corr"), (rows, "household_mean_abs_corr")]:
@@ -98,6 +98,46 @@ def test_directions_use_weighted_lower_slopes_and_numeric_income_bands():
     assert checks["income_prior"]["high"] == -1
 
 
+def test_population_ks_uses_seeded_weighted_draws_and_bounded_independent_jitter():
+    profiles = pd.DataFrame(
+        [[0.4, 1, 10, 0, 0.6, 1], [0.8, 9, 100, 0.3, 0.6, 0.8]],
+        columns=quality.ATTRIBUTES,
+    ).assign(weight=[8, 2])
+    original = profiles.copy(deep=True)
+    agents = quality._expand_population(profiles)
+    assert len(agents) == 5_000
+    pd.testing.assert_frame_equal(agents, quality._expand_population(profiles))
+    pd.testing.assert_frame_equal(profiles, original)
+    draws = np.random.default_rng(42).choice(2, size=5_000, p=[0.8, 0.2])
+    sampled = profiles.loc[draws, list(quality.ATTRIBUTES)].reset_index(drop=True)
+    assert (agents["avg_price_paid"].gt(50).to_numpy() == (draws == 1)).all()
+    assert (agents >= 0.9 * sampled).all().all() and (agents <= 1.1 * sampled).all().all()
+    assert agents["purchase_cycle_weeks"].min() == 1
+    assert agents["brand_loyalty"].max() == 1
+    assert (agents.loc[draws == 0, "promo_share"] == 0).all()
+    factors = agents[["weekly_buy_rate", "avg_price_paid"]] / sampled[
+        ["weekly_buy_rate", "avg_price_paid"]
+    ]
+    assert abs(factors.corr().iloc[0, 1]) < 0.05
+    # The six-decimal profile distribution matches these households exactly.
+    households = profiles.iloc[[0, 0, 0, 0, 1]]
+    marginal, _, _ = quality._reference_checks(profiles, households)
+    assert marginal["coupon_rate"]["profile_value"] == pytest.approx(1)
+    assert marginal["coupon_rate"]["status"] == "fail"
+    # All reference coupon rates are 0.6; the larger CDF gap occurs on one side of this atom.
+    rates = agents["coupon_rate"].round(6)
+    expected = 1 - max((rates < 0.6).mean(), (rates > 0.6).mean())
+    assert marginal["coupon_rate"]["value"] == pytest.approx(expected)
+
+
+def test_adjusted_priors_pass_both_directions_on_published_personas():
+    checks = quality._direction_checks(pd.DataFrame(loaders.load_personas()))
+    assert checks["income_prior"]["low"] < checks["income_prior"]["high"]
+    assert checks["income_prior"]["status"] == "pass"
+    assert checks["deal_hunter_vs_loyal"]["deal_hunter"] < checks["deal_hunter_vs_loyal"]["loyal"]
+    assert checks["deal_hunter_vs_loyal"]["status"] == "pass"
+
+
 def test_missing_panel_preserves_badge_inputs_and_reports_skips(monkeypatch, tmp_path, capsys):
     # Resolve persona data before redirecting the published report to the test directory.
     personas = loaders.load_personas()
@@ -123,7 +163,10 @@ def test_missing_panel_preserves_badge_inputs_and_reports_skips(monkeypatch, tmp
     assert "household_behavior.parquet is missing" in capsys.readouterr().out
     report = loaders.load_eval_report()
     assert report["reference"]["status"] == "skipped"
-    assert all(m == {"value": None, "status": "skipped"} for m in report["marginal_fit"].values())
+    assert all(
+        m == {"value": None, "profile_value": None, "status": "skipped"}
+        for m in report["marginal_fit"].values()
+    )
     assert report["variance_ratio"]["status"] == report["over_correlation"]["status"] == "skipped"
     assert all(d["status"] != "skipped" for d in report["direction_checks"].values())
     assert report["rival_evidence"] == {
@@ -160,7 +203,7 @@ def test_published_report_thresholds_and_source_counts():
         if metric["value"] is None:
             assert metric["status"] == "skipped" and report["reference"]["status"] != "available"
             continue
-        assert 0 <= metric["value"] <= 1
+        assert 0 <= metric["value"] <= 1 and 0 <= metric["profile_value"] <= 1
         assert metric["status"] == ("pass" if metric["value"] >= 0.9 else "fail")
     ratio, gap = report["variance_ratio"], report["over_correlation"]
     if ratio["value"] is not None:
@@ -177,9 +220,10 @@ def test_published_report_thresholds_and_source_counts():
         assert fresh[key] == report[key]
     if report["reference"]["status"] == fresh["reference"]["status"] == "available":
         for attr in quality.ATTRIBUTES:
-            assert fresh["marginal_fit"][attr]["value"] == pytest.approx(
-                report["marginal_fit"][attr]["value"]
-            )
+            for key in ("value", "profile_value"):
+                assert fresh["marginal_fit"][attr][key] == pytest.approx(
+                    report["marginal_fit"][attr][key]
+                )
         assert fresh["over_correlation"]["gap"] == pytest.approx(gap["gap"])
         assert fresh["variance_ratio"]["value"] == pytest.approx(ratio["value"])
     assert report["confidence_inputs"]["backtest_label"] is None

@@ -20,6 +20,8 @@ from data.etl.config import (
     DISCOUNT_CAP_PCT,
     ELASTICITY_PRIOR_LEAST_PROMO,
     ELASTICITY_PRIOR_MOST_PROMO,
+    INCOME_ELASTICITY_FACTORS,
+    INCOME_ELASTICITY_NOTE,
     MANUFACTURERS,
     MIN_SEGMENT_HOUSEHOLDS,
     PANEL_WEEKS,
@@ -252,12 +254,11 @@ def _household_features(
     )
 
 
-def _segments(households: pd.DataFrame) -> pd.DataFrame:
+def _segments(households: pd.DataFrame, personas: list[dict]) -> pd.DataFrame:
     grouped = households.groupby("segment").agg(
         households=("segment", "size"),
         weekly_purchase_prob=("weekly_buy_rate", "mean"),
         avg_basket_thb=("avg_basket_thb", "mean"),
-        price_elasticity=("price_elasticity", "mean"),
         price_elasticity_observed=("price_elasticity_observed", "mean"),
         coupon_rate=("coupon_rate", "mean"),
         promo_response=("promo_share", "mean"),
@@ -266,7 +267,12 @@ def _segments(households: pd.DataFrame) -> pd.DataFrame:
     grouped["share"] = grouped["households"] / len(households)
     grouped["source"] = "data"
     grouped["archetype"] = grouped.index
-    grouped["price_elasticity"] = grouped["price_elasticity"].round(6)
+    profiles = pd.DataFrame(personas)
+    weighted_priors = profiles["weight"] * profiles["price_elasticity"]
+    segment_weights = profiles.groupby("segment")["weight"].sum()
+    grouped["price_elasticity"] = (
+        weighted_priors.groupby(profiles["segment"]).sum() / segment_weights
+    ).round(6)
     representative = households.loc[households["archetype"].eq(households["segment"])]
     grouped["cluster_label"] = representative.groupby("segment")["cluster_label"].first()
     grouped["price_elasticity_source"] = "default"
@@ -351,10 +357,17 @@ def _market_inputs(
                 for maker_id, role in MANUFACTURERS.items()
             },
             "archetype_segments": {"values": archetype_segments, "source": "data"},
+            "income_elasticity_factors": {
+                "value": INCOME_ELASTICITY_FACTORS,
+                "source": "default",
+                "note": INCOME_ELASTICITY_NOTE,
+                "aggregation": "Segment priors are weighted means of adjusted personas.",
+            },
             "pooled_price_elasticity": {
                 "value": round((ELASTICITY_PRIOR_LEAST_PROMO + ELASTICITY_PRIOR_MOST_PROMO) / 2, 6),
                 "source": "default",
                 "note": "observational slope biased toward 0 by promo endogeneity",
+                "scope": "Archetype base prior midpoint before income adjustment.",
             },
             "pooled_price_elasticity_observed": {"value": round(elasticity, 6), "source": "data"},
             "persona_fields": {"demographics": "data", "weight": "data", "channels": "default"},
@@ -482,8 +495,8 @@ def main() -> None:
     households, archetype_segments, elasticity = _household_features(
         purchases, purchase_weeks, visits, weeks
     )
-    segments = _segments(households)
     personas = build_personas(households)
+    segments = _segments(households, personas)
     market, economics, knobs = _market_inputs(purchases, segments, archetype_segments, elasticity)
     panel = _calibration(households, purchase_weeks, weeks)
     _write_artifacts(

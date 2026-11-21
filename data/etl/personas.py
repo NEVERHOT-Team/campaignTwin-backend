@@ -5,7 +5,7 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
-from data.etl.config import CHANNELS, SEED
+from data.etl.config import CHANNELS, INCOME_ELASTICITY_FACTORS, SEED, income_group
 from data.loaders import load_twin_responses
 
 BEHAVIOR = [
@@ -174,6 +174,8 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
         weight = cluster_weights[cluster] * counts[stratum]
         weight /= represented[cluster] * slot_counts[stratum]
         prefix = "tt-edge" if edge else "tt"
+        base_prior = float(cohort["price_elasticity"].iloc[0])
+        income_factor = INCOME_ELASTICITY_FACTORS.get(income_group(income), 1.0)
         profiles.append(
             {
                 "persona_id": f"{prefix}-{slot + 1:02d}",
@@ -187,7 +189,7 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
                 "kids": kids,
                 "homeowner": homeowner,
                 **behavior,
-                "price_elasticity": float(cohort["price_elasticity"].iloc[0]),
+                "price_elasticity": round(base_prior * income_factor, 6),
                 "traits": dict(zip(TRAITS, trait_values, strict=True)),
                 "channels": list(CHANNELS),
                 "backstory": BACKSTORIES[cluster],

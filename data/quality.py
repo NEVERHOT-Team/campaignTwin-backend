@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from data import loaders
+from data.etl.config import income_group
 
 ATTRIBUTES = (
     "weekly_buy_rate",
@@ -19,6 +20,10 @@ ATTRIBUTES = (
     "brand_loyalty",
 )
 TARGETS = {"ks_similarity_min": 0.9, "sd_ratio_min": 0.8, "correlation_gap_max": 0.1}
+AGENT_COUNT = 5_000
+AGENT_SEED = 42
+JITTER_FRACTION = 0.10
+RATE_ATTRIBUTES = ["weekly_buy_rate", "promo_share", "coupon_rate", "brand_loyalty"]
 MISSING_PANEL = (
     "Household reference checks skipped: local data/calib/household_behavior.parquet is missing. "
     "Run python -m data.etl.build_tissue with local raw data to enable them."
@@ -80,6 +85,19 @@ def _ks_similarity(persona, weights, real):
     return float(1 - np.max(np.abs(difference)))
 
 
+def _expand_population(personas: pd.DataFrame) -> pd.DataFrame:
+    """Draw equally weighted agents and independently jitter the six measured attributes."""
+    rng = np.random.default_rng(AGENT_SEED)
+    weights = personas["weight"].to_numpy(dtype=float)
+    draws = rng.choice(len(personas), size=AGENT_COUNT, replace=True, p=weights / weights.sum())
+    values = personas[list(ATTRIBUTES)].to_numpy(dtype=float)[draws]
+    factors = rng.uniform(1 - JITTER_FRACTION, 1 + JITTER_FRACTION, size=values.shape)
+    agents = pd.DataFrame(values * factors, columns=ATTRIBUTES)
+    agents[RATE_ATTRIBUTES] = agents[RATE_ATTRIBUTES].clip(0, 1)
+    agents["purchase_cycle_weeks"] = agents["purchase_cycle_weeks"].clip(lower=1)
+    return agents
+
+
 def _mean_abs_correlation(frame, weights=None):
     values = frame.to_numpy(dtype=float)
     if len(values) < 2 or (np.ptp(values, axis=0) == 0).any():
@@ -101,14 +119,20 @@ def _status(value, threshold, *, maximum=False):
 
 def _reference_checks(personas, households):
     weights = personas["weight"].to_numpy()
+    agents = _expand_population(personas)
+    unit_weights = np.ones(len(agents))
     marginal = {}
     for field in ATTRIBUTES:
-        score = None
+        profile_score = population_score = None
         if households is not None and field in households:
-            score = _ks_similarity(
-                personas[field].to_numpy(), weights, households[field].to_numpy()
-            )
-        marginal[field] = {"value": score, "status": _status(score, TARGETS["ks_similarity_min"])}
+            reference = households[field].to_numpy()
+            profile_score = _ks_similarity(personas[field].to_numpy(), weights, reference)
+            population_score = _ks_similarity(agents[field].to_numpy(), unit_weights, reference)
+        marginal[field] = {
+            "profile_value": profile_score,
+            "value": population_score,
+            "status": _status(population_score, TARGETS["ks_similarity_min"]),
+        }
 
     rates = personas["weekly_buy_rate"].to_numpy()
     center = np.average(rates, weights=weights)
@@ -157,10 +181,9 @@ def _direction(personas, field, left_name, left, right_name, right):
 
 
 def _direction_checks(personas):
-    bands = personas["income_band"]
-    lower = pd.to_numeric(bands.str.extract(r"^(\d+)(?:-\d+K|K\+)$", expand=False))
-    low = bands.eq("Under 15K") | lower.lt(35)
-    high = lower.ge(75)
+    income = personas["income_band"].map(income_group)
+    low = income.eq("low")
+    high = income.eq("high")
     archetype = personas["archetype"]
     return {
         "deal_hunter_vs_loyal": _direction(
@@ -223,12 +246,24 @@ def build_eval_report() -> dict:
         "source": "data",
         "reference": reference,
         "persona_count": len(personas),
+        "ks_population": {
+            "agents": AGENT_COUNT,
+            "seed": AGENT_SEED,
+            "jitter_fraction": JITTER_FRACTION,
+            "distribution": "independent uniform multiplicative jitter",
+            "source": "default",
+        },
         "targets": TARGETS.copy(),
         "targets_source": "default",
         "method": {
             "reference": "Pre-holdout panel from the packaged simulated Complete Journey data.",
             "weights": "Population weights for personas and equal weights for households.",
-            "marginal_fit": "One minus maximum empirical CDF distance at six-decimal precision.",
+            "marginal_fit": (
+                "KS similarity at six decimals. profile_value uses weighted profiles. "
+                "value and status apply to equally weighted agents sampled by persona weight. "
+                "Jitter applies to all six attributes. Rates are clipped to [0, 1] and cycles "
+                "to at least one week."
+            ),
             "variance_ratio": "Population SD of persona buy rate over household population SD.",
             "over_correlation": "Absolute gap in mean absolute Pearson r over 15 distinct pairs.",
             "direction_checks": (
@@ -262,9 +297,13 @@ def main() -> None:
         temp = Path(staging) / destination.name
         temp.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         temp.replace(destination)
+    ks = [
+        (field, score["profile_value"], score["value"], score["status"])
+        for field, score in report["marginal_fit"].items()
+    ]
+    ks_table = pd.DataFrame(ks, columns=["KS attribute", "Profiles", "Agents", "Agent status"])
+    print(ks_table.to_string(index=False))
     rows = []
-    for field, score in report["marginal_fit"].items():
-        rows.append((f"KS {field}", score["value"], score["status"]))
     variance = report["variance_ratio"]
     corr = report["over_correlation"]
     rows.extend(

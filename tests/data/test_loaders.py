@@ -111,22 +111,34 @@ def test_promotional_elasticity_prior_and_observed_slopes():
     prior = segments["price_elasticity"]
     assert prior["deal_hunter"] < prior["loyal"]
     promo_rank = (segments["promo_response"] + segments["coupon_rate"]).sort_values().index
-    assert prior.loc[promo_rank].tolist() == pytest.approx([-0.8, -1.3, -1.8, -2.3, -2.8])
+    base = dict(zip(promo_rank, [-0.8, -1.3, -1.8, -2.3, -2.8], strict=True))
     assert set(segments["price_elasticity_source"]) == {"default"}
     assert set(segments["price_elasticity_observed_source"]) == {"data"}
     notes = loaders.load_market()["source_notes"]
     assert notes["pooled_price_elasticity"]["value"] == pytest.approx(-1.8)
     assert notes["pooled_price_elasticity"]["source"] == "default"
     assert notes["pooled_price_elasticity_observed"]["source"] == "data"
-    for persona in loaders.load_personas():
+    personas = loaders.load_personas()
+    for persona in personas:
         segment = segments.loc[persona["archetype"]]
         assert persona["cluster_label"] == segment["cluster_label"]
-        assert persona["price_elasticity"] == pytest.approx(segment["price_elasticity"])
+        band = persona["income_band"]
+        if band in {"Under 15K", "15-24K", "25-34K"}:
+            factor = 1.2
+        elif band in {"35-49K", "50-74K"}:
+            factor = 1.0
+        else:
+            factor = 0.85
+        assert persona["price_elasticity"] == pytest.approx(base[persona["archetype"]] * factor)
         assert persona["price_elasticity_observed"] == pytest.approx(
             segment["price_elasticity_observed"], abs=1e-6
         )
         assert persona["source"]["price_elasticity"] == "default"
         assert persona["source"]["price_elasticity_observed"] == "data"
+    for name, segment_prior in prior.items():
+        group = [p for p in personas if p["segment"] == name]
+        weighted = sum(p["price_elasticity"] * p["weight"] for p in group)
+        assert segment_prior == pytest.approx(weighted / sum(p["weight"] for p in group), abs=1e-6)
 
 
 def test_economics_anchors_and_backtest():
