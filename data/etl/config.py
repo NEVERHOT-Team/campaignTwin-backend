@@ -2,6 +2,10 @@
 
 CATEGORY = "toilet_tissue"
 PRODUCT_PATH = ("GROCERY", "BATH TISSUES", "TOILET TISSUE")
+# Complete Journey campaign 18 spans eight complete retail weeks in the 2017 panel.
+BACKTEST_CAMPAIGN_ID = 18
+BACKTEST_START_WEEK = 45
+BACKTEST_END_WEEK = 52
 MANUFACTURERS = {751: "our_brand", 764: "leader", 595: "peer", 69: "private_label"}
 ROLE_PRICE_TIERS = {"our_brand": "mid", "leader": "high", "peer": "mid", "private_label": "low"}
 SEED = 42

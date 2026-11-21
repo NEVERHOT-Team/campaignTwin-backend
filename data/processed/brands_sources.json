@@ -15,38 +15,38 @@
   },
   "price_tiers": {
     "751": {
-      "paid_thb_per_sq_ft": 0.6262901194,
-      "unit_coverage": 0.8034188034,
-      "price_tier": "mid",
+      "paid_thb_per_sq_ft": 0.6189190321,
+      "unit_coverage": 0.8058007566,
+      "price_tier": "high",
       "source": "data"
     },
     "764": {
-      "paid_thb_per_sq_ft": 0.6436866733,
-      "unit_coverage": 0.4029008864,
+      "paid_thb_per_sq_ft": 0.6120241256,
+      "unit_coverage": 0.4011976048,
       "price_tier": "high",
       "source": "data"
     },
     "595": {
-      "paid_thb_per_sq_ft": 0.4189272938,
-      "unit_coverage": 0.9980858627,
+      "paid_thb_per_sq_ft": 0.4117005387,
+      "unit_coverage": 0.997804266,
       "price_tier": "low",
       "source": "data"
     },
     "69": {
-      "paid_thb_per_sq_ft": 0.2705352475,
-      "unit_coverage": 0.7461052632,
+      "paid_thb_per_sq_ft": 0.264667356,
+      "unit_coverage": 0.7386066003,
       "price_tier": "low",
       "source": "data"
     },
     "1011": {
-      "paid_thb_per_sq_ft": 0.6151820031,
-      "unit_coverage": 0.2085889571,
+      "paid_thb_per_sq_ft": 0.6114094264,
+      "unit_coverage": 0.2376033058,
       "price_tier": "mid",
       "source": "data"
     },
     "1315": {
-      "paid_thb_per_sq_ft": 0.3182180625,
-      "unit_coverage": 0.1715817694,
+      "paid_thb_per_sq_ft": 0.3092006667,
+      "unit_coverage": 0.1703470032,
       "price_tier": "low",
       "source": "data"
     }

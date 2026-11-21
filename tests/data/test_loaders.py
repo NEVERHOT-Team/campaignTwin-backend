@@ -10,7 +10,7 @@ from data.etl.personas import BEHAVIOR, TRAITS, _survey_traits
 
 def test_segments_and_personas():
     segments = loaders.load_segments()
-    assert segments["households"].sum() == 1514
+    assert segments["households"].sum() == 1417
     assert segments["households"].min() >= 50
     assert segments["share"].sum() == pytest.approx(1)
     assert (segments["price_elasticity"] < 0).all()
@@ -134,12 +134,19 @@ def test_economics_anchors_and_backtest():
     assert economics["source"]["usd_thb"] == "default"
 
     anchors = loaders.load_anchors()
-    assert set(anchors) == {"en", "th"}
-    assert all(len(anchors[language][0]) == 5 for language in anchors)
+    assert set(anchors) == {"sets", "test_responses"}
+    assert Counter(group["lang"] for group in anchors["sets"]) == {"th": 2, "en": 1}
+    texts = [anchor for group in anchors["sets"] for anchor in group["anchors"]]
+    assert all(len(group["anchors"]) == 5 for group in anchors["sets"])
+    assert len(set(texts)) == 15
+    responses = anchors["test_responses"]
+    assert len({row["text"] for row in responses}) == len(responses) == 10
+    assert Counter(row["expected"] for row in responses) == dict.fromkeys(range(1, 6), 2)
+    assert set(texts).isdisjoint(row["text"] for row in responses)
 
     backtest = loaders.load_backtest()
-    assert set(backtest["actual"]) == {"lift_pct", "redemption_rate", "incremental_sales"}
-    assert backtest["source"] == "default"
+    assert {"lift_pct", "redemption_rate", "incremental_sales"} <= set(backtest["actual"])
+    assert backtest["source"] == "data" and backtest["campaign_id"] == "18"
     assert max(backtest["calibration_weeks"]) < backtest["start_week"]
 
 
@@ -195,6 +202,9 @@ def test_local_calibration_loader(monkeypatch, tmp_path):
     path = tmp_path / "household_behavior.parquet"
     pd.DataFrame([record]).to_parquet(path, index=False)
     assert loaders.load_household_behavior().to_dict("records") == [record]
+    pd.DataFrame([{**record, "week": 45}]).to_parquet(path, index=False)
+    with pytest.raises(ValueError, match="build_tissue"):
+        loaders.load_household_behavior()
     pd.DataFrame([record]).drop(columns="brand").to_parquet(path, index=False)
     with pytest.raises(ValueError, match=r"household_behavior.parquet.*brand"):
         loaders.load_household_behavior()
@@ -213,3 +223,14 @@ def test_optional_twin_csv_uses_numeric_public_export(monkeypatch, tmp_path):
         "risk_aversion": 0.0,
         "time_preference": 1.0,
     }
+
+
+def test_twin_response_loader_supports_wave_and_optional_columns(monkeypatch, tmp_path):
+    monkeypatch.setattr(loaders, "RAW", tmp_path)
+    assert loaders.load_twin_responses(columns=["QID32"]) is None
+    for wave in ("1_3", "4"):
+        path = loaders.source_asset_path(f"twin2k/wave{wave}_response.csv")
+        path.parent.mkdir(exist_ok=True, parents=True)
+        path.write_text(f"QID32,wave\n3,{wave}\n")
+        assert list(loaders.load_twin_responses(wave=wave)) == ["QID32", "wave"]
+    assert loaders.load_twin_responses(["QID32"]).to_dict("list") == {"QID32": [3]}

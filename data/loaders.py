@@ -1,5 +1,4 @@
-"""Load synthetic engine fixtures and isolated public-source ETL data."""
-"""Read local source tables and validate the engine inputs."""
+"""Load registered public sources, local calibration data and validated engine inputs."""
 
 import json
 from functools import lru_cache
@@ -11,9 +10,8 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+from data.etl.config import BACKTEST_START_WEEK, CATEGORY, PRODUCT_PATH
 from data.sources import ASSETS, CJ_TABLES
-
-from data.etl.config import CATEGORY
 
 DATA_DIR = Path(__file__).resolve().parent
 PROCESSED = DATA_DIR / "processed"
@@ -48,18 +46,12 @@ def load_raw_table(
         ) from error
 
 
-def load_twin_responses(columns: list[str]) -> pd.DataFrame | None:
-    filename = "wave1_3_response.csv"
-    response_directory = "question_catalog_and_human_response_csv"
-    candidates = (
-        RAW / filename,
-        RAW / response_directory / filename,
-        RAW / "Twin-2K-500" / response_directory / filename,
+def load_category_products() -> pd.DataFrame:
+    fields = ("department", "product_category", "product_type")
+    return load_raw_table(
+        "products",
+        filters=[(field, "==", value) for field, value in zip(fields, PRODUCT_PATH, strict=True)],
     )
-    for path in candidates:
-        if path.is_file():
-            return pd.read_csv(path, usecols=columns)
-    return None
 
 
 def _require_keys(record, expected: str, location: str) -> None:
@@ -174,6 +166,10 @@ def load_household_behavior() -> pd.DataFrame:
         "discount_pct coupon_used in_mailer on_display brand",
         path.name,
     )
+    if panel["week"].ge(BACKTEST_START_WEEK).any():
+        raise ValueError(
+            f"{path.name} contains post-cutoff weeks. Run python -m data.etl.build_tissue."
+        )
     return panel
 
 
@@ -245,10 +241,20 @@ def load_rival_prior() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def load_anchors() -> dict[str, list[list[str]]]:
+def load_anchors() -> dict[str, list[dict[str, Any]]]:
     filename = "ssr_anchors.json"
     record = _read_json(filename)
-    _require_keys(record, "th en", filename)
+    _require_keys(record, "sets test_responses", filename)
+    for group in record["sets"]:
+        _require_keys(group, "lang anchors", filename)
+        if len(group["anchors"]) != 5 or not all(
+            isinstance(a, str) and a.strip() for a in group["anchors"]
+        ):
+            raise ValueError(f"{filename} requires five nonempty anchors per set")
+    for response in record["test_responses"]:
+        _require_keys(response, "text expected", filename)
+        if type(response["expected"]) is not int or not 1 <= response["expected"] <= 5:
+            raise ValueError(f"{filename} expected scores must be integers from 1 to 5")
     return record
 
 
@@ -381,10 +387,28 @@ def normalize_completejourney(table: str, *, chunk_size: int = 1_000_000) -> dic
     return {"rows": rows, "columns": columns}
 
 
-def load_twin_responses(wave: str = "1_3") -> pd.DataFrame:
-    """US survey respondents, not a Thai population or an LLM prompt payload."""
+def load_twin_responses(
+    wave: str | list[str] = "1_3", *, columns: list[str] | None = None
+) -> pd.DataFrame | None:
+    """Read a registered survey wave, or optional local columns for persona fitting."""
+    if isinstance(wave, list):
+        if columns is not None:
+            raise TypeError("Pass columns only once")
+        columns, wave = wave, "1_3"
     filename = {"1_3": "wave1_3_response.csv", "4": "wave4_response.csv"}[wave]
-    return pd.read_csv(source_asset_path(f"twin2k/{filename}"), low_memory=False)
+    registered = source_asset_path(f"twin2k/{filename}")
+    if columns is None:
+        return pd.read_csv(registered, low_memory=False)
+    directory = "question_catalog_and_human_response_csv"
+    for path in (
+        RAW / filename,
+        RAW / directory / filename,
+        RAW / "Twin-2K-500" / directory / filename,
+        registered,
+    ):
+        if path.is_file():
+            return pd.read_csv(path, usecols=columns, low_memory=False)
+    return None
 
 
 def load_twin_catalog() -> Any:

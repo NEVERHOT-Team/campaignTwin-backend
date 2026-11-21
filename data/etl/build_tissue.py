@@ -10,7 +10,9 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from threadpoolctl import threadpool_limits
 
+from data.etl.backtest import build_backtest
 from data.etl.config import (
+    BACKTEST_START_WEEK,
     CATEGORY,
     CHANNELS,
     CURRENCY,
@@ -21,26 +23,20 @@ from data.etl.config import (
     MANUFACTURERS,
     MIN_SEGMENT_HOUSEHOLDS,
     PANEL_WEEKS,
-    PRODUCT_PATH,
     SEED,
 )
 from data.etl.personas import build_personas
-from data.loaders import CALIB, DATA_DIR, PROCESSED, load_raw_table
+from data.loaders import CALIB, DATA_DIR, PROCESSED, load_category_products, load_raw_table
 
 PROMOTION_KEYS = ["product_id", "store_id", "week"]
 
 
 def _category_purchases() -> tuple[pd.DataFrame, pd.Series, pd.Index]:
-    products = load_raw_table("products")
-    department, category, product_type = PRODUCT_PATH
-    products = products.loc[
-        products["department"].eq(department)
-        & products["product_category"].eq(category)
-        & products["product_type"].eq(product_type),
-        ["product_id", "manufacturer_id", "brand"],
-    ].rename(columns={"brand": "label_type"})
+    products = load_category_products()[["product_id", "manufacturer_id", "brand"]].rename(
+        columns={"brand": "label_type"}
+    )
 
-    transactions = load_raw_table("transactions")
+    transactions = load_raw_table("transactions", filters=[("week", "<", BACKTEST_START_WEEK)])
     visits = transactions.groupby(["store_id", "week"])["basket_id"].nunique()
     weeks = pd.Index(range(transactions["week"].min(), transactions["week"].max() + 1), name="week")
     purchases = transactions.loc[transactions["quantity"].gt(0)].merge(
@@ -73,7 +69,10 @@ def _category_purchases() -> tuple[pd.DataFrame, pd.Series, pd.Index]:
     promotions = load_raw_table(
         "promotions",
         columns=[*PROMOTION_KEYS, "mailer_location", "display_location"],
-        filters=[("product_id", "in", products["product_id"].tolist())],
+        filters=[
+            ("product_id", "in", products["product_id"].tolist()),
+            ("week", "<", BACKTEST_START_WEEK),
+        ],
     )
     promotions["in_mailer"] = promotions["mailer_location"].fillna("0").ne("0")
     promotions["on_display"] = promotions["display_location"].fillna("0").ne("0")
@@ -490,6 +489,7 @@ def main() -> None:
             "market.json": market,
             "knob_ranges.json": knobs,
             "unit_economics.json": economics,
+            "backtest_campaign.json": build_backtest(weeks),
         },
         segments,
         panel,
