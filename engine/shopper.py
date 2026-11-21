@@ -525,6 +525,67 @@ def media_reach(
     return float(1 - (1 - params.organic_reach) * math.exp(-impressions / targeted))
 
 
+def discount_budget(strategy: Strategy) -> float | None:
+    """THB the plan may spend on discounts: budget x the discount share of its split.
+
+    None means uncapped (no budget, or the baseline). Plans without a split keep the
+    budget net of media, so discounts plus media never exceed the approved budget.
+    """
+    if strategy.is_baseline:
+        return None
+    budget = (strategy.timing or {}).get("budget_thb")
+    if not isinstance(budget, (int, float)) or budget <= 0:
+        return None
+    split = strategy.budget_split or {}
+    share = split.get("discount")
+    if share is None:
+        share = 1.0 - float(split.get("media", 0.0) or 0.0)
+    return float(budget) * float(share)
+
+
+def _discount_spend(stats: WeekStats, offer: WeekOffer, ref_price: float) -> float:
+    # Same basis as engine.evaluator: discounted units x shelf price x posted depth.
+    return stats.discounted_units_us * ref_price * offer.our_discount_pct / 100
+
+
+def _budgeted_step(population, state, offer, seed, week, params, vector, remaining):
+    """step() that stops spending once the discount budget is used up.
+
+    In the week the budget would run out, fewer shoppers see the offer (reach scaled down)
+    so spend lands at the remaining budget; after that the offer is withdrawn. The random
+    draws do not change, so plan and baseline stay paired. Returns (stats, state, spend).
+    """
+    if remaining is None or not offer.active or offer.our_discount_pct <= 0:
+        stats, new_state = step(population, state, offer, seed, week, params, vector)
+        return stats, new_state, 0.0
+    if remaining <= 0:
+        offer = replace(offer, active=False)
+        stats, new_state = step(population, state, offer, seed, week, params, vector)
+        return stats, new_state, 0.0
+    price = population.ref_price
+    stats, new_state = step(population, state, offer, seed, week, params, vector)
+    spend = _discount_spend(stats, offer, price)
+    reach, low, high = offer.reach, 0.0, offer.reach
+    for _ in range(12):  # bisect reach until spend fits the remaining budget
+        if spend <= remaining:
+            if spend >= 0.98 * remaining or high - low < 1e-4 or reach == offer.reach:
+                break
+            low = reach
+        else:
+            high = reach
+        reach = (low + high) / 2
+        trial = replace(offer, reach=reach)
+        stats, new_state = step(population, state, trial, seed, week, params, vector)
+        spend = _discount_spend(stats, trial, price)
+    if spend > remaining:  # never overspend: fall back to the last reach that fit
+        trial = replace(offer, reach=low)
+        stats, new_state = step(population, state, trial, seed, week, params, vector)
+        spend = _discount_spend(stats, trial, price)
+    stats = replace(stats, extra={**stats.extra, "discount_spend_thb": spend,
+                                  "budget_exhausted": spend >= 0.98 * remaining})
+    return stats, new_state, spend
+
+
 def simulate(
     population: Population,
     strategy: Strategy,
@@ -555,10 +616,14 @@ def simulate(
     message = None if strategy.is_baseline else strategy.id
     vector = appeal_vector(population, appeal, message)
     reach = media_reach(population, strategy, params)
+    remaining = discount_budget(strategy)
     stats = []
     for week in range(1, weeks + 1):
         offer = offer_from_strategy(strategy, week, campaign_weeks, rivals, reach)
-        week_stats, state = step(population, state, offer, seed, week, params, vector)
+        week_stats, state, spend = _budgeted_step(population, state, offer, seed, week, params,
+                                                  vector, remaining)
+        if remaining is not None:
+            remaining = 0.0 if week_stats.extra.get("budget_exhausted") else remaining - spend
         stats.append(week_stats)
     return stats
 
@@ -600,6 +665,7 @@ def _simulate_adaptive(
         if isinstance(budget, (int, float)) and budget > 0:
             media = float(budget) * float(share or 0.0)
 
+    remaining = discount_budget(strategy)
     obs = Observation(week=0)
     first_share: float | None = None
     share_gain: float | None = None
@@ -615,7 +681,7 @@ def _simulate_adaptive(
             shifted = strategy.model_copy(update={"target_segments": list(plan.target_segments)})
             plan.reach = media_reach(population, shifted, params)
         scheduled = offer_from_strategy(strategy, week, campaign_weeks, None, plan.reach)
-        on = scheduled.active and not plan.stopped
+        on = scheduled.active and not plan.stopped and (remaining is None or remaining > 0)
         posted = scheduled.our_discount_pct if on else 0.0
         rival_pct, non_price, rival_events = book.react(week, posted, share_gain,
                                                         our_active=on)
@@ -627,7 +693,10 @@ def _simulate_adaptive(
             rival_discount_pct=rival_pct,
             rival_non_price=non_price,
         )
-        week_stats, state = step(population, state, offer, seed, week, params, vector)
+        week_stats, state, spend = _budgeted_step(population, state, offer, seed, week, params,
+                                                  vector, remaining)
+        if remaining is not None:
+            remaining = 0.0 if week_stats.extra.get("budget_exhausted") else remaining - spend
         share = _share_pp(week_stats)
         if week == 1:
             first_share = share

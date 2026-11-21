@@ -216,3 +216,12 @@ def test_new_buyer_voucher_is_offered_and_keeps_its_eligibility(spec, context):
     assert newbuyer.timing["eligibility"] == "new_only"
     assert newbuyer.mechanic == "voucher" and newbuyer.cap_per_user == 1
     assert all("eligibility" not in plans[pid].timing for pid in plans if pid != "g0-newbuyer")
+
+
+def test_deep_brief_still_screens_a_lean_discount(context):
+    raw = deepcopy(load_mock("campaign_spec")["spec"])
+    raw["offer"]["mechanics"][0].update({"value": 40, "value_unit": "pct"})
+    bounds = resolve_bounds(CampaignSpec.model_validate(raw), context)
+    assert bounds.discount_min <= strategist.LEAN_DISCOUNT_PCT
+    plans = _generated(strategist.propose(CampaignSpec.model_validate(raw), context))
+    assert min(p.discount_pct for p in plans) <= strategist.LEAN_DISCOUNT_PCT

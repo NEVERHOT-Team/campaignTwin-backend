@@ -43,6 +43,7 @@ DEFAULT_COST_PER_REACH = 0.32
 # engine's reach curve (30% organic); spending beyond that buys almost nothing.
 MEDIA_FREQUENCY = 2.0
 DEFAULT_SPLIT = {"discount": 0.7, "media": 0.25, "fees": 0.05}
+LEAN_DISCOUNT_PCT = 5.0  # shallowest discount the screen always includes
 PERCENT_MECHANICS = {"percent_off", "voucher", "flash_sale", "coins_cashback"}
 DEFAULT_EXTRA_MECHANICS = ("percent_off", "voucher", "free_shipping", "bundle", "flash_sale")
 
@@ -202,7 +203,9 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         low, high = given.discount_pct
         labels["discount_pct"] = "data"
     elif user_discount is not None:
-        low, high = user_discount * 0.5, user_discount * 1.5
+        # Around the brief, but always screen a lean option: with thin unit margins the
+        # profitable plan is often far shallower than the marketer's own discount.
+        low, high = min(user_discount * 0.5, LEAN_DISCOUNT_PCT), user_discount * 1.5
         labels["discount_pct"] = "default"
     else:
         low, high = 5.0, 30.0

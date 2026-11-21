@@ -249,3 +249,43 @@ def test_params_load_from_data_when_present(monkeypatch):
     assert params.habit == shopper.ShopperParams().habit
     monkeypatch.setattr(loaders, "load_shopper_params", lambda: {}, raising=False)
     assert shopper.ShopperParams.from_data() == shopper.ShopperParams()
+
+
+def budget_plan(budget, discount=40.0, media_share=0.0):
+    return make_strategy(discount).model_copy(update={
+        "timing": {"budget_thb": budget},
+        "budget_split": {"discount": 1 - media_share, "media": media_share},
+    })
+
+
+def discount_spend(population, stats, discount):
+    return sum(s.discounted_units_us for s in stats) * population.ref_price * discount / 100
+
+
+def test_discount_budget_caps_spend_and_withdraws_the_offer(population):
+    # Same reach as the capped plan (a budget without media keeps organic reach only).
+    uncapped = discount_spend(population, run(population, budget_plan(1e12)), 40)
+    budget = uncapped / 3
+    stats = run(population, budget_plan(budget))
+    spent = discount_spend(population, stats, 40)
+    assert spent <= budget + 1e-6
+    assert spent >= 0.9 * budget
+    last = max(w for w, s in enumerate(stats, 1) if s.discounted_units_us > 0)
+    assert last < CAMPAIGN  # the offer stops once the budget is used up
+    assert any(s.extra.get("budget_exhausted") for s in stats)
+
+
+def test_discount_budget_is_net_of_media_without_a_split():
+    plan = budget_plan(100_000, media_share=0.25).model_copy(update={"budget_split": {
+        "media": 0.25}})
+    assert shopper.discount_budget(plan) == pytest.approx(75_000)
+    assert shopper.discount_budget(budget_plan(100_000, media_share=0.2)) == pytest.approx(80_000)
+    assert shopper.discount_budget(make_strategy(40)) is None
+
+
+def test_adaptive_run_respects_the_discount_budget(population):
+    uncapped = discount_spend(population, run(population, budget_plan(1e12)), 40)
+    budget = uncapped / 2
+    stats = shopper.simulate(population, budget_plan(budget), WEEKS, CAMPAIGN, SEED,
+                             adaptive=True)
+    assert discount_spend(population, stats, 40) <= budget + 1e-6
