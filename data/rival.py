@@ -10,6 +10,7 @@ from scipy.stats import beta
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from contracts.models import CampaignSpec, RivalScenario
+from data.etl.config import MANUFACTURERS
 from data.loaders import load_brands, load_library, load_rival_prior
 
 REACTIONS = ("none", "match", "undercut", "non_price")
@@ -32,7 +33,7 @@ def _competitors(spec: CampaignSpec, brands: pd.DataFrame) -> tuple[pd.Series, p
     tiers = {"low": 0, "mid": 1, "high": 2}
     target = _tags(spec.target_segments or ours.target_segments)
     channels = _tags(spec.channel or ours.channels)
-    rivals = brands.loc[~brands["is_ours"]].copy()
+    rivals = brands.loc[~brands["is_ours"] & brands["brand"].isin(map(str, MANUFACTURERS))].copy()
     scores = []
     for brand in rivals.itertuples():
         tier_distance = abs(tiers[ours.price_tier] - tiers[brand.price_tier])
@@ -44,10 +45,8 @@ def _competitors(spec: CampaignSpec, brands: pd.DataFrame) -> tuple[pd.Series, p
             + 0.05 * _overlap(_tags(ours.geo), _tags(brand.geo))
         )
     rivals["score"] = scores
-    ranked = rivals.loc[rivals["score"].ge(0.5)].sort_values(
-        ["score", "market_share", "brand"], ascending=[False, False, True]
-    )
-    return ours, ranked.head(3)
+    ranked = rivals.sort_values(["score", "market_share", "brand"], ascending=[False, False, True])
+    return ours, ranked
 
 
 def _season(spec: CampaignSpec, start: pd.Timestamp, end: pd.Timestamp) -> str:
@@ -112,7 +111,9 @@ def _evidence(spec: CampaignSpec, category: str, library: pd.DataFrame, rival: s
     outcomes["fixed_score"] = 0.1 * feature_sum + 0.5 * _text_scores(
         spec.goal, triggers["description"]
     )
-    outcomes["trigger_depth"] = pd.to_numeric(triggers["discount_depth"], errors="coerce")
+    # The hand-edited campaign library stores fractions. All rival depths use percent.
+    outcomes["trigger_depth"] = 100 * pd.to_numeric(triggers["discount_depth"], errors="coerce")
+    outcomes["response_depth"] = 100 * pd.to_numeric(outcomes["discount_depth"], errors="coerce")
     outcomes["duration_days"] = _days(outcomes)
     return outcomes
 
@@ -132,7 +133,7 @@ def _posterior(
     peak_risk = -1.0
     peak_rows = []
     for point in range(1, level + 1):
-        depth_sim = np.where(np.isfinite(depth), np.maximum(0, 1 - np.abs(point / 100 - depth)), 0)
+        depth_sim = np.where(np.isfinite(depth), np.maximum(0, 1 - np.abs(point - depth) / 100), 0)
         sim = fixed + 0.1 * depth_sim
         nearest = np.argsort(-sim, kind="stable")[:NEIGHBOURS]
         known = nearest[(labels[nearest] != "") & (sim[nearest] > 0)]
@@ -213,9 +214,11 @@ def get_rival_scenarios(spec: CampaignSpec) -> list[RivalScenario]:
                 q = 0.9 if aggressive else 0.5
                 if reaction != "non_price":
                     raw = _quantile(
-                        rows, "discount_depth", q, prior["depth_p90" if aggressive else "depth_p50"]
+                        rows, "response_depth", q, prior["depth_p90" if aggressive else "depth_p50"]
                     )
-                    depth = min(raw, max(0, 1 - rival.margin_floor_pct / 100))
+                    depth = min(raw, max(0, 100 - rival.margin_floor_pct))
+                    if aggressive:
+                        depth = min(depth, spec.discount_pct + 10)
                 lag = prior["delay_weeks_min" if aggressive else "delay_weeks_p50"]
                 delay = math.ceil(
                     _quantile(rows, "reaction_delay_days", 0 if aggressive else 0.5, lag * 7) / 7

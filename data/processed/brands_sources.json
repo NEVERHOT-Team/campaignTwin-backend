@@ -13,6 +13,44 @@
     "typical_discount_pct": "data",
     "margin_floor_pct": "default"
   },
+  "price_tiers": {
+    "751": {
+      "paid_thb_per_sq_ft": 0.6262901194,
+      "unit_coverage": 0.8034188034,
+      "price_tier": "mid",
+      "source": "data"
+    },
+    "764": {
+      "paid_thb_per_sq_ft": 0.6436866733,
+      "unit_coverage": 0.4029008864,
+      "price_tier": "high",
+      "source": "data"
+    },
+    "595": {
+      "paid_thb_per_sq_ft": 0.4189272938,
+      "unit_coverage": 0.9980858627,
+      "price_tier": "low",
+      "source": "data"
+    },
+    "69": {
+      "paid_thb_per_sq_ft": 0.2705352475,
+      "unit_coverage": 0.7461052632,
+      "price_tier": "low",
+      "source": "data"
+    },
+    "1011": {
+      "paid_thb_per_sq_ft": 0.6151820031,
+      "unit_coverage": 0.2085889571,
+      "price_tier": "mid",
+      "source": "data"
+    },
+    "1315": {
+      "paid_thb_per_sq_ft": 0.3182180625,
+      "unit_coverage": 0.1715817694,
+      "price_tier": "low",
+      "source": "data"
+    }
+  },
   "usd_thb": {
     "value": 35.1,
     "source": "default"

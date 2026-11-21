@@ -155,7 +155,12 @@ def test_rival_data_loaders():
     prior = loaders.load_rival_prior()
     assert set(prior["p"]) == {"none", "match", "undercut", "non_price"}
     assert sum(prior["p"].values()) == pytest.approx(1)
-    assert prior["source"] == ("data" if prior["n_events"] >= 20 else "default")
+    assert prior["p"]["none"] >= 0.2
+    assert prior["source"] in {"data", "data+default"}
+    if prior["n_events"] < 20:
+        assert prior["source"] == "data+default"
+    assert 0 <= prior["depth_p50"] <= prior["depth_p90"] <= 100
+    assert prior["delay_weeks_p50"] >= 1
 
 
 def test_loader_names_missing_keys(monkeypatch, tmp_path):

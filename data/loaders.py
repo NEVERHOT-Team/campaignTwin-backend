@@ -214,11 +214,20 @@ def load_rival_prior() -> dict[str, Any]:
     record = _read_json(filename)[CATEGORY]
     _require_keys(
         record,
-        "none match undercut non_price depth_p50 depth_p90 delay_median n_events source",
+        "none match undercut non_price depth_p50 depth_p90 delay_median n_events source "
+        "event_rates background_rates lift n_trigger_weeks n_matched_trigger_weeks "
+        "n_background_weeks n_comparisons",
         filename,
     )
     return {
         "p": {name: record[name] for name in ("none", "match", "undercut", "non_price")},
+        "event_rates": record["event_rates"],
+        "background_rates": record["background_rates"],
+        "lift": record["lift"],
+        "n_trigger_weeks": record["n_trigger_weeks"],
+        "n_matched_trigger_weeks": record["n_matched_trigger_weeks"],
+        "n_background_weeks": record["n_background_weeks"],
+        "n_comparisons": record["n_comparisons"],
         "depth_p50": record["depth_p50"],
         "depth_p90": record["depth_p90"],
         "delay_weeks_p50": record["delay_median"],

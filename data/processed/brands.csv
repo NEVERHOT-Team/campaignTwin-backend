@@ -1,7 +1,7 @@
 brand,is_ours,category,sub_category,price_tier,avg_price,target_segments,channels,geo,market_share,typical_discount_pct,margin_floor_pct
-751,True,toilet_tissue,TOILET TISSUE,mid,223.7231,explorer|indifferent,Shopee|LINE,TH,0.18072903,27.8087,10.0
+751,True,toilet_tissue,TOILET TISSUE,mid,223.7231,deal_hunter|explorer,Shopee|LINE,TH,0.18072903,27.8087,10.0
 764,False,toilet_tissue,TOILET TISSUE,high,254.1678,explorer|indifferent,Shopee|LINE,TH,0.26860546,18.9099,10.0
 595,False,toilet_tissue,TOILET TISSUE,low,61.8538,explorer|loyal,Shopee|LINE,TH,0.1922106,21.322,10.0
-69,False,toilet_tissue,TOILET TISSUE,low,81.3668,explorer|indifferent,Shopee|LINE,TH,0.16376799,21.3162,10.0
-1011,False,toilet_tissue,TOILET TISSUE,high,242.1232,explorer|indifferent,Shopee|LINE,TH,0.13580162,27.8087,10.0
-1315,False,toilet_tissue,TOILET TISSUE,mid,175.4746,explorer|indifferent,Shopee|LINE,TH,0.05881422,25.8665,10.0
+69,False,toilet_tissue,TOILET TISSUE,low,81.3668,explorer|loyal,Shopee|LINE,TH,0.16376799,21.3162,10.0
+1011,False,toilet_tissue,TOILET TISSUE,mid,242.1232,explorer|deal_hunter,Shopee|LINE,TH,0.13580162,27.8087,10.0
+1315,False,toilet_tissue,TOILET TISSUE,low,175.4746,deal_hunter|explorer,Shopee|LINE,TH,0.05881422,25.8665,10.0

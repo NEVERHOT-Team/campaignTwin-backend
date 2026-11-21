@@ -91,40 +91,71 @@ traits. The checked-in personas use archetype defaults.
 
 `build_rival_prior` writes four aggregate files under `data/processed/`.
 `brands.csv` covers manufacturers 751, 764, 595, 69, 1011, and 1315. Average
-price is THB paid per purchased unit. Price tiers divide those six prices into
-thirds. Market share uses all toilet-tissue sales as its denominator. Typical
-discount is the median positive line discount in percentage points. The two
-archetypes with the most distinct buying households form each brand's target
-segments. `brands_sources.json` records provenance by column. Brand ownership,
-channels, geography, margin floor, and the USD-to-THB rate are team defaults.
+price is THB paid per purchased pack. Price tiers use paid THB per square foot
+on packs with a measured area. Each brand receives a low, mid, or high tier
+from its midpoint in the cumulative sales distribution ordered by this price.
+Packs labeled only in rolls, sheets, or counts have no measured area. Coverage
+among the three configured rivals is 40.3% of purchased units for 764, 99.8%
+for 595, and 74.6% for 69. These give tiers high, low, and low respectively.
+A brand without usable area gets its configured role tier, labeled `default`.
+`brands_sources.json` records the comparable price, unit coverage, tier and
+source for each brand.
 
-`reaction_events.csv` has one row per triggering brand-week and rival. The
-reference price is the median of a brand's available weekly median paid unit
-prices in the preceding eight calendar weeks. A drop of at least 10% or a
-mailer/display appearance in any store qualifies the week. Consecutive
-qualifying weeks each count. For each rival, the closest qualifying move within
-three weeks either side wins. Ties favor a same-week or later move, then a price
-move. A price cut of at least 5% qualifies as a match within five percentage
-points of the trigger, or an undercut if it exceeds that band. A placement
-without an observed 5% cut qualifies as a non-price move. A placement trigger
-with no observed discount uses zero depth.
+Market share uses all toilet-tissue sales as its denominator. Typical discount
+is the median positive line discount in percentage points. Target segments are
+the two archetypes with the highest buyer-share lift. An archetype's share of
+distinct households buying the brand is divided by its share of distinct
+category buyers. Brand ownership, channels, geography, margin floor, and the
+USD-to-THB rate are defaults.
 
-`reaction_base_rate.json` pools 294 triggering brand-weeks and 1,470 rival
-comparisons. The observed shares are 0.14% none, 3.20% match, 28.10% undercut,
-and 68.57% non-price. Frequent placements across stores contribute to the
-non-price share. These are associations in the simulated grocery panel. The
-audit retains signed lags, including preceding moves. Scenario delay uses the
-absolute lag in weeks. With fewer than 20 triggers, the observed probability
-weight is `n_events / 20`. The remainder uses the default distribution
-(45% none, 30% match, 15% undercut, 10% non-price), and the prior is labeled
-`default`. `load_rival_prior()` exposes the probabilities under `p`.
+### Event and background rates
+
+The price reference is the median of the available weekly median paid unit
+prices in the preceding eight weeks. A brand-week with at least a 10% cut or
+a mailer/display placement in any store is a trigger. The audit covers only
+weeks with two preceding weeks and three following weeks in the panel.
+
+A reaction must start one, two, or three weeks after the anchor. The rival must
+have two observed preceding weeks with a cut below 5% and no placement.
+The earliest qualifying onset wins. A new cut of at least 5% matches within
+five percentage points of the trigger depth and undercuts above that band.
+A non-price reaction requires a new placement with an observed zero discount.
+Ongoing cuts and placements cannot supply an onset. Missing prior prices
+cannot establish that the rival was inactive.
+
+For each trigger, the builder samples one non-event week from the same
+manufacturer with replacement using seed 42. It evaluates the same rivals
+and uses the trigger's depth and the same response rules in both windows.
+When the rival fails the pre-event inactivity check, the comparison contributes
+no new reaction. `reaction_events.csv` records both windows, their outcomes,
+and the inactivity checks. Manufacturers 69 and 595 had no eligible non-event
+week as triggering brands. Their trigger rows have empty background fields.
+Both can still contribute as responding rivals.
+
+Of 268 trigger weeks, 172 had same-manufacturer controls, yielding 860 paired
+comparisons from 19 distinct sampled control brand-weeks. Fifteen matched
+trigger weeks had at least one rival with a clear two-week history
+(`n_events`). The event arm contained three matches and six undercuts. The
+background arm had no qualifying responses. Each reaction's lift is its
+event rate minus its background rate, floored at zero. The remaining
+probability goes to `none`. When that probability is below 0.20 or fewer
+than 20 informative trigger weeks remain, the builder averages the adjusted
+rates with the defaults (45% none, 30% match, 15% undercut, 10% non-price).
+
+The resulting `data+default` prior is 71.98% none, 15.17% match, 7.85%
+undercut, and 5.00% non-price. Among observed matches and undercuts, the P50
+depth is 12.85% and the P90 is 30.16%. The median observed delay is two
+weeks. `load_rival_prior()` exposes the final probabilities under `p`, along
+with both measured rates, the unblended lifts, and the sample counts.
 
 ## Rival retrieval
 
-`data.rival.get_rival_scenarios(spec)` selects up to three competitors scoring
-at least 0.5. The score weights category (35%), price tier (25%), target segments
-(20%), channels (15%), and geography (5%). Adjacent tiers receive half credit.
-Set overlap uses intersection divided by union. Market share breaks score ties.
+`data.rival.get_rival_scenarios(spec)` returns scenarios for the three rivals
+in `data/etl/config.py` (764, 595, 69). Their score orders the results and is
+available for display. It weights category (35%), price tier (25%), target
+segments (20%), channels (15%), and geography (5%). Adjacent tiers receive
+half credit. Set overlap uses intersection divided by union. Market share
+breaks score ties.
 
 For hand-entered rows in `campaign_library.csv`, put the manufacturer's ID in
 `brand`. Set `reaction_to_campaign_id` to the triggering campaign ID when known.
@@ -150,8 +181,10 @@ S1 describes no response, S2 the most likely outcome, and S3 an undercut.
 S2 can repeat either of the other outcomes. Depth, delay, and duration use
 similarity-weighted observations for the selected reaction, with category
 estimates filling gaps. S2 uses median terms. S3 uses the 90th-percentile
-depth and earliest delay. Depths are fractions capped at the rival's margin
-floor allowance. A missing or zero discount produces three certain no-response
+depth and earliest delay. Rival scenario depths, audit depths and prior depth
+percentiles use percent (0–100). Retrieval converts the library's fractional
+discount once. All scenarios respect the margin-floor allowance. S3 also caps
+the response at ten percentage points above the proposed discount. A missing or zero discount produces three certain no-response
 scenarios per selected rival.
 
 ## Read
