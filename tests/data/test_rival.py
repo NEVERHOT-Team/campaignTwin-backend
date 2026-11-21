@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from scipy.stats import beta
 
-from contracts.models import CampaignSpec
+from contracts.models import CampaignSpec, Strategy
 from data import rival
 from data.etl.build_rival_prior import (
     DEFAULT_PROBABILITY,
@@ -362,3 +362,57 @@ def test_tiers_use_area_and_targets_use_relative_buyer_share():
         "mid",
         "low",
     ]
+
+
+def _nested_spec(discount=40.0):
+    raw = load_mock("campaign_spec")["spec"]
+    raw["offer"]["mechanics"][0]["value"] = discount
+    return CampaignSpec.model_validate(raw)
+
+
+def _strategy(discount, mechanic="percent_off", baseline=False):
+    return Strategy(
+        id="baseline" if baseline else f"plan-{discount:g}",
+        name="test",
+        discount_pct=discount,
+        mechanic="none" if baseline else mechanic,
+        target_segments=["deal_hunter"],
+        message="",
+        channel_mix={} if baseline else {"shopee": 1.0},
+        timing={},
+        cap_per_user=None,
+        budget_split={},
+        contingency_rules=[],
+        rationale="test",
+        is_baseline=baseline,
+    )
+
+
+def test_nested_campaign_spec_v01_is_accepted():
+    spec = _nested_spec()
+    assert not hasattr(spec, "goal")  # real v0.1 object, no injected legacy fields
+    rows = rival.get_rival_scenarios(spec)
+    assert len(rows) == 9
+    assert {row.scenario for row in rows} == {"S1", "S2", "S3"}
+    for row in rows:
+        assert 0 <= row.depth <= 100  # percent, not fraction
+        assert 0 <= row.ci_low <= row.likelihood <= row.ci_high <= 1
+
+
+def test_legacy_view_maps_v01_fields():
+    view = rival._legacy_view(_nested_spec(35))
+    assert view.discount_pct == 35
+    assert view.mechanic == "voucher"
+    assert view.channel == ["shopee", "line"]
+    assert view.start < view.end
+    assert "11.11" in view.goal
+
+
+def test_strategy_overrides_the_brief_offer():
+    spec = _nested_spec()
+    passive = rival.get_rival_scenarios(spec, _strategy(0, baseline=True))
+    assert all(row.reaction == "none" and row.depth == 0 for row in passive)
+    shallow = rival.get_rival_scenarios(spec, _strategy(10))
+    for row in shallow:
+        if row.scenario == "S3":
+            assert row.depth <= 10 + 10  # S3 cap follows the strategy's discount

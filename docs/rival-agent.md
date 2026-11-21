@@ -1,17 +1,16 @@
 # Rival S4 and the shared LLM wrapper
 
-## Scope
+## Scope and units
 
-`data/rival.py` remains unchanged. S1-S3 continue to come from
-`ContextPack.model_validate(load_mock("context_pack")).rivals`. This change does
-not implement the deferred evidence likelihood model or recalibrate its weights.
-The S1-S3 interval tests check the current fixture, not statistical calibration.
+S1-S3 come from the evidence model `data.rival.get_rival_scenarios(spec, strategy=None)`.
+It accepts a CampaignSpec v0.1 (legacy flat objects still work) and an optional Strategy
+whose offer replaces the brief's offer, so each plan gets its own rival response. The
+baseline strategy yields `none` for every rival. When the evidence model is unavailable,
+`red_team` falls back to the rivals in `mocks/context_pack.json`.
 
-The current checkout has `CampaignSpec` in `contracts/models.py`; it does not
-contain `contracts/campaign_spec.py`. Rival helpers also accept a dictionary
-containing the proposed nested `brand.name` and `brand.category`. Explicit brand
-data enables exclusion of our own brand. The old flat CampaignSpec cannot carry
-a brand name, so the helper cannot infer it from that object alone.
+**Every rival `depth` and `depth_bound` is in percentage points (0-100)**, matching
+`data/rival.py`, `reaction_base_rate.json` and `knob_ranges.json`. The campaign library
+stores `discount_depth` as a fraction; `red_team` converts it to percent.
 
 ## Call before Arena simulation
 
@@ -24,8 +23,8 @@ payloads = [policy.model_dump(mode="json") for policy in s4_policies]
 ```
 
 The highest-scoring eligible rival is used. Its rival-specific library history
-sets the maximum depth, capped at `max_observed_depth * 1.1` and at 1.0. Optional
-rival-specific affordability bounds further reduce this cap. The first three
+sets the maximum depth, capped at `max_observed_depth * 1.1` and at 100%. The rival's
+`margin_floor_pct` in `brands.csv` caps it at `100 - margin_floor_pct`. The first three
 unique non-baseline strategies each receive their own S4 policy. Apply an S4
 policy only to its `strategy_id`; these are not three simultaneous competitors.
 
@@ -51,11 +50,10 @@ wire contracts and engine have deliberately not been changed.
 Optional bound fields can live on rival history records, or on supplied rival
 records carrying additional metadata. `rival_margin_floor`, `margin_floor`, and
 `max_discount_depth` use fractions. `rival_margin_floor_pct`, `margin_floor_pct`,
-and `max_discount_pct` use percentage points. Following the POC request, the
-margin fields here are interpreted as maximum affordable **discount ceilings**.
-If upstream data describes minimum retained profit margin instead, convert that
-quantity to a discount ceiling using the agreed unit economics first. Our own
-campaign's margin is never used as a rival's margin.
+and `max_discount_pct` use percentage points. Margin floors follow `data/rival.py`:
+the rival keeps that margin, so its discount ceiling is `100 - margin_floor`.
+`max_discount_*` fields are ceilings used directly. Our own campaign's margin is
+never used as a rival's margin.
 
 ## Shared LLM contract
 
