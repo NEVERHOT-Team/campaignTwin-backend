@@ -308,6 +308,14 @@ def test_minimal_brief_and_free_text_answers_reach_simulation(client):
         "start_date": ready["facts"]["start_date"], "end_date": ready["facts"]["end_date"],
     }
     assert original["approval_id"] == receipt.json()["approval_id"]
+    run_url = accepted.json()["status_url"]
+    frozen = client.get(run_url + "/input").json()
+    validator("RunInput").validate(frozen)
+    assert frozen["review"] == ready
+    evaluation = client.get(run_url + "/evaluation").json()
+    validator("BusinessEvaluation").validate(evaluation)
+    assert evaluation["decision"] == report["decision"]
+    assert evaluation["approval_id"] == frozen["approval_id"]
 
 
 def test_ai_interprets_reply_in_review_and_requires_confirmation(client, monkeypatch):
@@ -477,3 +485,21 @@ def test_requested_platform_remains_visible_and_blocks_incompatible_simulation(c
     assert switched.status_code == 201
     assert switched.json()["facts"]["channel"] == "shopee"
     assert not any(b["field"] == "/facts/channel" for b in switched.json()["blockers"])
+
+
+@pytest.mark.parametrize("invalid", [
+    {"weekly_buy_rate": 1.01}, {"share": float("nan")}, {"households": 100_001},
+    {"households": 50.5}, {"name": ""},
+])
+def test_unusable_market_context_blocks_approval(client, monkeypatch, invalid):
+    from api import v1_catalog
+
+    row = {"name": "buyers", "households": 120, "share": 1.0, "weekly_buy_rate": 0.2}
+    monkeypatch.setattr(v1_catalog, "load_market", lambda: {"segments": [{**row, **invalid}]})
+    response = client.post(REVIEWS, json={"fields": {"product_choice_id": "demo-tissue-12-shopee"}})
+    assert response.status_code == 201
+    review = response.json()
+    validator("Review").validate(review)
+    assert review["segments"] == []
+    assert review["data_versions"]["segments"] is None
+    assert any(b["field"] == "/segments" for b in review["blockers"])
