@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from agents.strategist import unit_contribution_thb
 from contracts.models import SimulationPlan, Strategy, WeekRow
 from data.loaders import load_market
 from engine import evaluator, shopper
@@ -69,8 +70,11 @@ def _ranking(outcome: ArenaResult, baseline_id: str):
     return ranking
 
 
-def _risks(user_scenarios):
+def _risks(user_scenarios, strategy: Strategy):
     risks = []
+    if strategy.below_cost:
+        loss = -unit_contribution_thb(strategy.discount_pct)
+        risks.append(f"User plan sells below cost by ฿{loss:,.2f} per unit")
     if user_scenarios and all(kpi["incremental_profit"]["p50"] < 0
                               for kpi in user_scenarios.values()):
         risks.append("The user plan loses money at P50 in every evaluated scenario.")
@@ -102,7 +106,7 @@ def arena_report_fields(
         "leakage_label": "unavailable", "new_buyers": zero, "p_loss": 0.0,
         "p_hit_target": float(profit_target <= 0),
     }
-    plans, weekly, breakpoints, user_scenarios = [], {}, {}, {}
+    plans, weekly, breakpoints, risks = [], {}, {}, []
     for strategy in plan.strategies:
         sid = strategy.id
         if strategy.is_baseline:
@@ -124,9 +128,10 @@ def arena_report_fields(
                 for s, row in rows.items()
             }
             if strategy.is_user_plan:
-                user_scenarios = kpis
+                risks = _risks(kpis, strategy)
         plans.append({
             "plan_id": sid, "name": strategy.name, "role": role,
+            "below_cost": strategy.below_cost,
             "discount_pct": strategy.discount_pct, "mechanic": strategy.mechanic, "scenarios": kpis,
         })
 
@@ -145,5 +150,5 @@ def arena_report_fields(
     return {
         "plans": plans, "ranking": _ranking(outcome, baseline.id),
         "weekly": weekly, "breakpoints": breakpoints,
-        "risks": _risks(user_scenarios), "events": events,
+        "risks": risks, "events": events,
     }

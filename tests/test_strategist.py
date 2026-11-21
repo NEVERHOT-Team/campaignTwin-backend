@@ -13,6 +13,7 @@ from agents.strategist import (
 )
 from contracts.campaign_spec import CampaignSpec
 from contracts.models import ContextPack, Strategy
+from data.loaders import load_demo_brief, load_market, load_personas
 from mocks import load_mock
 
 
@@ -163,22 +164,75 @@ def test_spec_without_budget_is_rejected(context):
         propose(spec, context)
 
 
-def test_unit_discount_limit_counts_cost_fees_and_shipping(spec, context):
-    from data.loaders import load_market
-
-    bounds = resolve_bounds(spec, context)
+@pytest.mark.parametrize("margin_floor", [0, 10])
+def test_tissue_discounts_protect_generated_plans_and_preserve_user_offer(context, margin_floor):
+    raw = deepcopy(load_demo_brief()["user_plan_spec"])
+    raw.setdefault("constraints", {})["margin_floor_pct"] = margin_floor
+    raw["field_meta"]["constraints.margin_floor_pct"] = {"source": "user", "confidence": 1}
+    spec = CampaignSpec.model_validate(raw)
     market = load_market()
-    price, cost = market["ref_price"], market["unit_cost"]
+    personas = load_personas()
+    units = sum(p["weight"] * p["avg_units"] for p in personas) / sum(
+        p["weight"] for p in personas
+    )
     fees = (market["platform_fee_pct"] + market["payment_fee_pct"]) / 100
-    shipping = market["shipping_cost_per_order"]
-    # At the limit, contribution per unit is break-even once shipping is spread over
-    # at least one unit per order, so the limit sits below the no-shipping ceiling.
-    no_shipping = 100 * (1 - cost / (price * (1 - fees)))
-    with_one_unit = 100 * (1 - (cost + shipping) / (price * (1 - fees)))
-    assert with_one_unit <= bounds.max_unit_discount < no_shipping
-    for plan in _generated(propose(spec, context)):
-        net = price * (1 - plan.discount_pct / 100)
-        assert net * (1 - fees) - cost - shipping / 1.0 > -shipping  # never far below cost
+    cost = market["unit_cost"] + market["shipping_cost_per_order"] / units
+    price = market["ref_price"]
+    break_even = 100 * (1 - cost / (price * (1 - fees)))
+    floor_cap = 100 * (1 - cost / (price * (1 - fees - margin_floor / 100)))
+
+    baseline, user, *generated = propose(spec, context)
+    assert (baseline.discount_pct, baseline.below_cost) == (0, False)
+    assert (user.discount_pct, user.below_cost) == (40, True)
+    assert len(generated) == strategist.GENERATED
+    for plan in generated:
+        assert plan.discount_pct <= min(break_even - 1, floor_cap) + 1e-9
+        assert plan.below_cost is False
+        assert price * (1 - plan.discount_pct / 100) * (1 - fees) >= cost
+
+
+def test_safety_margin_preserves_tissue_templates_already_within_cap(context, monkeypatch):
+    spec = CampaignSpec.model_validate(load_demo_brief()["user_plan_spec"])
+    limit = strategist.break_even_discount_pct() - 1
+    current = {p.id: p.discount_pct for p in _generated(propose(spec, context))}
+    monkeypatch.setattr(strategist, "DISCOUNT_SAFETY_POINTS", 0)
+    original = {p.id: p.discount_pct for p in _generated(propose(spec, context))}
+    assert original["g0-deep"] > limit
+    assert original["g0-targeted"] <= limit
+    assert original["g0-flash"] <= limit
+    for plan_id, discount in original.items():
+        if discount <= limit:
+            assert current[plan_id] == discount
+
+
+def test_plans_when_even_list_price_sells_below_cost(context, monkeypatch):
+    spec = CampaignSpec.model_validate(load_demo_brief()["user_plan_spec"])
+    market = dict(load_market())
+    market["unit_cost"] = market["ref_price"]
+    monkeypatch.setattr(strategist, "load_market", lambda: market)
+    plans = propose(spec, context)
+    assert [(plan.id, plan.discount_pct) for plan in plans] == [("baseline", 0), ("user-plan", 40)]
+    assert all(plan.below_cost for plan in plans)
+
+
+@pytest.mark.parametrize(
+    ("face_pct", "effective_pct", "below_cost"),
+    [(10, 10, False), (26, 26, False), (40, 40, True), (120, 100, True)],
+)
+def test_fixed_baht_voucher_effective_discount_uses_market_price(
+    context, face_pct, effective_pct, below_cost
+):
+    raw = deepcopy(load_demo_brief()["user_plan_spec"])
+    amount = load_market()["ref_price"] * face_pct / 100
+    raw["offer"]["mechanics"] = [{"type": "voucher", "value": amount, "value_unit": "thb"}]
+    spec = CampaignSpec.model_validate(raw)
+
+    baseline, user, *generated = propose(spec, context)
+    assert user.mechanic == "voucher"
+    assert user.discount_pct == pytest.approx(effective_pct)
+    assert user.below_cost is below_cost
+    assert baseline.discount_pct == 0
+    assert all(plan.below_cost is False for plan in generated)
 
 
 def test_explicit_zero_budget_flex_locks_the_budget(context):
