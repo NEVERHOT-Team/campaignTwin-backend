@@ -468,7 +468,9 @@ def test_requested_platform_remains_visible_and_blocks_incompatible_simulation(c
     assert review["facts"]["channel"] == "shopify"
     assert any(b["field"] == "/facts/channel" and b["code"] == "unsupported_choice"
                for b in review["blockers"])
-    assert client.post(f"{url}/approvals", json={"revision": 2, "confirmed": True}).status_code == 409
+    assert client.post(
+        f"{url}/approvals", json={"revision": 2, "confirmed": True}
+    ).status_code == 409
     switched = client.post(f"{url}/revisions", json={
         "base_revision": 2, "edits": {"channel": " Shopee "},
     })
