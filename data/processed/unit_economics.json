@@ -10,7 +10,7 @@
   "shipping_cost_per_order": 25.0,
   "unit_cost": 189.33,
   "margin_floor_pct": 10.0,
-  "collected_at": "2018-01-01",
+  "collected_at": null,
   "source": {
     "category": "data",
     "currency": "default",
@@ -23,6 +23,6 @@
     "shipping_cost_per_order": "default",
     "unit_cost": "default",
     "margin_floor_pct": "default",
-    "collected_at": "data"
+    "collected_at": "default"
   }
 }

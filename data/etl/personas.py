@@ -13,12 +13,12 @@ BEHAVIOR = [
     "purchase_cycle_weeks",
     "avg_units",
     "avg_price_paid",
-    "price_elasticity",
+    "price_elasticity_observed",
     "promo_share",
     "coupon_rate",
     "brand_loyalty",
 ]
-STRATUM = ["archetype", "age", "income"]
+STRATUM = ["cluster_label", "age", "income"]
 TRAITS = ("impulsiveness", "risk_aversion", "time_preference")
 DEFAULT_TRAITS = {
     "deal_hunter": (0.45, 0.55, 0.30),
@@ -79,9 +79,9 @@ def _sample_strata(counts: pd.Series, rng: np.random.Generator) -> list[tuple[st
         _draw_stratum(counts.xs(cell, level=["age", "income"], drop_level=False), rng)
         for cell in age_income.loc[age_income.ge(0.02 * age_income.sum())].index
     ]
-    for archetype in counts.index.unique("archetype"):
-        candidates = counts.xs(archetype, level="archetype", drop_level=False)
-        reserved = sum(stratum[0] == archetype for stratum in strata)
+    for cluster in counts.index.unique("cluster_label"):
+        candidates = counts.xs(cluster, level="cluster_label", drop_level=False)
+        reserved = sum(stratum[0] == cluster for stratum in strata)
         strata.extend(
             _draw_stratum(candidates, rng) for _ in range(max(0, MIN_PER_ARCHETYPE - reserved))
         )
@@ -132,19 +132,19 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
     rng = np.random.default_rng(SEED)
     demo = households.dropna(subset=["age", "income"])
     counts = demo.groupby(STRATUM).size()
-    if set(counts.index.unique("archetype")) != set(households["archetype"]):
+    if set(counts.index.unique("cluster_label")) != set(households["cluster_label"]):
         raise ValueError("Every archetype needs observed age and income to build personas")
 
     strata = _sample_strata(counts, rng)
     slot_counts = Counter(strata)
-    represented = counts.reindex(list(slot_counts)).groupby(level="archetype").sum()
-    archetype_weights = households["archetype"].value_counts(normalize=True)
+    represented = counts.reindex(list(slot_counts)).groupby(level="cluster_label").sum()
+    cluster_weights = households["cluster_label"].value_counts(normalize=True)
     edge_slots = set(rng.choice(PROFILE_COUNT, EDGE_COUNT, replace=False))
     survey = _survey_traits()
     surveyed = None if survey is None else survey[list(TRAITS)].to_numpy()
 
-    cohorts = dict(tuple(households.groupby("archetype")))
-    cohort_demos = dict(tuple(demo.groupby("archetype")))
+    cohorts = dict(tuple(households.groupby("cluster_label")))
+    cohort_demos = dict(tuple(demo.groupby("cluster_label")))
     cells = dict(tuple(demo.groupby(STRATUM)))
     tails = {
         name: cohort.nlargest(max(BOOTSTRAP_SIZE, int(len(cohort) * 0.10)), "distance_to_center")
@@ -153,32 +153,33 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
     profiles = []
     used: set[tuple[float, ...]] = set()
     for slot, stratum in enumerate(strata):
-        archetype, age, income = stratum
-        cohort = cohorts[archetype]
-        cohort_demo = cohort_demos[archetype]
+        cluster, age, income = stratum
+        cohort = cohorts[cluster]
+        cohort_demo = cohort_demos[cluster]
         age_income_cell = cells[stratum]
         pool = age_income_cell if len(age_income_cell) >= MIN_STRATUM_FOR_BEHAVIOR else cohort
         edge = slot in edge_slots
         if edge:
-            pool = tails[archetype]
+            pool = tails[cluster]
         behavior = _behavior_sample(pool, used, rng)
         size, kids, homeowner = _sample_demographics(cohort_demo, demo, age, income, rng)
 
         trait_source = "default"
-        trait_values = DEFAULT_TRAITS[archetype]
+        trait_values = DEFAULT_TRAITS[cluster]
         if surveyed is not None:
             draws = rng.integers(len(surveyed), size=BOOTSTRAP_SIZE)
             trait_values = tuple(round(float(value), 6) for value in surveyed[draws].mean(axis=0))
             trait_source = "data"
 
-        weight = archetype_weights[archetype] * counts[stratum]
-        weight /= represented[archetype] * slot_counts[stratum]
+        weight = cluster_weights[cluster] * counts[stratum]
+        weight /= represented[cluster] * slot_counts[stratum]
         prefix = "tt-edge" if edge else "tt"
         profiles.append(
             {
                 "persona_id": f"{prefix}-{slot + 1:02d}",
                 "segment": str(cohort["segment"].iloc[0]),
-                "archetype": archetype,
+                "archetype": str(cohort["archetype"].iloc[0]),
+                "cluster_label": cluster,
                 "weight": float(weight),
                 "age_band": age,
                 "income_band": income,
@@ -186,10 +187,17 @@ def build_personas(households: pd.DataFrame) -> list[dict]:
                 "kids": kids,
                 "homeowner": homeowner,
                 **behavior,
+                "price_elasticity": float(cohort["price_elasticity"].iloc[0]),
                 "traits": dict(zip(TRAITS, trait_values, strict=True)),
                 "channels": list(CHANNELS),
-                "backstory": BACKSTORIES[archetype],
-                "source": {"behavior": "data", "traits": trait_source, "backstory": "llm_estimate"},
+                "backstory": BACKSTORIES[cluster],
+                "source": {
+                    "behavior": "data",
+                    "price_elasticity": "default",
+                    "price_elasticity_observed": "data",
+                    "traits": trait_source,
+                    "backstory": "llm_estimate",
+                },
             }
         )
     return profiles

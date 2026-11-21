@@ -72,7 +72,8 @@ def load_segments() -> pd.DataFrame:
     _require_keys(
         frame.columns,
         "segment_id name archetype households share weekly_purchase_prob avg_basket_thb "
-        "price_elasticity coupon_rate promo_response private_label_share source",
+        "cluster_label price_elasticity price_elasticity_observed price_elasticity_source "
+        "price_elasticity_observed_source coupon_rate promo_response private_label_share source",
         filename,
     )
     return frame
@@ -99,16 +100,20 @@ def load_personas() -> list[dict[str, Any]]:
         location = f"{filename}[{index}]"
         _require_keys(
             record,
-            "persona_id segment archetype weight age_band income_band household_size kids "
-            "homeowner weekly_buy_rate purchase_cycle_weeks avg_units avg_price_paid "
-            "price_elasticity promo_share coupon_rate brand_loyalty "
+            "persona_id segment archetype cluster_label weight age_band income_band household_size "
+            "kids homeowner weekly_buy_rate purchase_cycle_weeks avg_units avg_price_paid "
+            "price_elasticity price_elasticity_observed promo_share coupon_rate brand_loyalty "
             "traits channels backstory source",
             location,
         )
         _require_keys(
             record["traits"], "impulsiveness risk_aversion time_preference", f"{location}.traits"
         )
-        _require_keys(record["source"], "behavior traits backstory", f"{location}.source")
+        _require_keys(
+            record["source"],
+            "behavior traits backstory price_elasticity price_elasticity_observed",
+            f"{location}.source",
+        )
     return records
 
 
@@ -125,7 +130,10 @@ def load_market() -> dict[str, Any]:
     _require_keys(market["weeks"], "campaign post", f"{filename}.weeks")
     for index, segment in enumerate(market["segments"]):
         _require_keys(
-            segment, "name share weekly_buy_rate households", f"{filename}.segments[{index}]"
+            segment,
+            "name archetype cluster_label share weekly_buy_rate households "
+            "price_elasticity price_elasticity_observed",
+            f"{filename}.segments[{index}]",
         )
     return market
 
@@ -139,7 +147,7 @@ def load_knobs() -> dict[str, Any]:
         "discount_pct duration_days mechanics cap_per_user calendar channels source",
         filename,
     )
-    _require_keys(knobs["discount_pct"], "min p50 p90 max", f"{filename}.discount_pct")
+    _require_keys(knobs["discount_pct"], "min p50 p90 max raw_max", f"{filename}.discount_pct")
     return knobs
 
 

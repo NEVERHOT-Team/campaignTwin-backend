@@ -3,7 +3,8 @@
     "min": 3.039514,
     "p50": 22.222222,
     "p90": 38.71577,
-    "max": 100.0
+    "raw_max": 100.0,
+    "max": 50.0
   },
   "duration_days": {
     "min": 7,
@@ -34,6 +35,11 @@
     "mechanics": "default",
     "cap_per_user": "default",
     "calendar": "default",
-    "channels": "default"
+    "channels": "default",
+    "discount_pct.raw_max": "data",
+    "discount_pct.max": "default"
+  },
+  "source_notes": {
+    "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases."
   }
 }

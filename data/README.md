@@ -48,9 +48,11 @@ The builder regenerates `personas.json`, `market.json`, `knob_ranges.json`,
 `data/etl/config.py` to set the USD-to-THB rate and the shipping, cost, margin,
 and marketplace fee assumptions. The current reference price is the median
 regular shelf price per purchased unit for manufacturer 751, converted at the
-default rate. The knob percentiles use the observed positive discounts from
-toilet-tissue purchase lines. The 100% maximum includes fully discounted
-lines in the source data. Fields ending in `_pct` use percentage points.
+default rate. Fee collection has no date (`collected_at` is null) while the
+fees use defaults. The knob percentiles use positive discounts from
+toilet-tissue purchase lines. `discount_pct.raw_max` captures the observed
+100% discount. The 50% planning cap in `discount_pct.max` excludes fully
+discounted purchases from campaign proposals. Fields ending in `_pct` use percentage points.
 Shares, probabilities, and trait values use fractions.
 
 The 60 personas represent five fixed-seed KMeans archetypes derived from
@@ -62,9 +64,19 @@ groups of households. Six `tt-edge-` profiles use the empirical tails of their
 archetypes. Weights preserve archetype prevalence and the relative
 demographic frequencies of the sampled strata. The legacy segment
 `promo_response` field measures the share of purchase weeks with a price
-promotion. Elasticity is an observational slope of log units per store visit
-against log paid price within product-store pairs with positive tracked sales.
-Archetypes without a supported negative slope use the pooled estimate.
+promotion. Each design archetype retains its original KMeans name in
+`cluster_label`. The deal hunter leads on promo share plus coupon rate.
+Among the remaining clusters, the loyal group leads on brand loyalty minus
+promo share. The waiter leads on the combined ranks of promo share and
+purchase cycle length. The explorer has the lowest brand loyalty among the
+last two clusters, and the other cluster receives the indifferent label.
+
+`price_elasticity_observed` carries the `data` label and measures the slope
+of log units per store visit against log paid price within product-store pairs
+with positive tracked sales. The model uses `price_elasticity`, a `default`
+prior ranked by mean promo share plus mean coupon rate, from −0.8 to −2.8 in
+steps of 0.5. The pooled default is the midpoint, −1.8. The rationale is
+“observational slope biased toward 0 by promo endogeneity.”
 
 For optional survey traits, place the public numeric `wave1_3_response.csv`
 export in `data/raw/`, in its original CSV directory under `data/raw/`, or in

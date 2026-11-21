@@ -15,6 +15,9 @@ from data.etl.config import (
     CHANNELS,
     CURRENCY,
     DEFAULTS,
+    DISCOUNT_CAP_PCT,
+    ELASTICITY_PRIOR_LEAST_PROMO,
+    ELASTICITY_PRIOR_MOST_PROMO,
     MANUFACTURERS,
     MIN_SEGMENT_HOUSEHOLDS,
     PANEL_WEEKS,
@@ -160,6 +163,24 @@ def _elasticity(purchases: pd.DataFrame, visits: pd.Series) -> float:
     )
 
 
+def _design_archetypes(centroids: pd.DataFrame) -> dict[str, str]:
+    # Assign one cluster per role. Sorted cluster labels break ties reproducibly.
+    scores = {
+        "deal_hunter": centroids["promo_share"] + centroids["coupon_rate"],
+        "loyal": centroids["brand_loyalty"] - centroids["promo_share"],
+        "waiter": centroids["promo_share"].rank() + centroids["purchase_cycle_weeks"].rank(),
+        "explorer": -centroids["brand_loyalty"],
+    }
+    remaining = centroids.index
+    names = {}
+    for name, score in scores.items():
+        cluster = score.loc[remaining].idxmax()
+        names[cluster] = name
+        remaining = remaining.drop(cluster)
+    names[remaining.item()] = "indifferent"
+    return names
+
+
 def _household_features(
     purchases: pd.DataFrame, weekly: pd.DataFrame, visits: pd.Series, weeks: pd.Index
 ) -> tuple[pd.DataFrame, dict[str, str], float]:
@@ -194,24 +215,40 @@ def _household_features(
         top_brand_units.groupby(level="household_id").max() / households["units"]
     )
 
-    labels, names, segments, distance = _classify(households)
-    households["archetype"] = pd.Series(labels, index=households.index).map(names)
-    households["segment"] = pd.Series(labels, index=households.index).map(segments)
+    labels, cluster_names, segments, distance = _classify(households)
+    cluster_ids = pd.Series(labels, index=households.index)
+    households["cluster_label"] = cluster_ids.map(cluster_names)
+    centroids = households.groupby("cluster_label")[
+        ["promo_share", "coupon_rate", "brand_loyalty", "purchase_cycle_weeks"]
+    ].mean()
+    design_names = _design_archetypes(centroids)
+    households["archetype"] = households["cluster_label"].map(design_names)
+    households["segment"] = cluster_ids.map(segments).map(design_names)
     households["distance_to_center"] = distance
 
+    promo_score = centroids["promo_share"] + centroids["coupon_rate"]
+    ranked = promo_score.sort_values(kind="stable").index
+    priors = pd.Series(
+        np.linspace(ELASTICITY_PRIOR_LEAST_PROMO, ELASTICITY_PRIOR_MOST_PROMO, len(ranked)).round(
+            6
+        ),
+        index=ranked,
+    )
+    households["price_elasticity"] = households["cluster_label"].map(priors)
     pooled = _elasticity(purchases, visits)
-    if not np.isfinite(pooled) or pooled >= 0:
-        raise ValueError("Category data did not support a negative pooled price elasticity")
+    if not np.isfinite(pooled):
+        raise ValueError("Category data did not support a pooled observed price elasticity")
     by_cluster = purchases.join(households["archetype"], on="household_id").groupby("archetype")
     estimates = {name: _elasticity(group, visits) for name, group in by_cluster}
-    estimates = {
-        name: fit if np.isfinite(fit) and fit < 0 else pooled for name, fit in estimates.items()
-    }
-    households["price_elasticity"] = households["archetype"].map(estimates)
+    estimates = {name: fit if np.isfinite(fit) else pooled for name, fit in estimates.items()}
+    households["price_elasticity_observed"] = households["archetype"].map(estimates)
     demographics = load_raw_table("demographics").set_index("household_id")
     return (
         households.join(demographics, validate="one_to_one"),
-        {name: segments[label] for label, name in names.items()},
+        {
+            design_names[name]: design_names[segments[label]]
+            for label, name in cluster_names.items()
+        },
         pooled,
     )
 
@@ -222,6 +259,7 @@ def _segments(households: pd.DataFrame) -> pd.DataFrame:
         weekly_purchase_prob=("weekly_buy_rate", "mean"),
         avg_basket_thb=("avg_basket_thb", "mean"),
         price_elasticity=("price_elasticity", "mean"),
+        price_elasticity_observed=("price_elasticity_observed", "mean"),
         coupon_rate=("coupon_rate", "mean"),
         promo_response=("promo_share", "mean"),
         private_label_share=("private_label_share", "mean"),
@@ -229,17 +267,26 @@ def _segments(households: pd.DataFrame) -> pd.DataFrame:
     grouped["share"] = grouped["households"] / len(households)
     grouped["source"] = "data"
     grouped["archetype"] = grouped.index
+    grouped["price_elasticity"] = grouped["price_elasticity"].round(6)
+    representative = households.loc[households["archetype"].eq(households["segment"])]
+    grouped["cluster_label"] = representative.groupby("segment")["cluster_label"].first()
+    grouped["price_elasticity_source"] = "default"
+    grouped["price_elasticity_observed_source"] = "data"
     grouped["name"] = grouped.index
     return grouped.rename_axis("segment_id").reset_index()[
         [
             "segment_id",
             "name",
             "archetype",
+            "cluster_label",
             "households",
             "share",
             "weekly_purchase_prob",
             "avg_basket_thb",
             "price_elasticity",
+            "price_elasticity_source",
+            "price_elasticity_observed",
+            "price_elasticity_observed_source",
             "coupon_rate",
             "promo_response",
             "private_label_share",
@@ -269,7 +316,18 @@ def _market_inputs(
         "payment_fee_pct": DEFAULTS["payment_fee_pct"],
         "shipping_cost_per_order": DEFAULTS["shipping_cost_per_order"],
         "margin_floor_pct": DEFAULTS["margin_floor_pct"],
-        "segments": segments[["name", "share", "weekly_purchase_prob", "households"]]
+        "segments": segments[
+            [
+                "name",
+                "archetype",
+                "cluster_label",
+                "share",
+                "weekly_purchase_prob",
+                "households",
+                "price_elasticity",
+                "price_elasticity_observed",
+            ]
+        ]
         .rename(columns={"weekly_purchase_prob": "weekly_buy_rate"})
         .to_dict("records"),
         "weeks": PANEL_WEEKS,
@@ -284,6 +342,8 @@ def _market_inputs(
                 "shipping_cost_per_order": "default",
                 "margin_floor_pct": "default",
                 "segments": "data",
+                "segments.price_elasticity": "default",
+                "segments.price_elasticity_observed": "data",
                 "weeks": "default",
             },
             "usd_thb": {"value": DEFAULTS["usd_thb"], "source": "default"},
@@ -292,7 +352,12 @@ def _market_inputs(
                 for maker_id, role in MANUFACTURERS.items()
             },
             "archetype_segments": {"values": archetype_segments, "source": "data"},
-            "pooled_price_elasticity": {"value": round(elasticity, 6), "source": "data"},
+            "pooled_price_elasticity": {
+                "value": round((ELASTICITY_PRIOR_LEAST_PROMO + ELASTICITY_PRIOR_MOST_PROMO) / 2, 6),
+                "source": "default",
+                "note": "observational slope biased toward 0 by promo endogeneity",
+            },
+            "pooled_price_elasticity_observed": {"value": round(elasticity, 6), "source": "data"},
             "persona_fields": {"demographics": "data", "weight": "data", "channels": "default"},
             "dataset": "Complete Journey as packaged by completejourney_py (simulated)",
         },
@@ -309,7 +374,7 @@ def _market_inputs(
         "shipping_cost_per_order": market["shipping_cost_per_order"],
         "unit_cost": market["unit_cost"],
         "margin_floor_pct": market["margin_floor_pct"],
-        "collected_at": purchases["transaction_timestamp"].max().date().isoformat(),
+        "collected_at": None,
         "source": {
             "category": "data",
             "currency": "default",
@@ -322,7 +387,7 @@ def _market_inputs(
             "shipping_cost_per_order": source["shipping_cost_per_order"],
             "unit_cost": source["reference_margin_pct"],
             "margin_floor_pct": source["margin_floor_pct"],
-            "collected_at": "data",
+            "collected_at": "default",
         },
     }
     discounts = purchases.loc[purchases["discount_pct"].gt(0), "discount_pct"]
@@ -335,14 +400,24 @@ def _market_inputs(
         "free_shipping",
     ]
     knobs = {
-        "discount_pct": dict(zip(("min", "p50", "p90", "max"), quantiles, strict=True)),
+        "discount_pct": {
+            **dict(zip(("min", "p50", "p90", "raw_max"), quantiles, strict=True)),
+            "max": DISCOUNT_CAP_PCT,
+        },
         "duration_days": {"min": 7, "max": 28},
         "mechanics": mechanics,
         "cap_per_user": {"min": 1, "max": 4},
         "calendar": ["12.12", "payday"],
         "channels": list(CHANNELS),
     }
-    knobs["source"] = dict.fromkeys(knobs, "default") | {"discount_pct": "data"}
+    knobs["source"] = dict.fromkeys(knobs, "default") | {
+        "discount_pct": "data",
+        "discount_pct.raw_max": "data",
+        "discount_pct.max": "default",
+    }
+    knobs["source_notes"] = {
+        "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases."
+    }
     return market, economics, knobs
 
 

@@ -63,6 +63,8 @@ def test_market_and_knobs_agree_with_the_legacy_loaders():
     assert market["margin_floor_pct"] == economics["margin_floor_pct"]
     assert market["platform_fee_pct"] == economics["shopee_commission_pct"]
     assert market["payment_fee_pct"] == economics["shopee_txn_fee_pct"]
+    assert economics["collected_at"] is None
+    assert economics["source"]["collected_at"] == "default"
     assert market["weeks"] == {"campaign": 4, "post": 2}
     manufacturers = market["source_notes"]["manufacturers"]
     assert {key: value["role"] for key, value in manufacturers.items()} == {
@@ -77,17 +79,54 @@ def test_market_and_knobs_agree_with_the_legacy_loaders():
         assert fields[field] == "default"
 
     expected_segments = loaders.load_segments()[
-        ["name", "share", "weekly_purchase_prob", "households"]
+        [
+            "name",
+            "archetype",
+            "cluster_label",
+            "share",
+            "weekly_purchase_prob",
+            "households",
+            "price_elasticity",
+            "price_elasticity_observed",
+        ]
     ].rename(columns={"weekly_purchase_prob": "weekly_buy_rate"})
     assert market["segments"] == expected_segments.to_dict("records")
     knobs = loaders.load_knobs()
     levels = [knobs["discount_pct"][key] for key in ("min", "p50", "p90", "max")]
     assert levels == sorted(levels)
-    assert 0 < levels[0] <= levels[-1] <= 100
+    assert 0 < levels[0] <= levels[-1] == 50
+    assert knobs["discount_pct"]["raw_max"] == 100
     assert knobs["source"]["discount_pct"] == "data"
+    assert knobs["source"]["discount_pct.max"] == "default"
+    assert knobs["source"]["discount_pct.raw_max"] == "data"
     assert {"12.12", "payday"} <= set(knobs["calendar"])
     assert knobs["duration_days"]["min"] <= knobs["duration_days"]["max"]
     assert knobs["cap_per_user"]["min"] <= knobs["cap_per_user"]["max"]
+
+
+def test_promotional_elasticity_prior_and_observed_slopes():
+    segments = loaders.load_segments().set_index("archetype")
+    assert set(segments.index) == {"deal_hunter", "waiter", "loyal", "explorer", "indifferent"}
+    assert segments["cluster_label"].nunique() == 5
+    prior = segments["price_elasticity"]
+    assert prior["deal_hunter"] < prior["loyal"]
+    promo_rank = (segments["promo_response"] + segments["coupon_rate"]).sort_values().index
+    assert prior.loc[promo_rank].tolist() == pytest.approx([-0.8, -1.3, -1.8, -2.3, -2.8])
+    assert set(segments["price_elasticity_source"]) == {"default"}
+    assert set(segments["price_elasticity_observed_source"]) == {"data"}
+    notes = loaders.load_market()["source_notes"]
+    assert notes["pooled_price_elasticity"]["value"] == pytest.approx(-1.8)
+    assert notes["pooled_price_elasticity"]["source"] == "default"
+    assert notes["pooled_price_elasticity_observed"]["source"] == "data"
+    for persona in loaders.load_personas():
+        segment = segments.loc[persona["archetype"]]
+        assert persona["cluster_label"] == segment["cluster_label"]
+        assert persona["price_elasticity"] == pytest.approx(segment["price_elasticity"])
+        assert persona["price_elasticity_observed"] == pytest.approx(
+            segment["price_elasticity_observed"], abs=1e-6
+        )
+        assert persona["source"]["price_elasticity"] == "default"
+        assert persona["source"]["price_elasticity_observed"] == "data"
 
 
 def test_economics_anchors_and_backtest():
