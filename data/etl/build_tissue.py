@@ -411,22 +411,22 @@ def _market_inputs(
     }
     discounts = purchases.loc[purchases["discount_pct"].gt(0), "discount_pct"]
     quantiles = discounts.quantile([0, 0.5, 0.9, 1]).round(6)
-    mechanics = [
-        "percentage_discount",
-        "seller_voucher",
-        "loyalty_voucher",
-        "bundle",
-        "free_shipping",
-    ]
+    calendar_dates = {
+        "11.11": ["2026-11-11"],
+        "12.12": ["2026-12-12"],
+        "payday": ["2026-11-25", "2026-12-25"],
+    }
     knobs = {
         "discount_pct": {
             **dict(zip(("min", "p50", "p90", "raw_max"), quantiles, strict=True)),
             "max": DISCOUNT_CAP_PCT,
         },
-        "duration_days": {"min": 7, "max": 28},
-        "mechanics": mechanics,
+        "duration_days": {"min": 1, "max": 28},
+        "mechanics": ["percent_off", "voucher", "bundle", "free_shipping", "flash_sale"],
+        "voucher_eligibility": ["all", "members", "new_only"],
         "cap_per_user": {"min": 1, "max": 4},
-        "calendar": ["12.12", "payday"],
+        "calendar": list(calendar_dates),
+        "calendar_dates": calendar_dates,
         "channels": list(CHANNELS),
     }
     knobs["source"] = dict.fromkeys(knobs, "default") | {
@@ -435,7 +435,9 @@ def _market_inputs(
         "discount_pct.max": "default",
     }
     knobs["source_notes"] = {
-        "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases."
+        "discount_pct.max": "The 50% planning cap excludes fully discounted historical purchases.",
+        "voucher_eligibility": "A new-buyer voucher uses type voucher and eligibility new_only.",
+        "calendar_dates": "November and December 2026 demo dates assume payday on the 25th.",
     }
     return market, economics, knobs
 

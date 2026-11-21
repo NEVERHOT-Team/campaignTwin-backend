@@ -318,6 +318,10 @@ def brand_display_name(brand_id: str | int) -> str:
     return names.get(key, key)
 
 
+# Increment in percentage points for categories without any observed undercut gaps.
+DEFAULT_UNDERCUT_GAP_PP = 5.0
+
+
 @lru_cache(maxsize=1)
 def load_rival_prior() -> dict[str, Any]:
     filename = "reaction_base_rate.json"
@@ -340,6 +344,8 @@ def load_rival_prior() -> dict[str, Any]:
         "n_comparisons": record["n_comparisons"],
         "depth_p50": record["depth_p50"],
         "depth_p90": record["depth_p90"],
+        "undercut_gap_p90": record.get("undercut_gap_p90", DEFAULT_UNDERCUT_GAP_PP),
+        "undercut_gap_source": record.get("undercut_gap_source", "default"),
         "delay_weeks_p50": record["delay_median"],
         "delay_weeks_min": record.get("delay_min", record["delay_median"]),
         "duration_weeks": record.get("duration_weeks", 2),

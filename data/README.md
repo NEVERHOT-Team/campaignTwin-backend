@@ -350,8 +350,8 @@ rates with the defaults (45% none, 30% match, 15% undercut, 10% non-price).
 
 The resulting `data+default` prior is 72.29% none, 15.07% match, 7.64%
 undercut, and 5.00% non-price. Among observed matches and undercuts, both the P50
-and P90 depth are 30.16%. The median observed delay is three
-weeks. `load_rival_prior()` exposes the final probabilities under `p`, along
+and P90 depth are 30.16%. The category P90 positive undercut gap is also 30.16 percentage points.
+The median observed delay is three weeks. `load_rival_prior()` exposes the final probabilities under `p`, along
 with both measured rates, the unblended lifts, and the sample counts.
 
 ## Rival retrieval
@@ -396,14 +396,20 @@ cover the voting campaigns, including any that set the undercut floor.
 For a positive discount, S1 reports the probability of no response. S2 selects
 the most likely of match, undercut, and non-price. Its likelihood uses the
 total posterior weight across all four outcomes. S3 describes an undercut.
-Depth, delay, and duration use
-similarity-weighted observations for the selected reaction, with category
-estimates filling gaps. S2 uses median terms. S3 uses the 90th-percentile
-depth and earliest delay. Rival scenario depths, audit depths and prior depth
-percentiles use percent (0–100). Retrieval converts the library's fractional
-discount once. All scenarios respect the margin-floor allowance. S3 also caps
-the response at ten percentage points above the proposed discount. A missing or zero discount produces three certain no-response
-scenarios per selected rival.
+A match copies the proposed discount. An undercut adds the similarity-weighted
+90th percentile of positive gaps between a linked response and its trigger.
+Without a usable gap, retrieval uses the category base-rate gap. If the base rate
+also lacks positive observations, the planning default is five percentage points.
+The extra is capped at ten percentage points, and both reactions respect the
+rival's discount ceiling of 100 minus its margin floor. Non-price responses have
+zero discount. Delay and duration use similarity-weighted observations with
+category estimates filling gaps. S2 uses median delay and S3 uses earliest delay.
+A missing or zero offer produces three certain no-response scenarios per rival.
+
+For the report, `data.context.competitive_outlook(spec, strategy=None)` groups S1–S3
+by rival, with display names, scores, likelihood intervals, discount ceilings,
+timing, and evidence IDs. It also returns the category prior's source label and
+up to five similar campaigns with source URLs.
 
 ## Read
 

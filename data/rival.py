@@ -178,6 +178,8 @@ def _campaign_features(
     # The hand-edited campaign library stores fractions. All rival depths use percent.
     outcomes["trigger_depth"] = 100 * pd.to_numeric(triggers["discount_depth"], errors="coerce")
     outcomes["response_depth"] = 100 * pd.to_numeric(outcomes["discount_depth"], errors="coerce")
+    gaps = outcomes["response_depth"] - outcomes["trigger_depth"]
+    outcomes["undercut_gap"] = gaps.where(gaps.gt(0))
     outcomes["duration_days"] = _days(outcomes)
     return outcomes
 
@@ -334,14 +336,12 @@ def get_rival_scenarios(
             if reaction != "none":
                 rows = neighbours.loc[neighbours["reaction_type"].eq(reaction)]
                 aggressive = scenario == "S3"
-                q = 0.9 if aggressive else 0.5
-                if reaction != "non_price":
-                    raw = _quantile(
-                        rows, "response_depth", q, prior["depth_p90" if aggressive else "depth_p50"]
-                    )
-                    depth = min(raw, max(0, 100 - rival.margin_floor_pct))
-                    if aggressive:
-                        depth = min(depth, spec.discount_pct + 10)
+                if reaction in ("match", "undercut"):
+                    target = spec.discount_pct
+                    if reaction == "undercut":
+                        extra = _quantile(rows, "undercut_gap", 0.9, prior["undercut_gap_p90"])
+                        target += min(10.0, extra)
+                    depth = min(target, max(0, 100 - rival.margin_floor_pct))
                 lag = prior["delay_weeks_min" if aggressive else "delay_weeks_p50"]
                 delay = math.ceil(
                     _quantile(rows, "reaction_delay_days", 0 if aggressive else 0.5, lag * 7) / 7

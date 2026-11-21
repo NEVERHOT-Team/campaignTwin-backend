@@ -6,7 +6,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from contracts.campaign_spec import CampaignSpec
+from contracts.campaign_spec import CampaignSpec, Mechanic
 from data import loaders
 from data.etl.personas import TRAITS, _survey_traits
 from data.rival import get_rival_scenarios
@@ -99,8 +99,22 @@ def test_market_and_knobs_agree_with_the_legacy_loaders():
     assert knobs["source"]["discount_pct"] == "data"
     assert knobs["source"]["discount_pct.max"] == "default"
     assert knobs["source"]["discount_pct.raw_max"] == "data"
-    assert {"12.12", "payday"} <= set(knobs["calendar"])
-    assert knobs["duration_days"]["min"] <= knobs["duration_days"]["max"]
+    expected_mechanics = {"percent_off", "voucher", "flash_sale", "free_shipping", "bundle"}
+    assert expected_mechanics <= set(knobs["mechanics"])
+    for kind in knobs["mechanics"]:
+        Mechanic(type=kind)
+    assert {"all", "members", "new_only"} <= set(knobs["voucher_eligibility"])
+    for eligibility in knobs["voucher_eligibility"]:
+        Mechanic(type="voucher", eligibility=eligibility)
+    assert knobs["duration_days"] == {"min": 1, "max": 28}
+    assert set(knobs["calendar"]) == set(knobs["calendar_dates"])
+    assert knobs["calendar_dates"] == {
+        "11.11": ["2026-11-11"],
+        "12.12": ["2026-12-12"],
+        "payday": ["2026-11-25", "2026-12-25"],
+    }
+    for key in ("mechanics", "voucher_eligibility", "duration_days", "calendar", "calendar_dates"):
+        assert knobs["source"][key] == "default"
     assert knobs["cap_per_user"]["min"] <= knobs["cap_per_user"]["max"]
 
 
