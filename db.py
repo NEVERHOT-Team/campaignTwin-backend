@@ -3,15 +3,14 @@
 import json
 import os
 import re
+from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Literal
 
-import psycopg
 from dotenv import load_dotenv
-from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
+from filelock import FileLock
 
 ROOT = Path(__file__).resolve().parent
 RUNS_DIR = ROOT / "runs"
@@ -26,7 +25,16 @@ def get_mode() -> Literal["json", "postgres"]:
     return mode
 
 
+def _jsonb(value):
+    from psycopg.types.json import Jsonb
+
+    return Jsonb(value)
+
+
 def _connect():
+    import psycopg
+    from psycopg.rows import dict_row
+
     url = os.getenv("DATABASE_URL")
     if not url:
         raise ValueError("DATABASE_URL is required with DB_MODE=postgres")
@@ -35,8 +43,15 @@ def _connect():
 
 def check_connection() -> None:
     if get_mode() == "postgres":
-        with _connect() as connection:
-            connection.execute("SELECT 1")
+        try:
+            import psycopg
+        except ImportError as error:
+            raise ConnectionError("Postgres driver unavailable") from error
+        try:
+            with _connect() as connection:
+                connection.execute("SELECT 1")
+        except psycopg.Error as error:
+            raise ConnectionError("Postgres unavailable") from error
 
 
 def _safe_key(key: str) -> str:
@@ -74,7 +89,7 @@ def save_run(run_id: str, plan: dict[str, Any]) -> None:
             connection.execute(
                 """INSERT INTO runs (run_id, status, progress, generation, plan)
                    VALUES (%s, 'queued', 0, 0, %s)""",
-                (run_id, Jsonb(plan)),
+                (run_id, _jsonb(plan)),
             )
     else:
         _write_json(
@@ -120,7 +135,7 @@ def save_result(run_id: str, payload: dict[str, Any]) -> None:
                    VALUES (%s, %s, %s, %s)
                    ON CONFLICT (run_id, strategy_id, scenario)
                    DO UPDATE SET payload = EXCLUDED.payload""",
-                (run_id, strategy_id, scenario, Jsonb(payload)),
+                (run_id, strategy_id, scenario, _jsonb(payload)),
             )
     else:
         key = sha256(json.dumps([strategy_id, scenario]).encode()).hexdigest()
@@ -162,7 +177,7 @@ def cache_put(key: str, model: str, prompt: Any, response: Any) -> None:
                    ON CONFLICT (hash) DO UPDATE
                    SET model = EXCLUDED.model, prompt = EXCLUDED.prompt,
                        response = EXCLUDED.response""",
-                (key, model, Jsonb(prompt), Jsonb(response)),
+                (key, model, _jsonb(prompt), _jsonb(response)),
             )
     else:
         _write_json(
@@ -182,3 +197,34 @@ def export_cache(directory: str | Path) -> int:
     for row in rows:
         _write_json(Path(directory) / f'{_safe_key(row["hash"])}.json', row)
     return len(rows)
+
+
+@contextmanager
+def v1_transaction():
+    """Serialize review and run admission together, committing only on normal exit."""
+    empty = {"reviews": {}, "approvals": {}, "runs": {}, "submissions": {}}
+    if get_mode() == "postgres":
+        with _connect() as connection:
+            connection.execute(
+                "INSERT INTO rehearsal_workspace (id, state) VALUES (1, %s) "
+                "ON CONFLICT (id) DO NOTHING", (_jsonb(empty),)
+            )
+            state = connection.execute(
+                "SELECT state FROM rehearsal_workspace WHERE id = 1 FOR UPDATE"
+            ).fetchone()["state"]
+            before = json.dumps(state)
+            yield state
+            if json.dumps(state) != before:
+                connection.execute(
+                    "UPDATE rehearsal_workspace SET state = %s WHERE id = 1", (_jsonb(state),)
+                )
+        return
+
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RUNS_DIR / "v1-workspace.json"
+    with FileLock(str(RUNS_DIR / ".v1.lock")):
+        state = _read_json(path) or empty
+        before = json.dumps(state)
+        yield state
+        if json.dumps(state) != before:
+            _write_json(path, state)
