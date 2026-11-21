@@ -5,9 +5,9 @@ paired no-campaign baseline on the same seeds, and the simulated lift in *catego
 sales (us + rival + other) over the campaign weeks is compared with the observed lift
 range by data.backtest.evaluate_backtest().
 
-The 22.2% discount is split into two parts, as agreed with Gan:
-- shelf discount (shelf_share of the depth): every shopper sees it, reach 1.0;
-- coupon (the rest): only the treated share of households holds it.
+The discount has two parts, as agreed with Gan (depths measured in backtest_campaign.json):
+- shelf markdown (shelf_depth_fraction): every shopper sees it, reach shelf_reach;
+- coupon (coupon_depth_fraction on redemptions): only the treated share holds it.
 The observed redemption rate is an outcome, so it is never used as reach. The simulated
 redemption rate is reported next to it as an extra check.
 
@@ -36,8 +36,10 @@ PANEL_HOUSEHOLDS = 2500  # Complete Journey panel size, used only if treated_sha
 class BacktestResult:
     campaign_id: str
     weeks: int
-    discount_pct: float
-    shelf_share: float
+    discount_pct: float  # the record's combined median line depth, for reference
+    shelf_discount_pct: float
+    shelf_reach: float
+    coupon_discount_pct: float
     treated_share: float
     simulated_lift_pct: float
     lift_by_seed: list[float]
@@ -50,21 +52,60 @@ class BacktestResult:
         return asdict(self)
 
 
-def campaign_inputs(record: dict[str, Any]) -> tuple[float, float, float, int, dict[str, str]]:
-    """(discount %, shelf share, treated share, weeks, labels) for the campaign record."""
+@dataclass(frozen=True)
+class CampaignInputs:
+    weeks: int
+    shelf_pct: float  # shelf markdown every shopper sees
+    shelf_reach: float
+    coupon_pct: float  # extra markdown when a coupon holder buys
+    treated_share: float  # share of households holding the coupon
+    labels: dict[str, str]
+
+
+def campaign_inputs(record: dict[str, Any]) -> CampaignInputs:
+    """Offer inputs for the campaign record, preferring Gan's measured depths.
+
+    mechanics.all_tissue_purchases.shelf_depth_fraction is the shelf markdown on all
+    tissue purchases; matched_campaign_redemptions.coupon_depth_fraction is the extra
+    markdown on purchases where a campaign coupon was redeemed. Without them the single
+    discount_depth is split by shelf_share (default: all shelf).
+    """
     labels: dict[str, str] = {}
-    discount = 100 * float(record["discount_depth"])
     weeks = int(record["end_week"]) - int(record["start_week"]) + 1
-    if "shelf_share" in record:
-        shelf, labels["shelf_share"] = float(record["shelf_share"]), "data"
+    mechanics = record.get("mechanics") or {}
+    purchases = mechanics.get("all_tissue_purchases") or {}
+    matched = mechanics.get("matched_campaign_redemptions") or {}
+    total = 100 * float(record["discount_depth"])
+    if "shelf_depth_fraction" in purchases:
+        shelf = 100 * float(purchases["shelf_depth_fraction"])
+        coupon = 100 * float(
+            matched.get("coupon_depth_fraction", purchases.get("coupon_depth_fraction", 0.0))
+        )
+        labels["shelf_pct"] = labels["coupon_pct"] = "data"
+    elif "shelf_share" in record:
+        share = float(np.clip(record["shelf_share"], 0, 1))
+        shelf, coupon = total * share, total * (1 - share)
+        labels["shelf_pct"] = labels["coupon_pct"] = "data"
     else:
-        shelf, labels["shelf_share"] = 1.0, "default"
+        shelf, coupon = total, 0.0
+        labels["shelf_pct"] = labels["coupon_pct"] = "default"
+    if "shelf_reach" in record:
+        reach, labels["shelf_reach"] = float(record["shelf_reach"]), "data"
+    else:
+        reach, labels["shelf_reach"] = 1.0, "default"
     if "treated_share" in record:
         treated, labels["treated_share"] = float(record["treated_share"]), "data"
     else:
         treated = float(record.get("treated_households", 0)) / PANEL_HOUSEHOLDS
         labels["treated_share"] = "default"
-    return discount, float(np.clip(shelf, 0, 1)), float(np.clip(treated, 0, 1)), weeks, labels
+    return CampaignInputs(
+        weeks=weeks,
+        shelf_pct=float(np.clip(shelf, 0, 100)),
+        shelf_reach=float(np.clip(reach, 0, 1)),
+        coupon_pct=float(np.clip(coupon, 0, 100)),
+        treated_share=float(np.clip(treated, 0, 1)),
+        labels=labels,
+    )
 
 
 def _category_sales(stats: Sequence[shopper.WeekStats]) -> float:
@@ -96,15 +137,17 @@ def run_backtest(
     params = params or shopper.default_params()
     # The whole panel is measured, so no holdout is kept out of the offer here.
     params = replace(params, holdout_share=0.0)
-    discount, shelf, treated, weeks, labels = campaign_inputs(record)
+    inputs = campaign_inputs(record)
+    weeks = inputs.weeks
     population = shopper.build_population(n_agents, seed=0, params=params)
     targets = tuple(record.get("target_segments") or ())
     offer = shopper.WeekOffer(
         active=True,
-        our_discount_pct=discount * shelf,
+        our_discount_pct=inputs.shelf_pct,
+        reach=inputs.shelf_reach,
         target_segments=targets,
-        coupon_discount_pct=discount * (1 - shelf),
-        coupon_reach=treated,
+        coupon_discount_pct=inputs.coupon_pct,
+        coupon_reach=inputs.treated_share,
     )
     lifts = []
     redemptions = holders = 0.0
@@ -121,15 +164,19 @@ def run_backtest(
     return BacktestResult(
         campaign_id=str(record["campaign_id"]),
         weeks=weeks,
-        discount_pct=round(discount, 4),
-        shelf_share=shelf,
-        treated_share=treated,
+        discount_pct=round(100 * float(record["discount_depth"]), 4),
+        shelf_discount_pct=round(inputs.shelf_pct, 4),
+        shelf_reach=inputs.shelf_reach,
+        coupon_discount_pct=round(inputs.coupon_pct, 4),
+        treated_share=inputs.treated_share,
         simulated_lift_pct=round(lift, 4),
         lift_by_seed=[round(v, 4) for v in lifts],
+        # Coupon purchases per holder. The observed rate counts households with at least
+        # one redemption, so the simulated value is an upper bound on that rate.
         simulated_redemption_rate=round(redemptions / holders, 6) if holders else None,
         observed_redemption_rate=float(observed) if observed is not None else None,
         evaluation=evaluate_backtest(lift),
-        labels={**labels, "params": params.label},
+        labels={**inputs.labels, "params": params.label},
     )
 
 

@@ -78,13 +78,17 @@ class ShopperParams:
             return cls()
         names = {f.name for f in fields(cls)} - {"label"}
         values = {}
+        calibrated = False
         for name, entry in record.items():
             value = entry.get("value") if isinstance(entry, dict) else entry
             if name in names and isinstance(value, (int, float)) and math.isfinite(value):
                 values[name] = float(value)
+                calibrated |= isinstance(entry, dict) and entry.get("label") == "calibrated"
         if not values:
             return cls()
-        return cls(**values, label="data")
+        # Gan's labels are per field ("calibrated" | "default"); the set is "calibrated"
+        # as soon as any value was fitted to evidence.
+        return cls(**values, label="calibrated" if calibrated else "default")
 
 
 @lru_cache(maxsize=1)

@@ -241,11 +241,11 @@ def test_params_load_from_data_when_present(monkeypatch):
     import data.loaders as loaders
 
     monkeypatch.setattr(loaders, "load_shopper_params",
-                        lambda: {"beta_price": {"value": 3.0, "label": "data"},
+                        lambda: {"beta_price": {"value": 3.0, "label": "calibrated"},
                                  "unknown": {"value": 1}, "habit": {"value": "x"}},
                         raising=False)
     params = shopper.ShopperParams.from_data()
-    assert params.beta_price == 3.0 and params.label == "data"
+    assert params.beta_price == 3.0 and params.label == "calibrated"
     assert params.habit == shopper.ShopperParams().habit
     monkeypatch.setattr(loaders, "load_shopper_params", lambda: {}, raising=False)
     assert shopper.ShopperParams.from_data() == shopper.ShopperParams()
