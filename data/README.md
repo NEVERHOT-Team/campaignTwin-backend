@@ -103,11 +103,27 @@ contains 1,417 households and 62,348 household-weeks. Rebuild it with
 | Retailer sales across all households (USD) | 5,221.50 | 5,669.07 | +447.57 (+8.57%) |
 | Matched category coupon redemptions across campaigns | 2 | 8 | +6 (+300%) |
 
-`actual.lift_pct` compares the total category `sales_value` including returns
-across the two periods. `actual.incremental_sales` expresses the difference
-as THB 15,709.71 at the configured default exchange rate of 35.1. Campaign
-assignment was observational. Seasonality and concurrent promotions can
-contribute to these measured changes.
+`actual.lift_pct_raw` is the 8.57% change in total toilet-tissue sales across
+the two periods. For the seasonality control, we selected four comparable
+household paper and hygiene product types in the GROCERY department. The ETL
+checks every product in each type against campaign 18's coupon mappings.
+Paper towels had nine coupon-eligible products, so they were excluded.
+
+| Control product type | Weeks 37–44 (USD) | Weeks 45–52 (USD) | Sales change |
+|---|---:|---:|---:|
+| FACIAL TISSUE & PAPER HANDKE | 1,190.60 | 1,240.76 | +4.21% |
+| PAPER NAPKINS | 436.91 | 558.75 | +27.89% |
+| CLEANSING WIPES | 199.31 | 189.17 | −5.09% |
+| BASIC PAPER PLATES | 294.57 | 295.88 | +0.44% |
+
+Each change uses all households' retailer `sales_value`, including returns.
+`actual.control_change_pct` is the equal-weight mean of the four unrounded
+percentage changes (+6.86%). Mic reads `actual.lift_pct`, the difference
+between raw tissue growth and control growth **(+1.71 percentage points)**.
+`seasonality_control.categories` in the JSON records each category's sales
+and change. `actual.incremental_sales` is the raw sales increase of USD 447.57
+converted to THB 15,709.71 at the configured default rate of 35.1.
+The comparison is observational and other promotions can affect either group.
 
 Each redemption must match a coupon-discounted purchase by the same household
 on the same recorded date for a product eligible under that campaign and UPC.

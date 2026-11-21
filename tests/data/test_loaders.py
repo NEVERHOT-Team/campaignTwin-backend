@@ -145,7 +145,7 @@ def test_economics_anchors_and_backtest():
     assert set(texts).isdisjoint(row["text"] for row in responses)
 
     backtest = loaders.load_backtest()
-    assert set(backtest["actual"]) == {"lift_pct", "redemption_rate", "incremental_sales"}
+    assert {"lift_pct", "redemption_rate", "incremental_sales"} <= set(backtest["actual"])
     assert backtest["source"] == "data" and backtest["campaign_id"] == "18"
     assert max(backtest["calibration_weeks"]) < backtest["start_week"]
 
