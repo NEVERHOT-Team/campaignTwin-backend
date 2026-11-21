@@ -20,7 +20,15 @@ from data.etl.config import (
 )
 from data.loaders import PROCESSED, load_category_products, load_raw_table
 
-BRANDS = (751, 764, 595, 69, 1011, 1315)
+BRAND_DISPLAY_NAMES = {
+    751: "Cellox",
+    764: "Scott",
+    595: "Zilk",
+    69: "House brand",
+    1011: "Brand D",
+    1315: "Brand E",
+}
+BRANDS = tuple(BRAND_DISPLAY_NAMES)
 DEFAULT_PROBABILITY = {"none": 0.45, "match": 0.30, "undercut": 0.15, "non_price": 0.10}
 BLEND_MIN_EVENTS = 20
 BLEND_MIN_NONE = 0.2
@@ -94,6 +102,7 @@ def brand_catalog(
         rows.append(
             {
                 "brand": brand,
+                "display_name": BRAND_DISPLAY_NAMES[brand],
                 "is_ours": MANUFACTURERS.get(brand) == "our_brand",
                 "category": CATEGORY,
                 "sub_category": PRODUCT_PATH[-1],
@@ -290,7 +299,9 @@ def main() -> None:
     tiers = _price_tiers(lines, sizes)
     brands = brand_catalog(lines, households, tiers)
     source = dict.fromkeys(brands.columns, "data")
-    source.update(dict.fromkeys(["is_ours", "channels", "geo", "margin_floor_pct"], "default"))
+    source.update(
+        dict.fromkeys(["display_name", "is_ours", "channels", "geo", "margin_floor_pct"], "default")
+    )
     source["price_tier"] = (
         tiers["source"].iloc[0] if tiers["source"].nunique() == 1 else tiers["source"].to_dict()
     )

@@ -221,6 +221,19 @@ def test_rival_data_loaders():
     assert prior["delay_weeks_p50"] >= 1
 
 
+def test_brand_display_names():
+    names = {
+        "751": "Cellox", "764": "Scott", "595": "Zilk", "69": "House brand",
+        "1011": "Brand D", "1315": "Brand E",
+    }
+    assert loaders.load_brands().set_index("brand")["display_name"].to_dict() == names
+    for brand_id, name in names.items():
+        assert loaders.brand_display_name(brand_id) == name
+        assert loaders.brand_display_name(int(brand_id)) == name
+    assert loaders.brand_display_name(9999) == "9999"
+    assert loaders._read_json("brands_sources.json")["fields"]["display_name"] == "default"
+
+
 def test_loader_names_missing_keys(monkeypatch, tmp_path):
     path = tmp_path / "reaction_base_rate.json"
     path.write_text(json.dumps({"toilet_tissue": {"none": 1}}))

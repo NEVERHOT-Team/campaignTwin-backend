@@ -1,0 +1,152 @@
+[
+  {
+    "persona_id": "tt-130",
+    "archetype": "deal_hunter",
+    "weight_in_archetype": 0.442301476796,
+    "reason": "Regular profile for age Unknown and income Unknown, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-066",
+    "archetype": "deal_hunter",
+    "weight_in_archetype": 0.186298936859,
+    "reason": "Regular profile for age 55-64 and income 75-99K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-063",
+    "archetype": "deal_hunter",
+    "weight_in_archetype": 0.198058141724,
+    "reason": "Regular profile for age 45-54 and income 50-74K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-119",
+    "archetype": "deal_hunter",
+    "weight_in_archetype": 0.100761969036,
+    "reason": "Regular profile for age 35-44 and income 200-249K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-edge-087",
+    "archetype": "deal_hunter",
+    "weight_in_archetype": 0.072579475585,
+    "reason": "Edge profile for age 45-54 and income 75-99K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-071",
+    "archetype": "explorer",
+    "weight_in_archetype": 0.297306061992,
+    "reason": "Regular profile for age Unknown and income Unknown, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-122",
+    "archetype": "explorer",
+    "weight_in_archetype": 0.172257654641,
+    "reason": "Regular profile for age 45-54 and income 35-49K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-004",
+    "archetype": "explorer",
+    "weight_in_archetype": 0.248486408698,
+    "reason": "Regular profile for age 35-44 and income 75-99K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-042",
+    "archetype": "explorer",
+    "weight_in_archetype": 0.140392365811,
+    "reason": "Regular profile for age 45-54 and income 250K+, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-edge-149",
+    "archetype": "explorer",
+    "weight_in_archetype": 0.141557508858,
+    "reason": "Edge profile for age 45-54 and income 75-99K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-143",
+    "archetype": "indifferent",
+    "weight_in_archetype": 0.502528594838,
+    "reason": "Regular profile for age Unknown and income Unknown, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-074",
+    "archetype": "indifferent",
+    "weight_in_archetype": 0.240025077054,
+    "reason": "Regular profile for age 45-54 and income 15-24K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-133",
+    "archetype": "indifferent",
+    "weight_in_archetype": 0.124169805343,
+    "reason": "Regular profile for age 35-44 and income 35-49K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-141",
+    "archetype": "indifferent",
+    "weight_in_archetype": 0.055476428829,
+    "reason": "Regular profile for age 19-24 and income 250K+, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-edge-097",
+    "archetype": "indifferent",
+    "weight_in_archetype": 0.077800093936,
+    "reason": "Edge profile for age 45-54 and income 100-124K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-056",
+    "archetype": "loyal",
+    "weight_in_archetype": 0.608600863733,
+    "reason": "Regular profile for age Unknown and income Unknown, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-109",
+    "archetype": "loyal",
+    "weight_in_archetype": 0.11186440678,
+    "reason": "Regular profile for age 35-44 and income Under 15K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-127",
+    "archetype": "loyal",
+    "weight_in_archetype": 0.074576271186,
+    "reason": "Regular profile for age 45-54 and income 35-49K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-111",
+    "archetype": "loyal",
+    "weight_in_archetype": 0.050847457627,
+    "reason": "Regular profile for age 45-54 and income 50-74K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-edge-031",
+    "archetype": "loyal",
+    "weight_in_archetype": 0.154111000673,
+    "reason": "Edge profile for age 35-44 and income 50-74K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-078",
+    "archetype": "waiter",
+    "weight_in_archetype": 0.545733609375,
+    "reason": "Regular profile for age Unknown and income Unknown, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-093",
+    "archetype": "waiter",
+    "weight_in_archetype": 0.158536585366,
+    "reason": "Regular profile for age 35-44 and income 125-149K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-024",
+    "archetype": "waiter",
+    "weight_in_archetype": 0.073170731707,
+    "reason": "Regular profile for age 45-54 and income 35-49K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-116",
+    "archetype": "waiter",
+    "weight_in_archetype": 0.069105691057,
+    "reason": "Regular profile for age 45-54 and income 50-74K, selected for weighted demographic coverage."
+  },
+  {
+    "persona_id": "tt-edge-146",
+    "archetype": "waiter",
+    "weight_in_archetype": 0.153453382495,
+    "reason": "Edge profile for age 45-54 and income 15-24K, selected for weighted demographic coverage."
+  }
+]

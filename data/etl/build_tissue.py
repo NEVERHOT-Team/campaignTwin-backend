@@ -29,6 +29,7 @@ from data.etl.config import (
 )
 from data.etl.personas import build_personas, sample_households
 from data.etl.selection_bias import calibrate_selection
+from data.etl.ssr_personas import build_ssr_personas
 from data.loaders import CALIB, DATA_DIR, PROCESSED, load_category_products, load_raw_table
 
 PROMOTION_KEYS = ["product_id", "store_id", "week"]
@@ -512,6 +513,7 @@ def main() -> None:
     _write_artifacts(
         {
             "personas.json": personas,
+            "ssr_personas.json": build_ssr_personas(personas),
             "market.json": market,
             "knob_ranges.json": knobs,
             "unit_economics.json": economics,

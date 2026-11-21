@@ -4,6 +4,7 @@ import json
 from functools import lru_cache
 from hashlib import sha256
 from io import BytesIO
+from math import isclose
 from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
@@ -13,6 +14,7 @@ import pandas as pd
 from contracts.campaign_spec import CampaignSpec
 from data.etl.appeal import APPEAL_KEYS, ARCHETYPES, MECHANICS, MESSAGE_STYLES
 from data.etl.config import BACKTEST_START_WEEK, CATEGORY, PRODUCT_PATH
+from data.etl.ssr_personas import SAMPLE_PER_ARCHETYPE
 from data.sources import ASSETS, CJ_TABLES
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -121,6 +123,37 @@ def load_personas() -> list[dict[str, Any]]:
 
 
 @lru_cache(maxsize=1)
+def load_ssr_personas() -> list[dict[str, Any]]:
+    """Load representative persona IDs and their within-archetype appeal weights."""
+    filename = "ssr_personas.json"
+    records = _read_json(filename)
+    weights = {archetype: [] for archetype in ARCHETYPES}
+    seen_ids = set()
+    for index, record in enumerate(records):
+        location = f"{filename}[{index}]"
+        _require_keys(record, "persona_id archetype weight_in_archetype reason", location)
+        persona_id = record["persona_id"]
+        archetype = record["archetype"]
+        weight = record["weight_in_archetype"]
+        if not isinstance(persona_id, str) or not persona_id or persona_id in seen_ids:
+            raise ValueError(f"{location} requires a distinct, nonempty persona ID")
+        if archetype not in weights:
+            raise ValueError(f"{location} contains an unknown archetype")
+        if not isinstance(record["reason"], str) or not record["reason"].strip():
+            raise ValueError(f"{location} requires a selection reason")
+        if type(weight) not in (int, float) or not 0 < weight <= 1:
+            raise ValueError(f"{location} requires a positive weight of at most one")
+        seen_ids.add(persona_id)
+        weights[archetype].append(weight)
+    for archetype, values in weights.items():
+        if len(values) != SAMPLE_PER_ARCHETYPE or not isclose(sum(values), 1):
+            raise ValueError(
+                f"{filename} requires {SAMPLE_PER_ARCHETYPE} weights summing to one for {archetype}"
+            )
+    return records
+
+
+@lru_cache(maxsize=1)
 def load_market() -> dict[str, Any]:
     filename = "market.json"
     market = _read_json(filename)
@@ -215,13 +248,20 @@ def load_brands() -> pd.DataFrame:
     frame = pd.read_csv(PROCESSED / filename, dtype={"brand": str}, keep_default_na=False)
     _require_keys(
         frame.columns,
-        "brand is_ours category sub_category price_tier avg_price target_segments "
+        "brand display_name is_ours category sub_category price_tier avg_price target_segments "
         "channels geo market_share typical_discount_pct margin_floor_pct",
         filename,
     )
     if frame["is_ours"].dtype != bool or frame["is_ours"].sum() != 1:
         raise ValueError("brands.csv requires exactly one is_ours brand")
     return frame
+
+
+def brand_display_name(brand_id: str | int) -> str:
+    """Return the catalog display name, falling back to the ID for uncatalogued brands."""
+    key = str(brand_id)
+    names = load_brands().set_index("brand")["display_name"]
+    return names.get(key, key)
 
 
 @lru_cache(maxsize=1)

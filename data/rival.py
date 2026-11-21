@@ -12,7 +12,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 from contracts.models import CampaignSpec, RivalScenario, Strategy
 from data.etl.config import MANUFACTURERS
-from data.loaders import load_brands, load_library, load_rival_prior
+from data.loaders import brand_display_name, load_brands, load_library, load_rival_prior
 
 REACTIONS = ("none", "match", "undercut", "non_price")
 UNDERCUT = REACTIONS.index("undercut")
@@ -290,7 +290,9 @@ def similar_campaigns(
         "campaign_id", "brand", "brand_name", "platform", "mechanic", "discount_depth",
         "description", "source_url", "confidence", "similarity",
     ]
-    return ranked.nlargest(k, "similarity")[columns].to_dict("records")
+    top = ranked.nlargest(k, "similarity")
+    top["brand_name"] = top["brand"].map(brand_display_name)
+    return top[columns].to_dict("records")
 
 
 def get_rival_scenarios(

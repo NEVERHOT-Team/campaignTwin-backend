@@ -219,12 +219,13 @@ def test_similar_campaigns_return_sourced_display_rows_without_changing_scenario
     scores = [row["similarity"] for row in rows]
     assert scores == sorted(scores, reverse=True)
     fields = {
-        "brand", "brand_name", "platform", "mechanic", "description", "source_url", "confidence"
+        "brand", "platform", "mechanic", "description", "source_url", "confidence"
     }
     for row in rows:
         original = library.loc[row["campaign_id"]]
-        assert set(row) == fields | {"campaign_id", "similarity", "discount_depth"}
+        assert set(row) == fields | {"campaign_id", "brand_name", "similarity", "discount_depth"}
         assert all(row[key] == original[key] for key in fields)
+        assert row["brand_name"] == rival.brand_display_name(row["brand"])
         assert row["source_url"].strip()
         assert row["discount_depth"] == pytest.approx(100 * original["discount_depth"])
     assert rival.get_rival_scenarios(spec) == scenarios
@@ -243,6 +244,7 @@ def test_similar_campaigns_score_linked_triggers_and_apply_strategy(spec, monkey
         **template,
         "campaign_id": "response", "reaction_to_campaign_id": "launch", "mechanic": "bundle",
         "discount_depth": 0.05, "description": "Response bundle", "source_url": "https://a.test/r",
+        "brand": "69", "brand_name": "Library label",
     }
     alternative = {
         **trigger,
@@ -253,6 +255,7 @@ def test_similar_campaigns_score_linked_triggers_and_apply_strategy(spec, monkey
     monkeypatch.setattr(rival, "load_library", lambda: library)
     first, second = rival.similar_campaigns(spec, k=5)
     assert (first["campaign_id"], second["campaign_id"]) == ("response", "sale")
+    assert (first["brand"], first["brand_name"]) == ("69", "House brand")
     assert first["similarity"] == pytest.approx(1)
     assert first["discount_depth"] == 5 and first["description"] == "Response bundle"
     ranked = rival.similar_campaigns(spec, strategy=_strategy(45), k=1)
@@ -447,6 +450,7 @@ def test_tiers_use_area_and_targets_use_relative_buyer_share():
     )
     tiers = _price_tiers(lines, sizes)
     catalog = brand_catalog(lines, households, tiers).set_index("brand")
+    assert catalog["display_name"].tolist() == rival.load_brands()["display_name"].tolist()
     assert tiers.at[764, "paid_thb_per_sq_ft"] == 0.5
     assert tiers.at[69, "paid_thb_per_sq_ft"] == 0.01
     assert tiers.at[69, "price_tier"] == "low" and tiers.at[764, "price_tier"] == "high"

@@ -1,6 +1,7 @@
 {
   "fields": {
     "brand": "data",
+    "display_name": "default",
     "is_ours": "default",
     "category": "data",
     "sub_category": "data",

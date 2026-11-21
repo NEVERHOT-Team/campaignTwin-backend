@@ -21,16 +21,19 @@ accounted for at least 5% of category sales. Shares use transaction
 `sales_value`, the amount received by the retailer.
 [Complete Journey transaction and product definitions](https://bradleyboehmke.github.io/completejourney/articles/completejourney.html)
 
-| Manufacturer ID | Thai demo mapping (`default`) | Demo role | Retailer sales share |
+| Manufacturer ID | Display name (`default`) | Demo role | Retailer sales share |
 |---|---|---|---:|
-| 751 | Cellox (BJC) | Our brand | 18.1% |
-| 764 | Scott (Kimberly-Clark) | Leader | 26.9% |
+| 751 | Cellox | Our brand | 18.1% |
+| 764 | Scott | Leader | 26.9% |
 | 595 | Zilk | Peer | 19.2% |
-| 69 | Store private label | Private label | 16.4% |
+| 69 | House brand | Private label | 16.4% |
+| 1011 | Brand D | Other manufacturer | 13.6% |
+| 1315 | Brand E | Other manufacturer | 5.9% |
 
-The other material manufacturers are 1011 (13.6%) and 1315 (5.9%). IDs and
-sales shares come from the packaged catalogue and transactions. The Thai brand
-mapping approximates the role each manufacturer plays in the demo.
+These display names are illustrative mappings of simulated manufacturer IDs.
+The IDs and sales shares come from the packaged catalogue and transactions.
+`data.loaders.brand_display_name(id)` looks up the display name in `brands.csv`
+and returns the ID as a string for an unknown manufacturer.
 
 ## Build
 
@@ -46,7 +49,7 @@ python -m data.etl.build_engine_inputs
 python -m data.quality
 ```
 
-The builder regenerates `personas.json`, `market.json`, `knob_ranges.json`,
+The builder regenerates `personas.json`, `ssr_personas.json`, `market.json`, `knob_ranges.json`,
 `segments.parquet`, `unit_economics.json`, and `backtest_campaign.json` under `data/processed/`. Use
 `data/etl/config.py` to set the USD-to-THB rate and the shipping, cost, margin,
 and marketplace fee assumptions. The current reference price is the median
@@ -81,6 +84,19 @@ Use these profiles locally for simulation. Behaviour and available demographics
 come from the same source household, even though published persona IDs are
 synthetic. For messaging scores, `load_appeal_fallback()` supplies an
 archetype-level lookup that can be used without sending a profile to an LLM.
+
+`load_ssr_personas()` returns 25 representative IDs from `personas.json`.
+Each archetype has five representatives, including one edge persona in the
+published sample. The builder favors distinct age × income cells and cells
+that represent more of the archetype's weight. Seed 42 breaks ties. Each
+entry's `reason` identifies its cell and whether it represents edge profiles.
+
+To calculate an archetype's SSR appeal, sum `weight_in_archetype × appeal`
+over its five representatives. Each source persona contributes its calibrated
+weight to the nearest selected age × income cell within its archetype and
+edge group. Distance counts the age and income bands that differ. Equally
+close representatives split the weight. The five weights sum to one within
+each archetype, preserving the edge group's share of the full panel.
 
 The legacy segment `promo_response` field measures the share of purchase weeks with a price
 promotion. Each design archetype retains its original KMeans name in
@@ -356,8 +372,9 @@ URLs and blank reaction types. With these rows, S1–S3 likelihoods come from
 the category prior and each scenario returns an empty `evidence_ids` list.
 
 `data.rival.similar_campaigns(spec, strategy=None, k=5)` supplies examples
-for Competitive Outlook. It scores the whole library with the same campaign
-similarity and returns up to `k` rows with a source URL and a discount in the
+for Competitive Outlook. Each result includes the manufacturer ID in `brand`
+and its illustrative display name in `brand_name`. It scores the whole library
+with the same campaign similarity and returns up to `k` rows with a source URL and a discount in the
 0–100 percent range. Higher similarity ranks first, with campaign ID breaking
 ties. A campaign with an unknown reaction can appear here.
 
