@@ -259,14 +259,51 @@ def run(
 # ---------------------------------------------------------------- demo
 
 
+def tissue_context(spec: CampaignSpec) -> ContextPack:
+    """The demo category's ContextPack from the published data (not the coffee mock).
+
+    Same fields as api/v1_arena.context_from_review: segments from market.json with
+    archetype, share, weekly purchase probability, elasticity and promo response (mean
+    persona promo_share), and the brief-level rival scenarios.
+    """
+    from data.loaders import load_personas
+
+    market = load_market()
+    promo: dict[str, list[float]] = {}
+    for persona in load_personas():
+        promo.setdefault(str(persona["segment"]), []).append(
+            float(persona.get("promo_share", 0.5)))
+    segments = []
+    for row in market["segments"]:
+        name = str(row["name"])
+        shares = promo.get(name) or [0.5]
+        segments.append({
+            "segment_id": name,
+            "archetype": row.get("archetype", name),
+            "share": float(row.get("share", 0.0)),
+            "households": row.get("households"),
+            "weekly_purchase_prob": float(row.get("weekly_buy_rate", 0.05)),
+            "price_elasticity": float(row.get("price_elasticity", -1.5)),
+            "promo_response": sum(shares) / len(shares),
+        })
+    try:
+        rivals = _default_evidence(spec, None)
+    except Exception as error:  # the arena falls back per strategy as well
+        logger.warning("arena tissue_context_rivals_failed error_type=%s", type(error).__name__)
+        rivals = []
+    return ContextPack(
+        category=str(market.get("category", "")), segments=segments, rivals=rivals,
+        assumptions=[], gaps=[],
+    )
+
+
 def demo(seeds: int = 5, n_agents: int = 3000) -> ArenaResult:
-    """Demo brief + fixture context + strategist templates + offline rival/appeal paths."""
+    """Demo brief + tissue context from data + strategist templates + offline appeal."""
     from agents.strategist import propose
     from data.loaders import load_demo_brief
-    from mocks import load_mock
 
     spec = CampaignSpec.model_validate(load_demo_brief()["user_plan_spec"])
-    context = ContextPack.model_validate(load_mock("context_pack"))
+    context = tissue_context(spec)
     plan = SimulationPlan(
         spec=spec, context=context, strategies=propose(spec, context),
         scenarios=list(SCENARIOS), seeds=seeds, n_agents=n_agents,

@@ -26,7 +26,7 @@ from typing import Any
 
 from contracts.campaign_spec import CampaignSpec
 from contracts.models import ContextPack, Strategy
-from data.loaders import load_market, load_personas, load_unit_econ
+from data.loaders import load_knobs, load_market, load_personas, load_unit_econ
 
 GENERATED = 6
 DEFAULT_BUDGET_FLEX_PCT = 10.0
@@ -132,15 +132,27 @@ def _unit_costs(spec: CampaignSpec) -> tuple[float, float, float, float, dict[st
         cost = float(market["unit_cost"])
         fees = (float(market["platform_fee_pct"]) + float(market["payment_fee_pct"])) / 100
         shipping = float(market["shipping_cost_per_order"])
-        source = "data"
+        # Per-field labels come from market.json; a missing label is not "data".
+        fields = (market.get("source_notes") or {}).get("fields") or {}
+
+        def label(*keys: str) -> str:
+            found = [fields.get(key, "default") for key in keys]
+            return "data" if all(value == "data" for value in found) else "default"
+
+        labels.update(
+            price=label("ref_price"),
+            unit_cost=label("unit_cost"),
+            fee_pct=label("platform_fee_pct", "payment_fee_pct"),
+            shipping=label("shipping_cost_per_order"),
+        )
     except Exception:  # older checkouts without market.json
         econ = load_unit_econ()
         price = float(econ["price_thb"])
         cost = price * (1 - float(econ["margin_pct"]) / 100)
         fees = (float(econ["shopee_commission_pct"]) + float(econ["shopee_txn_fee_pct"])) / 100
         shipping = 0.0
-        source = "default"
-    labels.update(price=source, unit_cost=source, fee_pct=source, shipping=source)
+        labels.update(price="default", unit_cost="default", fee_pct="default",
+                      shipping="default")
     economics = spec.unit_economics
     if economics and economics.avg_price_thb is not None:
         price, labels["price"] = float(economics.avg_price_thb), "data"
@@ -181,7 +193,9 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
     labels: dict[str, str] = {}
     cap = spec.budget.max_discount_pct
     if cap is None:
-        cap = DEFAULT_MAX_DISCOUNT_PCT
+        cap, labels["max_discount_pct"] = _knob_cap()
+    else:
+        labels["max_discount_pct"] = "data"
     user_discount = _user_discount(spec)
 
     if given and given.discount_pct:
@@ -231,6 +245,16 @@ def resolve_bounds(spec: CampaignSpec, context: ContextPack) -> Bounds:
         market_households=DEFAULT_MARKET_HOUSEHOLDS,
         cost_per_reach=cost_per_reach,
     )
+
+
+def _knob_cap() -> tuple[float, str]:
+    """Planning cap on discount depth from knob_ranges.json, else the module default."""
+    try:
+        knob = load_knobs()
+        return float(knob["discount_pct"]["max"]), knob["source"].get("discount_pct.max",
+                                                                         "default")
+    except Exception:
+        return DEFAULT_MAX_DISCOUNT_PCT, "default"
 
 
 def _segment_shares(context: ContextPack) -> tuple[dict[str, float], str]:
@@ -408,12 +432,15 @@ def template_strategies(
             text=f"{high:g}% off everything",
         ),
         dict(
-            key="newbuyer", name="Welcome voucher for new buyers only", discount=low,
-            mechanic="voucher", targets=[], cap=1, budget=bounds.budget_thb,
-            split={"discount": 0.85, "media": 0.1, "fees": 0.05}, mix=mix,
+            key="newbuyer", name="Welcome voucher for new buyers only (lean media)",
+            discount=low, mechanic="voucher", targets=[], cap=1, budget=bounds.budget_thb,
+            # Lean media: the platform listing reaches new buyers organically, and paid
+            # media is the largest fixed cost; 10% media made this plan lose money in S1.
+            split={"discount": 0.94, "media": 0.01, "fees": 0.05}, mix=mix,
             rules=[], eligibility="new_only",
-            why="Win shoppers who do not buy us yet; loyal buyers keep paying full price, "
-                "so the discount does not leak to sales we would make anyway.",
+            why="Win shoppers who do not buy us yet with almost no paid media; loyal buyers "
+                "keep paying full price, so the discount does not leak to sales we would "
+                "make anyway.",
             text=f"{low:g}% off your first order",
         ),
         dict(
