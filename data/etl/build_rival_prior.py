@@ -22,6 +22,9 @@ from data.loaders import PROCESSED, load_category_products, load_raw_table
 
 BRANDS = (751, 764, 595, 69, 1011, 1315)
 DEFAULT_PROBABILITY = {"none": 0.45, "match": 0.30, "undercut": 0.15, "non_price": 0.10}
+BLEND_MIN_EVENTS = 20
+BLEND_MIN_NONE = 0.2
+BLEND_DEFAULT_WEIGHT = 0.5
 EVENT_COLUMNS = [
     "brand",
     "week",
@@ -247,9 +250,10 @@ def base_rate(events: pd.DataFrame) -> dict:
     sampled_weeks = matched[["brand", "week"]].drop_duplicates()
     at_risk = matched.loc[matched["washout_clear"].eq(True)]
     count = len(at_risk[["brand", "week"]].drop_duplicates())
-    blend = count < 20 or adjusted["none"] < 0.2
+    blend = count < BLEND_MIN_EVENTS or adjusted["none"] < BLEND_MIN_NONE
+    weight = BLEND_DEFAULT_WEIGHT if blend else 0.0
     probabilities = {
-        label: (value + DEFAULT_PROBABILITY[label]) / 2 if blend else value
+        label: (1 - weight) * value + weight * DEFAULT_PROBABILITY[label]
         for label, value in adjusted.items()
     }
     responses = matched.loc[matched["reaction_type"].ne("none")]
