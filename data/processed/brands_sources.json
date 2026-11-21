@@ -1,0 +1,20 @@
+{
+  "fields": {
+    "brand": "data",
+    "is_ours": "default",
+    "category": "data",
+    "sub_category": "data",
+    "price_tier": "data",
+    "avg_price": "data",
+    "target_segments": "data",
+    "channels": "default",
+    "geo": "default",
+    "market_share": "data",
+    "typical_discount_pct": "data",
+    "margin_floor_pct": "default"
+  },
+  "usd_thb": {
+    "value": 35.1,
+    "source": "default"
+  }
+}

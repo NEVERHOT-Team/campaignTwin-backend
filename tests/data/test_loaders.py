@@ -4,11 +4,8 @@ from collections import Counter, defaultdict
 import pandas as pd
 import pytest
 
-from contracts.models import BriefParseResponse
 from data import loaders
 from data.etl.personas import BEHAVIOR, TRAITS, _survey_traits
-from data.rival import get_rival_scenarios
-from mocks import load_mock
 
 
 def test_segments_and_personas():
@@ -146,35 +143,27 @@ def test_economics_anchors_and_backtest():
     assert max(backtest["calibration_weeks"]) < backtest["start_week"]
 
 
-def test_rival_library_prior_and_scenarios():
+def test_rival_data_loaders():
     library = loaders.load_library()
-    assert len(library) == 8
-    assert set(library["confidence"]) == {"default"}
-    assert {"campaign_id", "reaction_to", "channel_mix", "source_url"} <= set(library.columns)
-
+    assert {"campaign_id", "reaction_to_campaign_id", "channel_mix", "source_url"} <= set(library)
+    assert set(library["reaction_type"]) <= {"", "none", "match", "undercut", "non_price"}
+    brands = loaders.load_brands()
+    assert set(brands["brand"]) == {"751", "764", "595", "69", "1011", "1315"}
+    assert brands.loc[brands["is_ours"], "brand"].tolist() == ["751"]
+    assert brands["market_share"].sum() == pytest.approx(1, abs=0.001)
+    assert set(brands["price_tier"]) == {"low", "mid", "high"}
     prior = loaders.load_rival_prior()
     assert set(prior["p"]) == {"none", "match", "undercut", "non_price"}
     assert sum(prior["p"].values()) == pytest.approx(1)
-    assert prior["source"] == "default"
-
-    spec = BriefParseResponse.model_validate(load_mock("campaign_spec")).spec
-    rivals = defaultdict(list)
-    campaign_ids = set(library["campaign_id"])
-    for scenario in get_rival_scenarios(spec):
-        rivals[scenario.rival].append(scenario)
-        assert set(scenario.evidence_ids) <= campaign_ids
-    assert len(rivals) == 2
-    for scenarios in rivals.values():
-        assert {scenario.scenario for scenario in scenarios} == {"S1", "S2", "S3"}
-        assert sum(scenario.likelihood for scenario in scenarios) == pytest.approx(1)
+    assert prior["source"] == ("data" if prior["n_events"] >= 20 else "default")
 
 
 def test_loader_names_missing_keys(monkeypatch, tmp_path):
-    path = tmp_path / "rival_prior.json"
-    path.write_text(json.dumps({"p": {"none": 1}}))
+    path = tmp_path / "reaction_base_rate.json"
+    path.write_text(json.dumps({"toilet_tissue": {"none": 1}}))
     monkeypatch.setattr(loaders, "PROCESSED", tmp_path)
     loaders.load_rival_prior.cache_clear()
-    with pytest.raises(ValueError, match=r"rival_prior.json missing required.*n_events"):
+    with pytest.raises(ValueError, match=r"reaction_base_rate.json missing required.*n_events"):
         loaders.load_rival_prior()
 
 

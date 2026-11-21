@@ -1,0 +1,18 @@
+{
+  "toilet_tissue": {
+    "none": 0.0013605442176870747,
+    "match": 0.03197278911564626,
+    "undercut": 0.28095238095238095,
+    "non_price": 0.6857142857142857,
+    "n_events": 294,
+    "n_comparisons": 1470,
+    "depth_p50": 0.20854527,
+    "depth_p90": 0.46923783,
+    "delay_median": 0.0,
+    "delay_min": 0,
+    "duration_weeks": 2.0,
+    "source": "data",
+    "depth_source": "data",
+    "timing_source": "data"
+  }
+}

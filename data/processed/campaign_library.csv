@@ -1,4 +1,4 @@
-campaign_id,brand,platform,category,price_tier,start_date,end_date,season,mechanic,discount_depth,voucher_type,min_spend,target_segment,channel_mix,reaction_to,reaction_type,reaction_delay_days,reported_outcome,description,source_url,confidence
+campaign_id,brand,platform,category,price_tier,start_date,end_date,season,mechanic,discount_depth,voucher_type,min_spend,target_segment,channel_mix,reaction_to_campaign_id,reaction_type,reaction_delay_days,reported_outcome,description,source_url,confidence
 c01,Morning Vale,Shopee,instant_coffee,mid,2025-11-07,2025-11-13,11.11,voucher,0.4,seller,299,deal_hunter,"{""Shopee"": 1.0}",,none,,,Fictional 11.11 voucher example.,,default
 c02,Daily Peak,Shopee,instant_coffee,mid,2025-11-10,2025-11-13,11.11,voucher,0.44,seller,299,deal_hunter,"{""Shopee"": 1.0}",c01,undercut,3,,Fictional 11.11 voucher example.,,default
 c03,Brew Lane,Shopee,instant_coffee,mid,2025-11-11,2025-11-13,11.11,bundle,0.25,,0,deal_hunter,"{""Shopee"": 1.0}",c01,non_price,4,,Fictional 11.11 bundle example.,,default
