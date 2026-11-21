@@ -1,0 +1,1703 @@
+openapi: 3.1.0
+info:
+  title: CampaignTwin review and approval API
+  version: 1.0.0-draft
+  description: |
+    Proposed implementation contract for FEAT-02 (campaign intake and reconciliation)
+    and FEAT-04 (approved simulation input), based on the roadmap, SRS r2 and
+    CT-CAMPAIGN-REHEARSAL v1. JSON responses use contract_version 1.
+    Calendar dates use the matched capability's timezone and exclusive ends.
+    The five v1 operations are draft. The FastAPI scaffold serves fixtures at
+    /api/brief/parse and /api/plan/context and accepts fixture runs at /api/runs.
+    It publishes its CampaignSpec v0.1 contract at /openapi.json.
+    The historical /extract maps conceptually to agent-mode intake and revision.
+    /simulate and /optimize require later run and strategy contracts. These
+    mappings grant no approval or execution authority to the fixture endpoints.
+
+    Backend agent integration is defined in x-agent-integration. The internal
+    FEAT-04 engine handoff is defined in x-engine-handoff.
+servers:
+  - url: http://localhost:8000
+tags:
+  - name: Campaign review
+  - name: Campaign approval
+
+x-data-compatibility:
+  loader: data/loaders.py
+  active_category: toilet_tissue
+  active_brand_id: '751'
+  currency: THB
+  supported_voucher_example: |
+    CT-CAMPAIGN-EVIDENCE v1 documents a synthetic Thai Shopee voucher for one
+    500 g rice pouch, fixture-jasmine-rice / pouch-500g / TH / shopee /
+    fixed_order_voucher / THB, with THB 20 off THB 120 and an explicit zero
+    service fee. The active checkout's loaders have no authorized FEAT-01
+    snapshot lookup. The fixture needs a provider before it can resolve at
+    runtime. It requires independent measurement and scenario verification.
+  sources:
+    - loaders: [load_market, load_unit_econ]
+      use: |
+        Category-level planning inputs. price_thb / ref_price is THB 315.55
+        per purchased unit, transferred from the simulated Complete Journey
+        catalogue using a default exchange rate. unit_cost is a THB 189.33
+        default. Shopee commission and transaction fee are 7 and 3 percentage
+        points with collected_at null. Shipping is a THB 25 per-order default.
+        Media cost is THB 0.32 per reach. Publish any used value with its
+        original unit, source label and applicable scope. Exact selling unit,
+        seller cost applicability, fee bases, voucher service fee, tax and
+        returns require independent support. Never map a per-reach amount
+        directly to paid_media in THB per campaign.
+    - loaders: [load_knobs]
+      use: |
+        Shopee and LINE, generic seller_voucher, and a 50 percentage-point
+        discount planning cap are hints. They do not authorize a
+        fixed_order_voucher, its THB amount, minimum spend, redemption limits
+        or eligible orders. Four campaign and two post weeks from load_market
+        are planning defaults only. Keep exact IDs and calendars snapshot-driven.
+    - loaders: [load_segments, load_market]
+      use: |
+        Resolve existing IDs through load_segments. The load_market projection
+        has archetypes deal_hunter, explorer, indifferent, loyal and waiter,
+        with 86, 418, 473, 308 and 229 households respectively. The category
+        weekly_buy_rate / weekly_purchase_prob is a fraction and is an
+        aggregate hint. Publishing a FEAT-01 segment also requires its pinned
+        profile, window, eligibility denominator and evidence. Require at least
+        50 distinct households for every released household-derived cell.
+        Suppress withheld IDs, counts and dependent evidence.
+    - loaders: [load_brands, load_library, load_rival_prior]
+      use: |
+        Rival inputs are category or demo evidence. The current library has
+        eight instant_coffee rows and the tissue prior blends data and defaults.
+        Accept scenarios for approval only from a compatible versioned FEAT-03
+        settings provider. Keep likelihood unavailable until the analogue and
+        calibration gates pass. Keep rival discount depths in percentage
+        points, likelihoods as fractions and voucher amounts in THB.
+    - loaders: [load_source_manifest]
+      use: |
+        Use registered asset versions and checksums for source lineage where
+        applicable. A source manifest tracks inputs to local data processing.
+        An approved capability snapshot additionally pins the released
+        records, transformation versions, coverage and applicable terms.
+  fallback: |
+    No authorized snapshot yields snapshot_unavailable with facts retained.
+    A snapshot with no exact match yields unsupported_configuration. Missing
+    engine/evaluator coverage yields measurement_support_unverified. Missing
+    compatible rival settings yields scenario_settings_unavailable at approval.
+    A match, a generic knob, or a model suggestion never supplies missing terms
+    or proves that a configuration is executable.
+  legacy_intake_mapping: |
+    For a future CampaignSpec v0.1 adapter, channels can supply a single
+    channel hint, brand and audience hints can help matching, and
+    timing.start_date can supply a start date. Resolve the legacy end-date
+    convention before deriving end_date_exclusive. Map an unambiguous,
+    confirmed fixed THB voucher amount and minimum spend into the corresponding
+    offer fields. Keep percentages and per-user caps in their original units.
+    budget.total_thb can suggest a cap; derive included spend only from the
+    confirmed budget basis. objective.primary and smart_goals supply intent.
+    Comparator, scope, measurement window, and guardrails still require review.
+    unit_economics.fee_pct cannot resolve a typed fee. Ignore fixture defaults
+    for commitments. Existing extractions require fresh safe quote verification.
+
+x-agent-integration:
+  gateway: agents.llm.call_llm
+  proposed_result_schema:
+    $ref: '#/components/schemas/AgentProposal'
+  rules: |
+    These schemas describe backend model proposals. Approval and engine
+    admission are deterministic backend operations with no model decision.
+    Locally remove or reject personal contacts, household IDs, row-level
+    records, and unreleased cells before extraction or clarification, including
+    follow-up inputs. Pass only relevant sanitized business text, permitted
+    aggregate/public evidence, validated facts and blocking gaps through the
+    repository LLM gateway. Apply the same release rules to cached prompts,
+    model output and published evidence.
+    Check that each extraction quote is an exact substring of the stored
+    sanitized brief revision and supports the proposed normalized value. Drop
+    unverifiable candidates. Store valid extracted values as pending, even when
+    there is only one. The model can phrase questions for validated blockers.
+    The backend resolves supported terms, assigns IDs and provenance, verifies
+    costs and derives readiness. Questions or model estimates confer no
+    capability, cost confirmation or approval.
+    If a model call fails, preserve facts, confirmed answers, the evidence pin
+    and safe completed extraction. Return a reply with the failed stage and
+    deterministic manual questions. The current gateway's unclassified None
+    maps to provider_unavailable. Use timeout or invalid_response only when
+    the adapter identifies that failure. Manual mode makes no model call.
+
+x-engine-handoff:
+  boundary: api.approval.prepare_approved_comparison(review, approval_id, execution_inputs)
+  result_schema:
+    $ref: '#/components/schemas/ApprovedComparisonResult'
+  rules: |
+    Resolve a current approval for the exact review, evidence and canonical
+    original/baseline plans. The receipt can precede FEAT-06 execution inputs.
+    Dispatch requires compatible pins, including resolved scenario settings,
+    cohort/persona and appeal versions and the random-stream policy. New run
+    admission checks freshness atomically with recording the run. Previously
+    admitted runs resolve from their saved pins. The engine rejects role,
+    identity, version, baseline or shared-scope mismatches as
+    comparison_scope_mismatch before execution. No plan-level calendar,
+    scenario, population or seed overrides are allowed. For every scenario and
+    seed, derive matched random streams according to the pinned policy.
+
+paths:
+  /api/v1/campaign-reviews:
+    post:
+      tags: [Campaign review]
+      operationId: createCampaignReview
+      summary: Create a campaign review from facts or a brief
+      description: |
+        Persist revision 1 and pin the authorized FEAT-01 snapshot when
+        available. With a brief the default mode is agent, otherwise manual.
+        Return unresolved terms and recoverable agent failures in the review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateReview'}
+            examples:
+              currentDataIntake:
+                summary: Planner-supplied toilet-tissue request for manual review
+                description: This request is valid intake and can be blocked on current evidence.
+                value:
+                  mode: manual
+                  facts:
+                    selection:
+                      product_id: requested-tissue-sku
+                      market_id: TH
+                      channel_id: shopee
+                      mechanic_id: fixed_order_voucher
+                      currency: THB
+                    offer: {discount_thb: 20}
+              conflictingBrief:
+                summary: Agent-mode intake with a conflicting planner-entered voucher amount
+                value:
+                  mode: agent
+                  brief: Use a THB 20 voucher on Shopee.
+                  facts:
+                    offer: {discount_thb: 25}
+              syntheticRiceIntake:
+                summary: CT-CAMPAIGN-EVIDENCE v1 synthetic voucher walkthrough
+                value:
+                  mode: manual
+                  facts:
+                    selection:
+                      product_id: fixture-jasmine-rice
+                      selling_unit_id: pouch-500g
+                      market_id: TH
+                      channel_id: shopee
+                      mechanic_id: fixed_order_voucher
+                      currency: THB
+                      start_date: '2026-12-01'
+                      end_date_exclusive: '2026-12-08'
+                    offer:
+                      discount_thb: 20
+                      minimum_spend_thb: 120
+                      eligibility: all_focal_product_orders_meeting_minimum_spend
+                    audience: {kind: all_eligible}
+                    goal:
+                      metric: incremental_contribution_profit
+                      unit: THB
+                      direction: at_least
+                      target: 25
+                      comparator: paired_no_campaign
+                      scope: focal_product
+                      window: {start_date: '2026-12-01', end_date_exclusive: '2026-12-08'}
+                    budget: {cap_thb: 2500, includes: [seller_voucher, paid_media]}
+                    guardrails: {max_discount_thb: 20, min_contribution_thb_per_selling_unit: 10}
+                    post_end_date_exclusive: '2026-12-15'
+      responses:
+        '201': {$ref: '#/components/responses/ReviewSaved'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+  /api/v1/campaign-reviews/{review_id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    post:
+      tags: [Campaign review]
+      operationId: reviseCampaignReview
+      summary: Apply edits or candidate confirmations to the current review
+      description: |
+        Omission carries existing leaves forward. Scalars and arrays replace
+        leaves. Null clears a leaf or group. Default to manual mode. Candidate
+        IDs are unique and must belong to the base revision. Reject edits and
+        confirmations for the same field, as well as confirmations invalidated
+        by an edit in the request. Preserve prior scoped answers. Re-resolve
+        selection and dates within the exact pinned snapshot and recompute
+        applicability. A review that has no pin can establish its first pin.
+        Create a new review to use newer evidence. Reject stale revisions
+        atomically and preserve the current answers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviseReview'}
+            example:
+              base_revision: 1
+              mode: manual
+              edits: {offer: {minimum_spend_thb: 120}}
+      responses:
+        '201': {$ref: '#/components/responses/ReviewSaved'}
+        '404': {$ref: '#/components/responses/ReviewNotFound'}
+        '409': {$ref: '#/components/responses/StaleReview'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+  /api/v1/campaign-reviews/{review_id}/approval-proposals:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    post:
+      tags: [Campaign approval]
+      operationId: proposeCampaignApproval
+      summary: Resolve the exact approval terms for planner review
+      description: |
+        Use the exact saved review and its pinned evidence. Resolve compatible
+        scenario settings, common calendar, evaluation population, random-stream
+        policy, seeds and no-campaign baseline server-side. An unavailable
+        scenario likelihood can coexist with a compatible setting. Validate
+        bounds against the capability, economics, approved guardrails and
+        verified engine policy for each use. Up to three original-plan rules are
+        allowed. Each action needs a matching contingency_rule permission at the
+        weekly decision tick. A proposal grants no authority to execute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateApprovalProposal'}
+            example: {review_revision: 1, permitted_changes: [], contingency_rules: []}
+      responses:
+        '200':
+          description: Review, requested bounds or comparison scope is blocked.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BlockedApprovalProposal'}
+              example:
+                contract_version: 1
+                proposal_id: null
+                review: {review_id: review-thb-shopee-voucher, revision: 1}
+                status: blocked
+                terms:
+                  evidence: null
+                  original: null
+                  assumptions: []
+                  comparison: null
+                  baseline: null
+                  permitted_changes: []
+                blockers:
+                  - code: scenario_settings_unavailable
+                    field: terms.comparison.scenarios
+                    reason: Compatible versioned rival settings are unavailable.
+                    evidence_refs: []
+        '201':
+          description: Immutable approval proposal awaiting explicit planner confirmation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalProposal'}
+        '404': {$ref: '#/components/responses/ReviewNotFound'}
+        '409': {$ref: '#/components/responses/StaleReview'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+  /api/v1/campaign-reviews/{review_id}/approvals:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    post:
+      tags: [Campaign approval]
+      operationId: confirmCampaignApproval
+      summary: Record the authorized planner's explicit approval
+      description: |
+        Confirm only the immutable proposal shown for this review revision.
+        Obtain planner identity from the authorized session. The concrete
+        session mechanism is pending owner agreement. Revalidate the
+        review, all terms and their pins before atomically recording approval
+        and the canonical original and baseline IDs. Identical concurrent
+        confirmations of a still-current proposal resolve to one receipt.
+        Material edits, incompatible pins or approving different terms
+        supersede prior approval for new work. Cosmetic edits preserve it.
+        Prior admitted runs keep their saved inputs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfirmApproval'}
+            example: {review_revision: 1, proposal_id: proposal-thb-shopee-voucher}
+      responses:
+        '200':
+          description: An identical confirmation recovers the existing current receipt.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalReceipt'}
+        '201':
+          description: Approval stored with the normalized original and baseline plan identities.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalReceipt'}
+        '403':
+          description: approval_forbidden for a caller without approval rights on the visible review.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+        '404': {$ref: '#/components/responses/ReviewNotFound'}
+        '409':
+          description: stale_approval_proposal for an invalidated proposal or approval_proposal_required for a missing approvable proposal.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+  /api/v1/campaign-approvals/{approval_id}:
+    get:
+      tags: [Campaign approval]
+      operationId: getCampaignApproval
+      summary: Read a saved approval receipt
+      description: Superseded approvals retain their saved terms and plan IDs with state stale.
+      parameters:
+        - name: approval_id
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Id'}
+      responses:
+        '200':
+          description: Saved approval terms, current eligibility and plan identities.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApprovalReceipt'}
+        '404':
+          description: approval_not_found
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+
+components:
+  parameters:
+    ReviewId:
+      name: review_id
+      in: path
+      required: true
+      schema: {$ref: '#/components/schemas/Id'}
+  responses:
+    ReviewSaved:
+      description: Immutable review revision with current values, available evidence, blockers and agent status.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ReviewContext'}
+          examples:
+            unavailableSnapshot:
+              summary: Current-checkout outcome when the evidence provider is absent
+              value:
+                contract_version: 1
+                review: {review_id: review-tissue-draft, revision: 1}
+                status: needs_input
+                facts:
+                  selection:
+                    product_id: requested-tissue-sku
+                    market_id: TH
+                    channel_id: shopee
+                    mechanic_id: fixed_order_voucher
+                    currency: THB
+                  offer: {discount_thb: 20}
+                field_meta:
+                  facts.selection.product_id: {origin: provided, evidence_refs: []}
+                  facts.selection.market_id: {origin: provided, evidence_refs: []}
+                  facts.selection.channel_id: {origin: provided, evidence_refs: []}
+                  facts.selection.mechanic_id: {origin: provided, evidence_refs: []}
+                  facts.selection.currency: {origin: provided, evidence_refs: []}
+                  facts.offer.discount_thb: {origin: provided, unit: thb_per_redeemed_order, evidence_refs: []}
+                snapshot: null
+                bundle: null
+                supported_choices: []
+                evidence: []
+                effective_costs: {}
+                measurement_support: {}
+                assumptions: []
+                candidates: []
+                blockers:
+                  - code: snapshot_unavailable
+                    field: snapshot
+                    reason: An authorized capability snapshot is unavailable.
+                    evidence_refs: []
+                  - code: missing_fact
+                    field: facts.selection.selling_unit_id
+                    reason: The selling unit is required for an exact product match.
+                    evidence_refs: []
+                questions:
+                  - field: facts.selection.selling_unit_id
+                    code: missing_fact
+                    prompt: What is the exact selling unit for this product?
+                    candidate_ids: []
+                agent: {mode: manual, status: not_requested, failed_stage: null, reason: null}
+    InvalidRequest:
+      description: invalid_request for a malformed body, unknown field, or invalid edit or confirmation.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+    ReviewNotFound:
+      description: review_not_found
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+    StaleReview:
+      description: stale_review_revision
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorEnvelope'}
+  schemas:
+    Id: {type: string, minLength: 1, description: Opaque identifier.}
+    Text: {type: string, minLength: 1}
+    NullableText: {type: [string, 'null'], minLength: 1}
+    Date: {type: string, format: date}
+    NullableDate: {type: [string, 'null'], format: date}
+    Version: {type: integer, const: 1}
+    Revision: {type: integer, minimum: 1}
+    Amount: {type: number, minimum: 0}
+    Fraction: {type: number, minimum: 0, maximum: 1}
+    Scalar: {type: [string, number, boolean]}
+    IdList:
+      type: array
+      uniqueItems: true
+      items: {$ref: '#/components/schemas/Id'}
+    ReviewRef:
+      type: object
+      additionalProperties: false
+      required: [review_id, revision]
+      properties:
+        review_id: {$ref: '#/components/schemas/Id'}
+        revision: {$ref: '#/components/schemas/Revision'}
+    SnapshotRef:
+      type: object
+      additionalProperties: false
+      required: [contract_version, snapshot_id, snapshot_version]
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        snapshot_id: {$ref: '#/components/schemas/Id'}
+        snapshot_version: {$ref: '#/components/schemas/Id'}
+    PolicyRef:
+      type: object
+      additionalProperties: false
+      required: [policy_id, policy_version]
+      properties:
+        policy_id: {$ref: '#/components/schemas/Id'}
+        policy_version: {$ref: '#/components/schemas/Id'}
+    VersionedRef:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        version: {$ref: '#/components/schemas/Id'}
+    Window:
+      type: object
+      additionalProperties: false
+      required: [start_date, end_date_exclusive]
+      properties:
+        start_date: {$ref: '#/components/schemas/Date'}
+        end_date_exclusive: {$ref: '#/components/schemas/Date'}
+    AgentMode: {type: string, enum: [manual, agent]}
+    CreateReview:
+      type: object
+      additionalProperties: false
+      anyOf:
+        - required: [facts]
+          properties:
+            facts: {minProperties: 1}
+        - required: [brief]
+      description: At least one structured fact or a nonblank brief. Empty groups and null leaves alone do not count as a fact.
+      properties:
+        facts: {$ref: '#/components/schemas/PlannerFacts'}
+        brief: {type: string, pattern: '\S'}
+        mode: {$ref: '#/components/schemas/AgentMode'}
+    ReviseReview:
+      type: object
+      additionalProperties: false
+      required: [base_revision]
+      anyOf:
+        - required: [mode]
+        - required: [edits]
+          properties:
+            edits: {minProperties: 1}
+        - required: [confirm]
+          properties:
+            confirm: {minItems: 1}
+      properties:
+        base_revision: {$ref: '#/components/schemas/Revision'}
+        mode: {$ref: '#/components/schemas/AgentMode'}
+        edits: {$ref: '#/components/schemas/PlannerFacts'}
+        confirm: {$ref: '#/components/schemas/IdList'}
+    PlannerFacts:
+      type: object
+      additionalProperties: false
+      description: |
+        Partial business facts. Resolve readiness only against the current
+        snapshot, a supported measurement policy and complete applicable terms.
+        Voucher discount, minimum spend and eligibility require explicit entry
+        or confirmation. Retrieved fixed attributes keep evidence. Currency
+        support is THB in this milestone. Other requested values may be retained
+        as blockers. Dates must be well formed and ordered.
+      properties:
+        selection: {$ref: '#/components/schemas/DraftSelection'}
+        offer: {$ref: '#/components/schemas/DraftOffer'}
+        audience: {$ref: '#/components/schemas/DraftAudience'}
+        goal: {$ref: '#/components/schemas/DraftGoal'}
+        budget: {$ref: '#/components/schemas/DraftBudget'}
+        guardrails: {$ref: '#/components/schemas/DraftGuardrails'}
+        post_end_date_exclusive: {$ref: '#/components/schemas/NullableDate'}
+        message: {$ref: '#/components/schemas/DraftMessage'}
+        cost_inputs:
+          type: [object, 'null']
+          additionalProperties: {$ref: '#/components/schemas/DraftCostInput'}
+    DraftSelection:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        product_id: {$ref: '#/components/schemas/NullableText'}
+        selling_unit_id: {$ref: '#/components/schemas/NullableText'}
+        market_id: {$ref: '#/components/schemas/NullableText'}
+        channel_id: {$ref: '#/components/schemas/NullableText'}
+        mechanic_id: {$ref: '#/components/schemas/NullableText'}
+        currency: {$ref: '#/components/schemas/NullableText'}
+        start_date: {$ref: '#/components/schemas/NullableDate'}
+        end_date_exclusive: {$ref: '#/components/schemas/NullableDate'}
+    DraftOffer:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        discount_thb: {type: [number, 'null'], description: THB per redeemed order.}
+        minimum_spend_thb: {type: [number, 'null'], description: THB per order.}
+        eligibility: {$ref: '#/components/schemas/NullableText'}
+        minimum_spend_basis: {$ref: '#/components/schemas/NullableText'}
+        funder: {$ref: '#/components/schemas/NullableText'}
+        stacking: {type: [boolean, 'null']}
+        max_redemptions_per_order: {type: [integer, 'null'], minimum: 1}
+    DraftAudience:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        kind: {type: [string, 'null'], enum: [all_eligible, segments, null]}
+        segment_ids:
+          anyOf:
+            - $ref: '#/components/schemas/IdList'
+            - type: 'null'
+    DraftGoal:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        metric: {$ref: '#/components/schemas/NullableText'}
+        unit: {$ref: '#/components/schemas/NullableText'}
+        direction: {type: [string, 'null'], enum: [at_least, at_most, null]}
+        target: {type: [number, 'null']}
+        comparator: {$ref: '#/components/schemas/NullableText'}
+        scope: {$ref: '#/components/schemas/NullableText'}
+        window:
+          type: [object, 'null']
+          additionalProperties: false
+          properties:
+            start_date: {$ref: '#/components/schemas/NullableDate'}
+            end_date_exclusive: {$ref: '#/components/schemas/NullableDate'}
+    DraftBudget:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        cap_thb: {type: [number, 'null']}
+        includes:
+          anyOf:
+            - $ref: '#/components/schemas/IdList'
+            - type: 'null'
+    DraftGuardrails:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        max_discount_thb: {type: [number, 'null'], description: Discount ceiling per redeemed order.}
+        min_contribution_thb_per_selling_unit: {type: [number, 'null']}
+    DraftMessage:
+      type: [object, 'null']
+      additionalProperties: false
+      properties:
+        headline: {$ref: '#/components/schemas/NullableText'}
+        key_message: {$ref: '#/components/schemas/NullableText'}
+        language: {$ref: '#/components/schemas/NullableText'}
+        tone: {$ref: '#/components/schemas/NullableText'}
+    DraftCostInput:
+      type: [object, 'null']
+      additionalProperties: false
+      description: |
+        Resolve an unavailable cost once all seven fields are supplied. The
+        backend binds the record to the exact capability and economics IDs and
+        matching unit, basis, payer and interval. Keep original snapshot amounts
+        intact. An out-of-scope edit reopens the cost gap. A fee charged only
+        on voucher redemption requires campaign-period coverage.
+      properties:
+        value: {type: [number, 'null'], minimum: 0}
+        unit: {$ref: '#/components/schemas/NullableText'}
+        basis: {$ref: '#/components/schemas/NullableText'}
+        payer: {$ref: '#/components/schemas/NullableText'}
+        effective_from: {$ref: '#/components/schemas/NullableDate'}
+        effective_to_exclusive: {$ref: '#/components/schemas/NullableDate'}
+        business_basis: {$ref: '#/components/schemas/NullableText'}
+    Origin:
+      type: string
+      enum: [provided, extracted, retrieved, calculated, proposed, unavailable]
+    FieldMeta:
+      type: object
+      additionalProperties: false
+      required: [origin, evidence_refs]
+      properties:
+        origin: {$ref: '#/components/schemas/Origin'}
+        evidence_refs: {$ref: '#/components/schemas/IdList'}
+        unit: {$ref: '#/components/schemas/NullableText'}
+        basis: {$ref: '#/components/schemas/NullableText'}
+        quote: {$ref: '#/components/schemas/NullableText'}
+        brief_revision: {type: [integer, 'null'], minimum: 1}
+    BlockerCode:
+      type: string
+      enum:
+        - snapshot_unavailable
+        - evidence_incompatible
+        - missing_fact
+        - conflicting_fact
+        - confirmation_required
+        - unsupported_configuration
+        - unsupported_offer_terms
+        - unsupported_audience
+        - economics_unresolved
+        - material_cost_unavailable
+        - incompatible_cost_basis
+        - unsupported_goal
+        - guardrail_invalid
+        - measurement_support_unverified
+        - scenario_settings_unavailable
+        - comparison_scope_unverified
+        - lever_not_supported
+        - invalid_contingency_rule
+        - approval_required
+        - stale_approval
+        - approval_review_mismatch
+        - execution_inputs_unavailable
+        - comparison_scope_mismatch
+    Blocker:
+      type: object
+      additionalProperties: false
+      required: [code, field, reason, evidence_refs]
+      properties:
+        code: {$ref: '#/components/schemas/BlockerCode'}
+        field: {$ref: '#/components/schemas/Text'}
+        reason: {$ref: '#/components/schemas/Text'}
+        evidence_refs: {$ref: '#/components/schemas/IdList'}
+    Question:
+      type: object
+      additionalProperties: false
+      required: [field, code, prompt, candidate_ids]
+      properties:
+        field: {$ref: '#/components/schemas/Text'}
+        code: {$ref: '#/components/schemas/BlockerCode'}
+        prompt: {$ref: '#/components/schemas/Text'}
+        candidate_ids: {$ref: '#/components/schemas/IdList'}
+    Assumption:
+      type: object
+      additionalProperties: false
+      required: [id, version, field, value, unit, basis, consequence, evidence_ref, state]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        version: {$ref: '#/components/schemas/Id'}
+        field: {$ref: '#/components/schemas/Text'}
+        value:
+          description: JSON value scoped and validated against the target field.
+        unit: {$ref: '#/components/schemas/NullableText'}
+        basis: {$ref: '#/components/schemas/Text'}
+        consequence: {$ref: '#/components/schemas/Text'}
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+        state: {type: string, enum: [pending_confirmation, confirmed]}
+    Candidate:
+      type: object
+      additionalProperties: false
+      required: [id, field, value, origin, basis, evidence_refs]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        field: {$ref: '#/components/schemas/Text'}
+        value:
+          description: JSON value scoped and validated against the target field.
+        origin: {$ref: '#/components/schemas/Origin'}
+        basis: {$ref: '#/components/schemas/Text'}
+        evidence_refs: {$ref: '#/components/schemas/IdList'}
+        quote: {$ref: '#/components/schemas/Text'}
+        brief_revision: {$ref: '#/components/schemas/Revision'}
+        assumption_id: {$ref: '#/components/schemas/Id'}
+      allOf:
+        - if: {properties: {origin: {const: extracted}}}
+          then: {required: [quote, brief_revision]}
+        - if: {properties: {origin: {const: proposed}}}
+          then: {required: [assumption_id]}
+    AgentState:
+      type: object
+      additionalProperties: false
+      required: [mode, status, failed_stage, reason]
+      properties:
+        mode: {$ref: '#/components/schemas/AgentMode'}
+        status: {type: string, enum: [not_requested, completed, unavailable]}
+        failed_stage: {type: [string, 'null'], enum: [extraction, clarification, null]}
+        reason: {type: [string, 'null'], enum: [timeout, provider_unavailable, invalid_response, null]}
+      oneOf:
+        - properties:
+            mode: {const: manual}
+            status: {const: not_requested}
+            failed_stage: {type: 'null'}
+            reason: {type: 'null'}
+        - properties:
+            mode: {const: agent}
+            status: {const: completed}
+            failed_stage: {type: 'null'}
+            reason: {type: 'null'}
+        - properties:
+            mode: {const: agent}
+            status: {const: unavailable}
+            failed_stage: {type: string}
+            reason: {type: string}
+    AgentProposal:
+      type: object
+      additionalProperties: false
+      description: Internal structured output from the FEAT-02 extraction or clarification call.
+      required: [candidates, questions]
+      examples:
+        - candidates:
+            - field: facts.offer.discount_thb
+              value: 20
+              quote: THB 20 voucher
+          questions:
+            - field: facts.offer.minimum_spend_thb
+              prompt: What minimum order spend applies to the voucher?
+      properties:
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, value, quote]
+            properties:
+              field: {$ref: '#/components/schemas/Text'}
+              value:
+                description: Untrusted proposed fact leaf. Validate the type and quote against the field.
+                anyOf:
+                  - $ref: '#/components/schemas/Scalar'
+                  - type: array
+                    items: {$ref: '#/components/schemas/Scalar'}
+              quote: {$ref: '#/components/schemas/Text'}
+        questions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, prompt]
+            properties:
+              field: {$ref: '#/components/schemas/Text'}
+              prompt: {$ref: '#/components/schemas/Text'}
+    ReviewContext:
+      type: object
+      additionalProperties: false
+      required: [contract_version, review, status, facts, field_meta, snapshot, bundle, supported_choices,
+        evidence, effective_costs, measurement_support, assumptions, candidates, blockers, questions, agent]
+      description: |
+        Current facts retain planner input during conflicts. A candidate only
+        supplies a resolved value after confirmation. Every evidence reference
+        published in the review resolves to a released source record in evidence.
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        status: {type: string, enum: [needs_input, ready_for_approval]}
+        facts: {$ref: '#/components/schemas/PlannerFacts'}
+        field_meta:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/FieldMeta'}
+        snapshot:
+          anyOf:
+            - $ref: '#/components/schemas/SnapshotRef'
+            - type: 'null'
+        bundle:
+          anyOf:
+            - $ref: '#/components/schemas/EvidenceBundle'
+            - type: 'null'
+        supported_choices:
+          type: array
+          items: {$ref: '#/components/schemas/Capability'}
+        evidence:
+          type: array
+          items: {$ref: '#/components/schemas/EvidenceSource'}
+        effective_costs: {$ref: '#/components/schemas/EffectiveCosts'}
+        measurement_support: {$ref: '#/components/schemas/MeasurementSupport'}
+        assumptions:
+          type: array
+          items: {$ref: '#/components/schemas/Assumption'}
+        candidates:
+          type: array
+          items: {$ref: '#/components/schemas/Candidate'}
+        blockers:
+          type: array
+          items: {$ref: '#/components/schemas/Blocker'}
+        questions:
+          type: array
+          items: {$ref: '#/components/schemas/Question'}
+        agent: {$ref: '#/components/schemas/AgentState'}
+      if: {properties: {status: {const: ready_for_approval}}}
+      then:
+        properties:
+          snapshot: {type: object}
+          bundle: {type: object}
+          blockers: {maxItems: 0}
+      else:
+        properties:
+          blockers: {minItems: 1}
+    MeasurementSupport:
+      type: object
+      description: Policy checks keyed by affected goal, budget, guardrail or horizon fact path.
+      additionalProperties:
+        type: object
+        additionalProperties: false
+        required: [status, basis, unit, policy_ref, evidence_refs, reason]
+        properties:
+          status: {type: string, enum: [verified, unsupported, unverified]}
+          basis: {$ref: '#/components/schemas/Text'}
+          unit: {$ref: '#/components/schemas/NullableText'}
+          policy_ref:
+            anyOf:
+              - $ref: '#/components/schemas/PolicyRef'
+              - type: 'null'
+          evidence_refs: {$ref: '#/components/schemas/IdList'}
+          reason: {$ref: '#/components/schemas/NullableText'}
+        if: {properties: {status: {const: verified}}}
+        then:
+          properties:
+            policy_ref: {type: object}
+            reason: {type: 'null'}
+        else:
+          properties:
+            reason: {type: string}
+    Selection:
+      type: object
+      additionalProperties: false
+      required: [product_id, selling_unit_id, market_id, channel_id, mechanic_id, currency,
+        start_date, end_date_exclusive]
+      properties:
+        product_id: {$ref: '#/components/schemas/Id'}
+        selling_unit_id: {$ref: '#/components/schemas/Id'}
+        market_id: {$ref: '#/components/schemas/Id'}
+        channel_id: {$ref: '#/components/schemas/Id'}
+        mechanic_id: {$ref: '#/components/schemas/Id'}
+        currency: {type: string, const: THB}
+        start_date: {$ref: '#/components/schemas/Date'}
+        end_date_exclusive: {$ref: '#/components/schemas/Date'}
+    EvidenceBundle:
+      type: object
+      additionalProperties: false
+      required: [reference, selection, capability, economics, segments, sources]
+      properties:
+        reference: {$ref: '#/components/schemas/SnapshotRef'}
+        selection: {$ref: '#/components/schemas/Selection'}
+        capability: {$ref: '#/components/schemas/Capability'}
+        economics: {$ref: '#/components/schemas/Economics'}
+        segments:
+          type: array
+          items: {$ref: '#/components/schemas/ReleasedSegment'}
+        sources:
+          type: array
+          items: {$ref: '#/components/schemas/EvidenceSource'}
+    Capability:
+      type: object
+      additionalProperties: false
+      required: [capability_id, product, market_id, channel_id, currency, timezone, valid_from,
+        valid_to_exclusive, voucher, evidence_ref]
+      properties:
+        capability_id: {$ref: '#/components/schemas/Id'}
+        product:
+          type: object
+          additionalProperties: false
+          required: [product_id, name, brand, category, selling_unit_id, pack_quantity,
+            pack_unit, units_per_order]
+          properties:
+            product_id: {$ref: '#/components/schemas/Id'}
+            name: {$ref: '#/components/schemas/Text'}
+            brand: {$ref: '#/components/schemas/Text'}
+            category: {$ref: '#/components/schemas/Id'}
+            selling_unit_id: {$ref: '#/components/schemas/Id'}
+            pack_quantity: {type: integer, minimum: 1}
+            pack_unit: {$ref: '#/components/schemas/Text'}
+            units_per_order: {type: integer, minimum: 1}
+        market_id: {$ref: '#/components/schemas/Id'}
+        channel_id: {$ref: '#/components/schemas/Id'}
+        currency: {type: string, const: THB}
+        timezone: {type: string, description: IANA timezone.}
+        valid_from: {$ref: '#/components/schemas/Date'}
+        valid_to_exclusive: {$ref: '#/components/schemas/Date'}
+        voucher:
+          type: object
+          additionalProperties: false
+          required: [mechanic_id, discount, discount_unit, minimum_spend, minimum_spend_unit,
+            minimum_spend_basis, eligibility, max_redemptions_per_order, stacking, funder]
+          properties:
+            mechanic_id: {$ref: '#/components/schemas/Id'}
+            discount: {$ref: '#/components/schemas/Amount'}
+            discount_unit: {type: string, const: thb_per_redeemed_order}
+            minimum_spend: {$ref: '#/components/schemas/Amount'}
+            minimum_spend_unit: {type: string, const: thb_per_order}
+            minimum_spend_basis: {$ref: '#/components/schemas/Text'}
+            eligibility: {$ref: '#/components/schemas/Text'}
+            max_redemptions_per_order: {type: integer, minimum: 1}
+            stacking: {type: boolean}
+            funder: {$ref: '#/components/schemas/Text'}
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+    Cost:
+      type: object
+      additionalProperties: false
+      required: [status, value, unit, basis, payer, evidence_ref]
+      description: Percentage points use the named base. A confirmed zero has the same evidence requirements as any confirmed amount.
+      examples:
+        - status: confirmed
+          value: 0
+          unit: thb_per_redeemed_order
+          basis: per_redeemed_order
+          payer: seller
+          evidence_ref: fixture-voucher-fee-confirmation
+        - status: unavailable
+          value: null
+          unit: thb_per_redeemed_order
+          basis: per_redeemed_order
+          payer: seller
+          evidence_ref: example-seller-fee-gap
+          reason: The applicable seller fee schedule is unavailable.
+      properties:
+        status: {type: string, enum: [confirmed, unavailable]}
+        value: {type: [number, 'null'], minimum: 0}
+        unit: {$ref: '#/components/schemas/Text'}
+        basis: {$ref: '#/components/schemas/Text'}
+        payer: {$ref: '#/components/schemas/Text'}
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+        reason: {$ref: '#/components/schemas/NullableText'}
+      if: {properties: {status: {const: unavailable}}}
+      then:
+        required: [reason]
+        properties:
+          value: {type: 'null'}
+          reason: {type: string}
+      else:
+        properties:
+          value: {type: number}
+          reason: {type: 'null'}
+    EffectiveCosts:
+      type: object
+      description: Map from FEAT-01 economics field to its effective reviewed cost and evidence.
+      additionalProperties: {$ref: '#/components/schemas/Cost'}
+    TaxAndReturns:
+      type: object
+      additionalProperties: false
+      required: [tax_basis, returns_basis, evidence_ref]
+      properties:
+        tax_basis: {$ref: '#/components/schemas/Text'}
+        returns_basis: {$ref: '#/components/schemas/Text'}
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+    Economics:
+      type: object
+      additionalProperties: {$ref: '#/components/schemas/Cost'}
+      required: [economics_id, capability_id, effective_from, effective_to_exclusive, regular_price, cogs,
+        channel_commission, voucher_service_fee, fulfillment, paid_media, platform_reimbursement,
+        tax_and_returns]
+      properties:
+        economics_id: {$ref: '#/components/schemas/Id'}
+        capability_id: {$ref: '#/components/schemas/Id'}
+        effective_from: {$ref: '#/components/schemas/Date'}
+        effective_to_exclusive: {$ref: '#/components/schemas/Date'}
+        regular_price:
+          allOf:
+            - $ref: '#/components/schemas/Cost'
+            - properties:
+                value: {exclusiveMinimum: 0}
+        cogs: {$ref: '#/components/schemas/Cost'}
+        channel_commission: {$ref: '#/components/schemas/Cost'}
+        voucher_service_fee: {$ref: '#/components/schemas/Cost'}
+        fulfillment: {$ref: '#/components/schemas/Cost'}
+        paid_media: {$ref: '#/components/schemas/Cost'}
+        platform_reimbursement: {$ref: '#/components/schemas/Cost'}
+        tax_and_returns: {$ref: '#/components/schemas/TaxAndReturns'}
+    ReleasedSegment:
+      type: object
+      additionalProperties: false
+      required: [segment_id, profile_version, capability_id, population_basis, population_count,
+        window_start, window_end_exclusive, metrics, evidence_ref]
+      properties:
+        segment_id: {$ref: '#/components/schemas/Id'}
+        profile_version: {$ref: '#/components/schemas/Id'}
+        capability_id: {$ref: '#/components/schemas/Id'}
+        population_basis: {type: string, enum: [synthetic, household_derived]}
+        population_count:
+          type: object
+          additionalProperties: false
+          required: [value, unit]
+          properties:
+            value: {type: integer, minimum: 1}
+            unit: {type: string, enum: [synthetic_households, distinct_households]}
+        window_start: {$ref: '#/components/schemas/Date'}
+        window_end_exclusive: {$ref: '#/components/schemas/Date'}
+        metrics:
+          type: object
+          additionalProperties: false
+          required: [weekly_purchase_probability]
+          properties:
+            weekly_purchase_probability:
+              type: object
+              additionalProperties: false
+              required: [value, unit, numerator, denominator, evidence_ref]
+              properties:
+                value: {$ref: '#/components/schemas/Fraction'}
+                unit: {type: string, const: fraction}
+                numerator:
+                  type: object
+                  additionalProperties: false
+                  required: [value, unit]
+                  properties:
+                    value: {type: integer, minimum: 0}
+                    unit: {type: string, const: buying_household_weeks}
+                denominator:
+                  type: object
+                  additionalProperties: false
+                  required: [value, unit]
+                  properties:
+                    value: {type: integer, minimum: 1}
+                    unit: {type: string, const: eligible_household_weeks}
+                evidence_ref: {$ref: '#/components/schemas/Id'}
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+      if: {properties: {population_basis: {const: household_derived}}}
+      then:
+        properties:
+          population_count:
+            properties:
+              value: {minimum: 50}
+              unit: {const: distinct_households}
+      else:
+        properties:
+          population_count:
+            properties:
+              unit: {const: synthetic_households}
+    EvidenceSource:
+      type: object
+      additionalProperties: false
+      required: [evidence_ref, source_id, source_version, record_key, transformation_id, transformation_version,
+        as_of, window_start, window_end_exclusive, scope, grain, coverage, origin, evidence_class, label]
+      properties:
+        evidence_ref: {$ref: '#/components/schemas/Id'}
+        source_id: {$ref: '#/components/schemas/Id'}
+        source_version: {$ref: '#/components/schemas/Id'}
+        record_key: {$ref: '#/components/schemas/Id'}
+        transformation_id: {$ref: '#/components/schemas/Id'}
+        transformation_version: {$ref: '#/components/schemas/Id'}
+        as_of: {$ref: '#/components/schemas/Date'}
+        window_start: {$ref: '#/components/schemas/Date'}
+        window_end_exclusive: {$ref: '#/components/schemas/Date'}
+        scope: {$ref: '#/components/schemas/Text'}
+        grain: {$ref: '#/components/schemas/Text'}
+        coverage: {$ref: '#/components/schemas/Text'}
+        origin: {$ref: '#/components/schemas/Origin'}
+        evidence_class:
+          type: string
+          enum: [observed_local_market, transferred_behavior, business_input, assumption, synthetic_fixture]
+        label: {type: string, enum: [data, llm_estimate, default]}
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [contract_version, error]
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, field, message]
+          properties:
+            code:
+              type: string
+              enum: [invalid_request, review_not_found, approval_not_found, stale_review_revision,
+                approval_forbidden, stale_approval_proposal, approval_proposal_required]
+            field: {$ref: '#/components/schemas/NullableText'}
+            message: {$ref: '#/components/schemas/Text'}
+    CreateApprovalProposal:
+      type: object
+      additionalProperties: false
+      required: [review_revision]
+      properties:
+        review_revision: {$ref: '#/components/schemas/Revision'}
+        permitted_changes:
+          type: array
+          uniqueItems: true
+          default: []
+          items: {$ref: '#/components/schemas/PermittedChange'}
+        contingency_rules:
+          $ref: '#/components/schemas/ContingencyRules'
+          default: []
+    ConfirmApproval:
+      type: object
+      additionalProperties: false
+      required: [review_revision, proposal_id]
+      properties:
+        review_revision: {$ref: '#/components/schemas/Revision'}
+        proposal_id: {$ref: '#/components/schemas/Id'}
+    PermittedChange:
+      type: object
+      additionalProperties: false
+      required: [path, uses, limit]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          examples: [offer.intervention_window.start_date]
+        uses:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, enum: [strategy, contingency_rule]}
+        limit:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [kind, min, max, unit]
+              properties:
+                kind: {type: string, const: numeric_range}
+                min: {type: number}
+                max: {type: number}
+                unit: {$ref: '#/components/schemas/Text'}
+            - type: object
+              additionalProperties: false
+              required: [kind, values, unit]
+              properties:
+                kind: {type: string, const: choice_set}
+                values:
+                  type: array
+                  minItems: 1
+                  uniqueItems: true
+                  items: {$ref: '#/components/schemas/Scalar'}
+                unit: {$ref: '#/components/schemas/NullableText'}
+    ContingencyRules:
+      type: array
+      maxItems: 3
+      description: Unique rule IDs. Only supported triggers and bounded actions at the approved weekly tick.
+      items:
+        type: object
+        additionalProperties: false
+        required: [rule_id, trigger, action, max_firings]
+        properties:
+          rule_id: {$ref: '#/components/schemas/Id'}
+          trigger:
+            type: object
+            additionalProperties: false
+            required: [metric, operator, threshold, unit]
+            properties:
+              metric: {$ref: '#/components/schemas/Id'}
+              operator: {$ref: '#/components/schemas/Text'}
+              threshold: {type: number}
+              unit: {$ref: '#/components/schemas/Text'}
+          action:
+            type: object
+            additionalProperties: false
+            required: [path, value]
+            properties:
+              path: {$ref: '#/components/schemas/Text'}
+              value: {$ref: '#/components/schemas/Scalar'}
+          max_firings: {type: integer, minimum: 1}
+    ApprovalProposal:
+      type: object
+      additionalProperties: false
+      required: [contract_version, proposal_id, review, status, terms, blockers]
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        proposal_id: {$ref: '#/components/schemas/Id'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        status: {type: string, const: awaiting_confirmation}
+        terms: {$ref: '#/components/schemas/ApprovalTerms'}
+        blockers: {type: array, maxItems: 0, items: {$ref: '#/components/schemas/Blocker'}}
+    BlockedApprovalProposal:
+      type: object
+      additionalProperties: false
+      required: [contract_version, proposal_id, review, status, terms, blockers]
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        proposal_id: {type: 'null'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        status: {type: string, const: blocked}
+        terms:
+          type: object
+          additionalProperties: false
+          description: Complete resolved groups may be shown. Null denotes an unresolved group.
+          properties:
+            evidence:
+              anyOf:
+                - $ref: '#/components/schemas/EvidencePin'
+                - type: 'null'
+            original:
+              anyOf:
+                - $ref: '#/components/schemas/ReviewedOriginal'
+                - type: 'null'
+            assumptions:
+              type: [array, 'null']
+              items: {$ref: '#/components/schemas/Assumption'}
+            comparison:
+              anyOf:
+                - $ref: '#/components/schemas/Comparison'
+                - type: 'null'
+            baseline:
+              anyOf:
+                - $ref: '#/components/schemas/BaselineDefinition'
+                - type: 'null'
+            permitted_changes:
+              type: [array, 'null']
+              items: {$ref: '#/components/schemas/PermittedChange'}
+        blockers: {type: array, minItems: 1, items: {$ref: '#/components/schemas/Blocker'}}
+    ApprovalReceipt:
+      type: object
+      additionalProperties: false
+      required: [contract_version, approval_id, proposal_id, review, state, approved_at, terms, plans]
+      description: Saved terms keep their values and versions. Pending comparison assumptions become confirmed.
+      properties:
+        contract_version: {$ref: '#/components/schemas/Version'}
+        approval_id: {$ref: '#/components/schemas/Id'}
+        proposal_id: {$ref: '#/components/schemas/Id'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        state: {type: string, enum: [current, stale]}
+        approved_at: {type: string, format: date-time, description: UTC instant.}
+        terms:
+          allOf:
+            - $ref: '#/components/schemas/ApprovalTerms'
+            - properties:
+                assumptions:
+                  items:
+                    properties:
+                      state: {const: confirmed}
+        plans:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: {$ref: '#/components/schemas/PlanRef'}
+          contains: {properties: {role: {const: original}}}
+          minContains: 1
+          maxContains: 1
+    PlanRef:
+      type: object
+      additionalProperties: false
+      required: [plan_id, role]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Id'}
+        role: {type: string, enum: [original, baseline]}
+    ApprovalTerms:
+      type: object
+      additionalProperties: false
+      required: [evidence, original, assumptions, comparison, baseline, permitted_changes]
+      properties:
+        evidence: {$ref: '#/components/schemas/EvidencePin'}
+        original: {$ref: '#/components/schemas/ReviewedOriginal'}
+        assumptions: {type: array, items: {$ref: '#/components/schemas/Assumption'}}
+        comparison: {$ref: '#/components/schemas/Comparison'}
+        baseline: {$ref: '#/components/schemas/BaselineDefinition'}
+        permitted_changes: {type: array, items: {$ref: '#/components/schemas/PermittedChange'}}
+    EvidencePin:
+      type: object
+      additionalProperties: false
+      required: [snapshot, capability_id, economics_id, evidence_refs]
+      properties:
+        snapshot: {$ref: '#/components/schemas/SnapshotRef'}
+        capability_id: {$ref: '#/components/schemas/Id'}
+        economics_id: {$ref: '#/components/schemas/Id'}
+        evidence_refs: {$ref: '#/components/schemas/IdList'}
+    ReviewedOriginal:
+      type: object
+      additionalProperties: false
+      required: [selection, offer, audience, goal, budget, guardrails, effective_costs,
+        measurement_support, appeal, contingency_rules]
+      properties:
+        selection: {$ref: '#/components/schemas/Selection'}
+        offer: {$ref: '#/components/schemas/ReviewedOffer'}
+        audience: {$ref: '#/components/schemas/Audience'}
+        goal: {$ref: '#/components/schemas/Goal'}
+        budget: {$ref: '#/components/schemas/Budget'}
+        guardrails: {$ref: '#/components/schemas/Guardrails'}
+        effective_costs: {$ref: '#/components/schemas/EffectiveCosts'}
+        measurement_support: {$ref: '#/components/schemas/MeasurementSupport'}
+        appeal: {$ref: '#/components/schemas/ApprovedAppeal'}
+        contingency_rules: {$ref: '#/components/schemas/ContingencyRules'}
+    ReviewedOffer:
+      type: object
+      additionalProperties: false
+      required: [discount_thb, minimum_spend_thb, eligibility, minimum_spend_basis, funder,
+        stacking, max_redemptions_per_order]
+      properties:
+        discount_thb: {$ref: '#/components/schemas/Amount'}
+        minimum_spend_thb: {$ref: '#/components/schemas/Amount'}
+        eligibility: {$ref: '#/components/schemas/Text'}
+        minimum_spend_basis: {$ref: '#/components/schemas/Text'}
+        funder: {$ref: '#/components/schemas/Text'}
+        stacking: {type: boolean}
+        max_redemptions_per_order: {type: integer, minimum: 1}
+        intervention_window: {$ref: '#/components/schemas/Window'}
+    Audience:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: {type: string, enum: [all_eligible, segments]}
+        segment_ids: {$ref: '#/components/schemas/IdList'}
+      if: {properties: {kind: {const: segments}}}
+      then:
+        required: [segment_ids]
+        properties:
+          segment_ids: {minItems: 1}
+    Goal:
+      type: object
+      additionalProperties: false
+      required: [metric, unit, direction, target, comparator, scope, window]
+      description: Approval requires the verified measurement policy for these exact terms.
+      properties:
+        metric: {$ref: '#/components/schemas/Id'}
+        unit: {$ref: '#/components/schemas/Text'}
+        direction: {type: string, enum: [at_least, at_most]}
+        target: {type: number}
+        comparator: {$ref: '#/components/schemas/Id'}
+        scope: {$ref: '#/components/schemas/Id'}
+        window: {$ref: '#/components/schemas/Window'}
+    Budget:
+      type: object
+      additionalProperties: false
+      required: [cap_thb, includes]
+      properties:
+        cap_thb: {$ref: '#/components/schemas/Amount'}
+        includes:
+          allOf:
+            - $ref: '#/components/schemas/IdList'
+            - minItems: 1
+    Guardrails:
+      type: object
+      additionalProperties: false
+      required: [max_discount_thb, min_contribution_thb_per_selling_unit]
+      properties:
+        max_discount_thb: {$ref: '#/components/schemas/Amount'}
+        min_contribution_thb_per_selling_unit: {type: number}
+    ApprovedAppeal:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, message_ref]
+          properties:
+            kind: {type: string, const: message}
+            message_ref: {$ref: '#/components/schemas/VersionedRef'}
+        - type: object
+          additionalProperties: false
+          required: [kind, reason, evidence_ref]
+          properties:
+            kind: {type: string, const: neutral}
+            reason: {$ref: '#/components/schemas/Text'}
+            evidence_ref: {$ref: '#/components/schemas/Id'}
+    BaselineDefinition:
+      type: object
+      additionalProperties: false
+      required: [kind, policy_ref]
+      properties:
+        kind: {type: string, const: no_campaign}
+        policy_ref: {$ref: '#/components/schemas/PolicyRef'}
+    Comparison:
+      type: object
+      additionalProperties: false
+      required: [comparison_id, revision, policy_ref, population, calendar, scenarios,
+        random_stream_policy_ref, seeds]
+      description: Fixed evaluation universe and ordered seed list shared by all plans.
+      properties:
+        comparison_id: {$ref: '#/components/schemas/Id'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        policy_ref: {$ref: '#/components/schemas/PolicyRef'}
+        population:
+          type: object
+          additionalProperties: false
+          required: [population_id, population_version, segment_refs, cohort_policy_ref]
+          properties:
+            population_id: {$ref: '#/components/schemas/Id'}
+            population_version: {$ref: '#/components/schemas/Id'}
+            segment_refs:
+              type: array
+              minItems: 1
+              uniqueItems: true
+              items:
+                type: object
+                additionalProperties: false
+                required: [segment_id, profile_version]
+                properties:
+                  segment_id: {$ref: '#/components/schemas/Id'}
+                  profile_version: {$ref: '#/components/schemas/Id'}
+            cohort_policy_ref: {$ref: '#/components/schemas/PolicyRef'}
+        calendar:
+          type: object
+          additionalProperties: false
+          required: [timezone, campaign, follow_up, measurement, simulation_tick, decision_tick,
+            decision_tick_anchor]
+          properties:
+            timezone: {$ref: '#/components/schemas/Text'}
+            campaign: {$ref: '#/components/schemas/Window'}
+            follow_up:
+              anyOf:
+                - $ref: '#/components/schemas/Window'
+                - type: 'null'
+            measurement: {$ref: '#/components/schemas/Window'}
+            simulation_tick: {$ref: '#/components/schemas/Id'}
+            decision_tick: {type: string, const: week}
+            decision_tick_anchor: {$ref: '#/components/schemas/Date'}
+        scenarios:
+          type: object
+          additionalProperties: false
+          required: [scenario_set_id, scenario_set_version, items]
+          properties:
+            scenario_set_id: {$ref: '#/components/schemas/Id'}
+            scenario_set_version: {$ref: '#/components/schemas/Id'}
+            items:
+              type: array
+              minItems: 1
+              items: {$ref: '#/components/schemas/Scenario'}
+        random_stream_policy_ref: {$ref: '#/components/schemas/PolicyRef'}
+        seeds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: IDs and numeric seeds must each be distinct. Use the verified engine's supported range.
+          items:
+            type: object
+            additionalProperties: false
+            required: [seed_id, seed]
+            properties:
+              seed_id: {$ref: '#/components/schemas/Id'}
+              seed: {type: integer, minimum: 0}
+    Scenario:
+      type: object
+      additionalProperties: false
+      required: [scenario_id, classification, settings_ref, settings, evidence_refs, likelihood]
+      description: FEAT-03 owns the settings and evidenced or assumed classification vocabulary.
+      properties:
+        scenario_id: {$ref: '#/components/schemas/Id'}
+        classification: {type: string, minLength: 1, examples: [passive, stress_only]}
+        settings_ref: {$ref: '#/components/schemas/VersionedRef'}
+        settings:
+          type: object
+          description: Resolved versioned FEAT-03 settings. Validate quantities, units, dates and trigger scope against the verified provider.
+          required: [trigger_scope]
+          properties:
+            trigger_scope:
+              type: string
+              minLength: 1
+              examples: [none, exogenous, focal_promotion]
+              description: Exogenous conditions apply to both plans. A focal-promotion trigger only applies when that intervention is enabled.
+        evidence_refs: {$ref: '#/components/schemas/IdList'}
+        likelihood: {$ref: '#/components/schemas/ScenarioLikelihood'}
+      allOf:
+        - if: {properties: {scenario_id: {const: S4}}}
+          then:
+            properties:
+              classification: {const: stress_only}
+              likelihood:
+                properties:
+                  status: {const: unavailable}
+    ScenarioLikelihood:
+      type: object
+      additionalProperties: false
+      required: [status, value, interval, reason]
+      properties:
+        status: {type: string, enum: [available, unavailable]}
+        value: {type: [number, 'null'], minimum: 0, maximum: 1}
+        interval:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [low, high, level]
+          properties:
+            low: {$ref: '#/components/schemas/Fraction'}
+            high: {$ref: '#/components/schemas/Fraction'}
+            level: {$ref: '#/components/schemas/Fraction'}
+        reason: {$ref: '#/components/schemas/NullableText'}
+        qualification:
+          type: object
+          additionalProperties: false
+          required: [analogue_count, loo_brier_score, base_rate_brier_score]
+          description: Provider-calibrated leave-one-out score must be lower than the base-rate score.
+          properties:
+            analogue_count: {type: integer, minimum: 0}
+            loo_brier_score: {$ref: '#/components/schemas/Fraction'}
+            base_rate_brier_score: {$ref: '#/components/schemas/Fraction'}
+      if: {properties: {status: {const: available}}}
+      then:
+        required: [qualification]
+        properties:
+          value: {type: number}
+          interval: {type: object}
+          reason: {type: 'null'}
+          qualification:
+            properties:
+              analogue_count: {minimum: 5}
+      else:
+        properties:
+          value: {type: 'null'}
+          interval: {type: 'null'}
+          reason: {type: string}
+    ApprovedComparisonResult:
+      type: object
+      additionalProperties: false
+      description: Internal result of preparing a new engine comparison.
+      required: [status, blockers, input]
+      properties:
+        status: {type: string, enum: [ready, blocked]}
+        blockers:
+          type: array
+          items: {$ref: '#/components/schemas/Blocker'}
+        input:
+          anyOf:
+            - $ref: '#/components/schemas/EngineComparisonInput'
+            - type: 'null'
+      if: {properties: {status: {const: ready}}}
+      then:
+        properties:
+          input: {type: object}
+          blockers: {maxItems: 0}
+      else:
+        properties:
+          input: {type: 'null'}
+          blockers: {minItems: 1}
+    EngineComparisonInput:
+      type: object
+      additionalProperties: false
+      required: [schema_version, approval_id, review, evidence, comparison, governance, execution_inputs, plans]
+      properties:
+        schema_version: {$ref: '#/components/schemas/Version'}
+        approval_id: {$ref: '#/components/schemas/Id'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        evidence: {$ref: '#/components/schemas/EvidencePin'}
+        comparison: {$ref: '#/components/schemas/Comparison'}
+        governance:
+          type: object
+          additionalProperties: false
+          required: [goal, budget, guardrails, measurement_support, assumptions, permitted_changes]
+          properties:
+            goal: {$ref: '#/components/schemas/Goal'}
+            budget: {$ref: '#/components/schemas/Budget'}
+            guardrails: {$ref: '#/components/schemas/Guardrails'}
+            measurement_support: {$ref: '#/components/schemas/MeasurementSupport'}
+            assumptions: {type: array, items: {$ref: '#/components/schemas/Assumption'}}
+            permitted_changes: {type: array, items: {$ref: '#/components/schemas/PermittedChange'}}
+        execution_inputs:
+          type: object
+          additionalProperties: false
+          required: [persona_bank_ref, cohort_ref, behavior_ref, appeal_by_plan_id]
+          properties:
+            persona_bank_ref: {$ref: '#/components/schemas/VersionedRef'}
+            cohort_ref: {$ref: '#/components/schemas/VersionedRef'}
+            behavior_ref: {$ref: '#/components/schemas/VersionedRef'}
+            appeal_by_plan_id:
+              type: object
+              minProperties: 2
+              maxProperties: 2
+              description: Keys are the canonical plan IDs. Every entry must equal the corresponding plan appeal.
+              additionalProperties: {$ref: '#/components/schemas/ExecutionAppeal'}
+        plans:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: {$ref: '#/components/schemas/CanonicalPlan'}
+          contains: {properties: {role: {const: original}}}
+          minContains: 1
+          maxContains: 1
+    ExecutionAppeal:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, ssr_ref]
+          properties:
+            kind: {type: string, const: pinned_ssr}
+            ssr_ref: {$ref: '#/components/schemas/VersionedRef'}
+        - type: object
+          additionalProperties: false
+          required: [kind, evidence_ref]
+          properties:
+            kind: {type: string, const: neutral}
+            evidence_ref: {$ref: '#/components/schemas/Id'}
+        - type: object
+          additionalProperties: false
+          required: [kind]
+          properties:
+            kind: {type: string, const: ordinary}
+    CanonicalPlan:
+      type: object
+      additionalProperties: false
+      description: |
+        The original links to the baseline. The baseline links to itself
+        and keeps the same selection, evaluation population and comparison
+        reference, ordinary costs and any shared exogenous conditions.
+      required: [plan_id, role, approval_id, review, comparison_ref, baseline_plan_id,
+        selection, audience, offer, spend, cost_schedule, appeal, contingency_rules]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Id'}
+        role: {type: string, enum: [original, baseline]}
+        approval_id: {$ref: '#/components/schemas/Id'}
+        review: {$ref: '#/components/schemas/ReviewRef'}
+        comparison_ref:
+          type: object
+          additionalProperties: false
+          required: [comparison_id, revision]
+          properties:
+            comparison_id: {$ref: '#/components/schemas/Id'}
+            revision: {$ref: '#/components/schemas/Revision'}
+        baseline_plan_id: {$ref: '#/components/schemas/Id'}
+        selection: {$ref: '#/components/schemas/Selection'}
+        audience:
+          oneOf:
+            - $ref: '#/components/schemas/Audience'
+            - type: object
+              additionalProperties: false
+              required: [kind]
+              properties:
+                kind: {type: string, const: comparison_population}
+        offer:
+          anyOf:
+            - $ref: '#/components/schemas/ReviewedOffer'
+            - type: 'null'
+        spend:
+          type: object
+          additionalProperties: false
+          required: [mode, focal_voucher_enabled, paid_media_thb]
+          properties:
+            mode: {type: string, enum: [campaign, none]}
+            focal_voucher_enabled: {type: boolean}
+            paid_media_thb: {$ref: '#/components/schemas/Amount'}
+        cost_schedule:
+          type: object
+          additionalProperties: false
+          required: [policy_ref, effective_costs, tax_and_returns, voucher_charges_apply]
+          description: |
+            The pinned cost policy resolves effective windows. The baseline
+            retains ordinary commission on undiscounted merchandise receipts and
+            disables fees or reimbursements contingent on voucher redemption.
+          properties:
+            policy_ref: {$ref: '#/components/schemas/PolicyRef'}
+            effective_costs: {$ref: '#/components/schemas/EffectiveCosts'}
+            tax_and_returns: {$ref: '#/components/schemas/TaxAndReturns'}
+            voucher_charges_apply: {type: boolean}
+        appeal: {$ref: '#/components/schemas/ExecutionAppeal'}
+        contingency_rules: {$ref: '#/components/schemas/ContingencyRules'}
+      if: {properties: {role: {const: original}}}
+      then:
+        properties:
+          offer: {type: object, required: [intervention_window]}
+          audience: {$ref: '#/components/schemas/Audience'}
+          spend:
+            properties:
+              mode: {const: campaign}
+              focal_voucher_enabled: {const: true}
+          cost_schedule:
+            properties:
+              voucher_charges_apply: {const: true}
+          appeal:
+            properties:
+              kind: {enum: [pinned_ssr, neutral]}
+      else:
+        properties:
+          offer: {type: 'null'}
+          audience:
+            properties:
+              kind: {const: comparison_population}
+          spend:
+            properties:
+              mode: {const: none}
+              focal_voucher_enabled: {const: false}
+              paid_media_thb: {const: 0}
+          cost_schedule:
+            properties:
+              voucher_charges_apply: {const: false}
+          appeal:
+            properties:
+              kind: {const: ordinary}
+          contingency_rules: {maxItems: 0}
