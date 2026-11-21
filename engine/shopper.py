@@ -309,7 +309,8 @@ def step(
     extra_supply = (units / population.avg_units - 1) * population.cycle_weeks
     new_state = ShopperState(
         weeks_since=np.where(buy, -np.maximum(extra_supply, 0.0), state.weeks_since) + 1.0,
-        exposures=state.exposures + exposed.astype(int),
+        # Only real discounts teach shoppers to wait for the next promotion.
+        exposures=state.exposures + (exposed & (d_us > 0)).astype(int),
         redemptions=state.redemptions + discounted.astype(int),
         last_brand=np.where(buy, brand, state.last_brand),
         ever_us=state.ever_us | ours,
