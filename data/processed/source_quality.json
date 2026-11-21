@@ -1,0 +1,117 @@
+{
+  "generated_at": "2026-11-21T04:52:03.896358+00:00",
+  "source": "data",
+  "downloaded_assets": 16,
+  "all_downloads_complete": true,
+  "download_bytes": 76457835,
+  "completejourney": {
+    "transactions": 1469307,
+    "households": 2469,
+    "products": 92331,
+    "households_with_demographics": 801,
+    "transaction_product_ids_missing_from_products": 4836,
+    "unique_product_ids_missing_from_products": 17,
+    "week_min": 1,
+    "week_max": 53,
+    "source_currency": "USD",
+    "promotions": "full RDS downloaded; bulk conversion deferred unless explicitly requested",
+    "brand_field_values": [
+      "National",
+      "Private"
+    ]
+  },
+  "twin2k": {
+    "wave1_3_respondents": 2058,
+    "wave4_respondents": 2058,
+    "population": "US; no Thai reweighting performed"
+  },
+  "hillstrom": {
+    "rows": 64000,
+    "publisher_checksum_verified": true,
+    "distribution": "scikit-uplift mirror of Kevin Hillstrom dataset"
+  },
+  "breakfast": {
+    "archive_readable": true,
+    "worksheets": [
+      {
+        "sheet": "Glossary",
+        "worksheet_rows": 41,
+        "columns": 15,
+        "readable": true,
+        "sample_rows_read": 3,
+        "header": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Breakfast at the Frat: A Time Series Analysis"
+        ]
+      },
+      {
+        "sheet": "dh Store Lookup",
+        "worksheet_rows": 81,
+        "columns": 15,
+        "readable": true,
+        "sample_rows_read": 3,
+        "header": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Breakfast at the Frat: A Time Series Analysis",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7",
+          "Unnamed: 8"
+        ]
+      },
+      {
+        "sheet": "dh Products Lookup",
+        "worksheet_rows": 76,
+        "columns": 15,
+        "readable": true,
+        "sample_rows_read": 3,
+        "header": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Breakfast at the Frat: A Time Series Analysis",
+          "Unnamed: 4",
+          "Unnamed: 5"
+        ]
+      },
+      {
+        "sheet": "dh Transaction Data",
+        "worksheet_rows": 682323,
+        "columns": 15,
+        "readable": true,
+        "sample_rows_read": 3,
+        "header": [
+          "Unnamed: 0",
+          "Unnamed: 1",
+          "Unnamed: 2",
+          "Breakfast at the Frat: A Time Series Analysis",
+          "Unnamed: 4",
+          "Unnamed: 5",
+          "Unnamed: 6",
+          "Unnamed: 7",
+          "Unnamed: 8",
+          "Unnamed: 9",
+          "Unnamed: 10",
+          "Unnamed: 11"
+        ]
+      }
+    ]
+  },
+  "engine_persona_profiles": 10,
+  "engine_campaign_library_records": 8,
+  "engine_inputs_remain_synthetic": true,
+  "calibration_performed": false,
+  "limitations": [
+    "Household/respondent records stay in ignored data/raw and are never LLM inputs.",
+    "Unmatched product metadata must be handled explicitly before category fitting.",
+    "National/Private labels and manufacturer IDs are not named Thai competitors.",
+    "No Thai campaign library, Thai reweighting or verified platform fees added.",
+    "No model calibration or historical back-test has run.",
+    "Worksheet dimensions include headers/formatting, not verified data-row counts."
+  ]
+}
