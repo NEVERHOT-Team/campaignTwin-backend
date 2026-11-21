@@ -1,15 +1,18 @@
 openapi: 3.1.0
 info:
   title: CampaignTwin API
-  version: 1.0.0-draft
+  version: 1.0.0
   description: |
-    Draft for five workflows under /api/v1. Submit and track uses two HTTP
-    operations. All v1 routes are proposed. The current FastAPI contract is
-    published at /openapi.json and the existing routes are listed below.
+    Local single-planner workflow. A review ID identifies the interaction
+    session. GET the review to resume, submit answers as revisions, approve
+    its exact revision, then submit the approval ID and a client submission ID.
+    The runnable example requires explicit selection of demo-tissue-12-shopee.
+    It uses synthetic commercial terms and aggregate purchase rates.
+    Seller-specific rehearsals require verified catalog and fee evidence.
 
     The planner can submit a short brief, fill a few fields, or do both.
     CampaignTwin resolves catalog choices, data versions, cost evidence,
-    aggregate audience statistics, and simulation settings. This draft
+    aggregate audience statistics, and simulation settings. The v1 workflow
     covers one exact product, pack, channel and offer per campaign, in THB.
     A review can be saved with unresolved fields. Only an explicit approval
     of a complete revision can authorize a run.
@@ -32,20 +35,8 @@ x-current-backend:
     - {method: GET, path: '/api/runs/{run_id}/report', status: existing, behavior: 'Shared fixture Report after done'}
     - {method: GET, path: /api/demo/replay, status: existing, behavior: Fixture replay}
   mapping: |
-    Brief and form concepts come from CampaignSpec v0.1. Review revisions,
-    catalog matching, approval, submission deduplication, and evaluated
-    per-run reports are new. V1 retains the RunStatus lifecycle names and
-    maps the evaluator metrics from KPI and SimResult. It reports status
-    during polling and publishes evaluated metrics once the report is saved.
-
-x-related-draft:
-  file: docs/campaign-review-approval.openapi.yaml
-  relationship: |
-    The review-and-approval draft on dev also proposes create, revise, and
-    approve at the same paths. This end-to-end draft proposes different
-    intake and review payloads and puts explicit confirmation on the
-    approval request itself. Agree on one wire contract for those paths
-    before implementation or client generation.
+    The unversioned routes above serve legacy fixtures. V1 persists review revisions,
+    approvals and per-run results. The separate campaign-review-approval draft is historical.
 
 x-data-sources:
   market_and_costs: |
@@ -57,7 +48,7 @@ x-data-sources:
     load_brands supplies manufacturer-level records. The current loaders
     supply no approved seller catalog joining exact SKUs, pack sizes,
     channels, supported offers and the applicable seller cost terms.
-    The server issues choice IDs only after that join has been verified.
+    The single synthetic catalog choice is labeled and must be selected explicitly.
     load_demo_brief supplies a scripted toilet-tissue rehearsal as an
     intake example. It supplies no verified seller catalog or cost schedule.
   segments: |
@@ -76,7 +67,7 @@ paths:
     post:
       tags: [Campaign reviews]
       operationId: createCampaignReview
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Create a campaign review
       description: |
         Save revision 1 from the brief, form, or both. Return supported exact
@@ -90,6 +81,18 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/CreateReview'}
             examples:
+              syntheticRehearsal:
+                summary: Runnable synthetic comparison
+                value:
+                  fields:
+                    product_choice_id: demo-tissue-12-shopee
+                    channel: shopee
+                    objective: incremental_profit
+                    audience_hint: all
+                    budget_thb: 1000
+                    start_date: '2026-12-01'
+                    end_date: '2026-12-08'
+                    offer: {kind: voucher, value: 10, unit: THB, eligibility: all}
               toiletTissue:
                 summary: A toilet-tissue brief with a partial form
                 value:
@@ -123,16 +126,35 @@ paths:
                   $ref: '#/components/examples/ToiletTissueBlocked'
         '422': {$ref: '#/components/responses/InvalidRequest'}
 
+  /api/v1/campaign-reviews/{review_id}:
+    parameters:
+      - $ref: '#/components/parameters/ReviewId'
+    get:
+      tags: [Campaign reviews]
+      operationId: getCampaignReview
+      summary: Resume the current review revision
+      responses:
+        '200':
+          description: Current saved review and clarification questions.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Review'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/InvalidRequest'}
+
   /api/v1/campaign-reviews/{review_id}/revisions:
     parameters:
       - $ref: '#/components/parameters/ReviewId'
     post:
       tags: [Campaign reviews]
       operationId: reviseCampaignReview
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Revise a campaign review
       description: |
-        Compare base_revision with the current revision before saving.
+        Send answer to continue the interview in natural language. The server
+        interprets it against the current review and returns evidence-backed
+        candidates for explicit confirmation. Use a separate revision to confirm
+        candidates or edit fields manually. Every write checks base_revision.
         Omitted edit keys carry forward. A null clears the named field.
         A supplied object replaces the whole field, including the offer.
         Valid input that cannot be matched to a supported choice is saved
@@ -157,6 +179,8 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/ReviseReview'}
             examples:
+              answerQuestion:
+                value: {base_revision: 1, answer: "Give everyone a 10 THB voucher and cap the total budget at 1000 THB."}
               editPackAndOffer:
                 value:
                   base_revision: 1
@@ -184,11 +208,11 @@ paths:
     post:
       tags: [Campaign reviews]
       operationId: approveCampaignReview
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Approve the exact review revision
       description: |
-        Require explicit confirmation from an authorized planner. Resolve
-        the actor from server-side caller context. Atomically verify the
+        Require explicit confirmation. The localhost server records the configured
+        workspace planner identity. Atomically verify the
         named revision is current and complete. Record the actor, revision
         and approval time with the frozen facts, applicable cost evidence,
         comparison inputs and data versions. An eligible repeat request
@@ -227,7 +251,7 @@ paths:
     post:
       tags: [Runs]
       operationId: submitRun
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Submit an approved review for simulation
       description: |
         Resolve the approved inputs on the server. Atomically bind the
@@ -291,9 +315,10 @@ paths:
     get:
       tags: [Runs]
       operationId: getRunStatus
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Poll the run
       description: |
+        The local synthetic evaluator completes during submission.
         Poll the submitted run at the indicated interval while queued or
         running. Progress is a nondecreasing fraction for this run. Done
         means its immutable report is available. Error is a terminal run
@@ -339,7 +364,7 @@ paths:
     get:
       tags: [Runs]
       operationId: getRunReport
-      x-implementation-status: proposed
+      x-implementation-status: implemented
       summary: Read the evaluated report for the requested run
       description: |
         Return evaluated output for this run ID, its approved revision and
@@ -459,6 +484,12 @@ components:
       type: number
       minimum: 0
       maximum: 1
+    RequestedChannel:
+      type: string
+      minLength: 1
+      maxLength: 80
+      pattern: '\S'
+      description: Requested sales platform. Unsupported platforms stay visible in review and block simulation.
     Channel:
       type: string
       enum: [shopee, lazada, tiktok_shop, line, meta, google, offline]
@@ -518,7 +549,7 @@ components:
         product_choice_id:
           $ref: '#/components/schemas/Text'
           description: Optional selection of an exact, server-supplied product choice.
-        channel: {$ref: '#/components/schemas/Channel'}
+        channel: {$ref: '#/components/schemas/RequestedChannel'}
         offer: {$ref: '#/components/schemas/OfferInput'}
         audience_hint: {$ref: '#/components/schemas/Text'}
         objective: {$ref: '#/components/schemas/Objective'}
@@ -557,7 +588,7 @@ components:
         product_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         pack_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         product_choice_id: {type: [string, 'null'], minLength: 1, pattern: '\S'}
-        channel: {oneOf: [{$ref: '#/components/schemas/Channel'}, {type: 'null'}]}
+        channel: {oneOf: [{$ref: '#/components/schemas/RequestedChannel'}, {type: 'null'}]}
         offer: {oneOf: [{$ref: '#/components/schemas/OfferInput'}, {type: 'null'}]}
         audience_hint: {type: [string, 'null'], minLength: 1, pattern: '\S'}
         objective: {oneOf: [{$ref: '#/components/schemas/Objective'}, {type: 'null'}]}
@@ -568,10 +599,13 @@ components:
       type: object
       additionalProperties: false
       required: [base_revision]
-      anyOf:
-        - required: [edits]
-        - required: [confirm]
+      oneOf:
+        - required: [answer]
+          not: {anyOf: [{required: [edits]}, {required: [confirm]}]}
+        - anyOf: [{required: [edits]}, {required: [confirm]}]
+          not: {required: [answer]}
       properties:
+        answer: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
         base_revision: {$ref: '#/components/schemas/Revision'}
         edits: {$ref: '#/components/schemas/PlannerEdits'}
         confirm:
@@ -675,7 +709,7 @@ components:
               value: {type: number}
               unit: {$ref: '#/components/schemas/CostUnit'}
               basis: {$ref: '#/components/schemas/Text'}
-              source: {const: data}
+              source: {enum: [data, default]}
               evidence_ref: {$ref: '#/components/schemas/Text'}
               reason: {type: 'null'}
         - if: {properties: {status: {const: reference_only}}}
@@ -757,7 +791,7 @@ components:
       type: object
       additionalProperties: false
       required: [candidate_id, field, value, brief_quote]
-      description: A pending candidate at a planner field. The server verifies its type against that field and its quote against the brief.
+      description: A pending interpretation of the brief or latest interview answer, with supporting text from that turn.
       properties:
         candidate_id: {$ref: '#/components/schemas/Text'}
         field: {$ref: '#/components/schemas/FieldPointer'}
@@ -800,6 +834,9 @@ components:
           minItems: 1
           uniqueItems: true
           items: {$ref: '#/components/schemas/ScenarioId'}
+        assumptions:
+          type: array
+          items: {$ref: '#/components/schemas/Text'}
         max_loss_probability: {$ref: '#/components/schemas/Fraction'}
         goal_target:
           type: [object, 'null']
@@ -1081,6 +1118,51 @@ components:
           then: {properties: {reason_code: {enum: [target_missed, guardrail_failed]}}}
         - if: {properties: {status: {const: insufficient_evidence}}}
           then: {properties: {reason_code: {const: missing_decision_evidence}}}
+    PlanInput:
+      type: object
+      additionalProperties: false
+      description: Frozen effective input for one evaluated plan under the synthetic S1 policy.
+      required: [plan_id, role, parent_plan_id, paired_baseline_id, changes, approval_id,
+        review_id, revision, data_versions, product, offer, currency, subsidy_budget, costs,
+        campaign_window, segments, target_segment_ids, evaluation, seeds, contingency_rules]
+      properties:
+        plan_id: {$ref: '#/components/schemas/Text'}
+        role: {enum: [original, conservative, baseline]}
+        parent_plan_id: {type: [string, 'null']}
+        paired_baseline_id: {$ref: '#/components/schemas/Text'}
+        changes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, before, after, reason]
+            properties:
+              field: {$ref: '#/components/schemas/FieldPointer'}
+              before: {type: number}
+              after: {type: number}
+              reason: {$ref: '#/components/schemas/Text'}
+        approval_id: {$ref: '#/components/schemas/Uuid'}
+        review_id: {$ref: '#/components/schemas/Uuid'}
+        revision: {$ref: '#/components/schemas/Revision'}
+        data_versions: {$ref: '#/components/schemas/PinnedDataVersions'}
+        product: {$ref: '#/components/schemas/ProductChoice'}
+        offer:
+          oneOf: [{$ref: '#/components/schemas/ResolvedOffer'}, {type: 'null'}]
+        currency: {const: THB}
+        subsidy_budget: {type: number, minimum: 0}
+        costs: {$ref: '#/components/schemas/Costs'}
+        campaign_window: {$ref: '#/components/schemas/DateWindow'}
+        segments:
+          type: array
+          items: {$ref: '#/components/schemas/Segment'}
+        target_segment_ids:
+          type: array
+          items: {$ref: '#/components/schemas/Text'}
+        evaluation: {$ref: '#/components/schemas/EvaluationPlan'}
+        seeds:
+          type: array
+          items: {type: integer}
+        contingency_rules: {type: array, maxItems: 0}
     RunReport:
       type: object
       additionalProperties: false
@@ -1105,6 +1187,18 @@ components:
           type: array
           minItems: 1
           items: {$ref: '#/components/schemas/ScenarioResult'}
+        plan_results:
+          type: array
+          items:
+            type: object
+            required: [role, input, discount_pct, scenario_results]
+            properties:
+              role: {enum: [original, conservative, baseline]}
+              input: {$ref: '#/components/schemas/PlanInput'}
+              discount_pct: {type: number, minimum: 0, maximum: 30}
+              scenario_results:
+                type: array
+                items: {$ref: '#/components/schemas/ScenarioResult'}
         decision: {$ref: '#/components/schemas/Decision'}
         commentary: {$ref: '#/components/schemas/Text'}
     Error:
@@ -1143,7 +1237,7 @@ components:
 
   examples:
     ToiletTissueBlocked:
-      summary: Current toilet-tissue context with no verified commercial selection
+      summary: Illustrative commercial context with no verified selection
       description: |
         Category observations and fee assumptions come from the current
         loaders. The repo version labels illustrate server-issued pins.

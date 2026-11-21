@@ -4,7 +4,6 @@ from pathlib import Path
 from time import sleep
 from uuid import UUID, uuid4
 
-import psycopg
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 import db
@@ -32,7 +31,7 @@ REPLAY_PATH = Path(demo.__file__).with_name("replay.json")
 def health():
     try:
         db.check_connection()
-    except (psycopg.Error, ValueError) as error:
+    except (ConnectionError, ValueError) as error:
         raise HTTPException(status_code=503, detail="Run storage unavailable") from error
     return {"ok": True, "db_mode": db.get_mode()}
 

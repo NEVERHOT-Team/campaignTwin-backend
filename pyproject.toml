@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Fixture-backed campaign stress test API"
 requires-python = ">=3.11"
 dependencies = [
+    "filelock>=3.13",
+    "jsonschema[format-nongpl]>=4.22",
+    "PyYAML>=6",
     "fastapi>=0.115",
     "httpx>=0.27",
     "numpy>=1.26",
@@ -20,6 +23,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "ruff>=0.7",
     "scikit-learn>=1.5",
+    "tzdata; sys_platform == 'win32'",
     "uvicorn>=0.30",
 ]
 
@@ -31,12 +35,13 @@ py-modules = ["main", "db"]
 include-package-data = false
 
 [tool.setuptools.packages.find]
-include = ["agents*", "api*", "contracts*", "data*", "demo*", "engine*", "mocks*"]
+include = ["agents*", "api*", "contracts*", "data*", "demo*", "docs", "engine*", "mocks*"]
 namespaces = false
 
 [tool.setuptools.package-data]
 data = ["processed/*.csv", "processed/*.json", "processed/*.parquet"]
 demo = ["*.json"]
+docs = ["campaigntwin-api-v1.openapi.yaml"]
 mocks = ["*.json"]
 
 [tool.pytest.ini_options]
