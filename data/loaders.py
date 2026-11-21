@@ -11,6 +11,7 @@ from zipfile import ZipFile
 import pandas as pd
 
 from contracts.campaign_spec import CampaignSpec
+from data.etl.appeal import APPEAL_KEYS, ARCHETYPES, MECHANICS, MESSAGE_STYLES
 from data.etl.config import BACKTEST_START_WEEK, CATEGORY, PRODUCT_PATH
 from data.sources import ASSETS, CJ_TABLES
 
@@ -270,9 +271,45 @@ def load_backtest() -> dict[str, Any]:
         filename,
     )
     _require_keys(
-        record["actual"], "lift_pct redemption_rate incremental_sales", f"{filename}.actual"
+        record["actual"],
+        "lift_pct lift_range_pct naive_lift_pct redemption_rate incremental_sales",
+        f"{filename}.actual",
     )
     return record
+
+
+@lru_cache(maxsize=1)
+def load_appeal_fallback() -> pd.DataFrame:
+    filename = "appeal_fallback.csv"
+    frame = pd.read_csv(PROCESSED / filename)
+    _require_keys(frame.columns, "archetype mechanic message_style appeal label", filename)
+    keys = pd.MultiIndex.from_frame(frame[list(APPEAL_KEYS)])
+    expected = pd.MultiIndex.from_product([ARCHETYPES, MECHANICS, MESSAGE_STYLES])
+    if not keys.is_unique or len(keys) != len(expected) or not expected.isin(keys).all():
+        raise ValueError(f"{filename} requires one row for every archetype, mechanic and style")
+    if not frame["label"].eq("default").all() or not frame["appeal"].between(-1, 1).all():
+        raise ValueError(f"{filename} requires default appeal scores between -1 and 1")
+    return frame
+
+
+@lru_cache(maxsize=1)
+def load_assumptions() -> list[dict[str, Any]]:
+    filename = "assumptions.json"
+    rows = _read_json(filename)
+    if not isinstance(rows, list) or not rows:
+        raise ValueError(f"{filename} requires a nonempty list of assumptions")
+    seen = set()
+    for row in rows:
+        _require_keys(row, "name value unit label source used_by", filename)
+        if not row["name"] or row["name"] in seen:
+            raise ValueError(f"{filename} requires unique assumption names")
+        if row["label"] not in {"data", "default", "llm_estimate"}:
+            raise ValueError(f"{filename} contains an unknown assumption label")
+        consumers = row["used_by"]
+        if not row["unit"] or not row["source"] or not isinstance(consumers, list) or not consumers:
+            raise ValueError(f"{filename} requires a unit, source and list of consumers")
+        seen.add(row["name"])
+    return rows
 
 
 @lru_cache(maxsize=1)

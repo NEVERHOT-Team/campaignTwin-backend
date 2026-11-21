@@ -17,7 +17,8 @@
       6.24
     ],
     "redemption_rate": 0.0070609,
-    "incremental_sales": 15709.71
+    "incremental_sales": 15709.71,
+    "naive_lift_pct": 19.02
   },
   "seasonality_control": {
     "method": "Difference-in-differences in percentage points. Subtract the unweighted mean control-category sales change from the toilet-tissue sales change. Each change compares total retailer sales including returns in the same eight-week windows. The reported range spans the mean-adjusted and median-adjusted lifts.",
@@ -95,5 +96,51 @@
     43,
     44
   ],
-  "source": "data"
+  "source": "data",
+  "naive_benchmark": {
+    "method": "Equal-weight mean of other toilet-tissue coupon campaign lifts wholly in weeks 1–44, or zero if none qualify. For each, compare mean weekly net retailer sales in complete active weeks against the eight complete weeks before launch. Subtract the unweighted mean percentage change of the holdout controls without coupons in that campaign. Round only the final benchmark to two decimal places.",
+    "source": "data",
+    "campaigns": [
+      {
+        "campaign_id": "8",
+        "baseline_weeks": [
+          12,
+          19
+        ],
+        "campaign_weeks": [
+          20,
+          26
+        ],
+        "tissue_change_pct": 4.111428,
+        "control_changes_pct": {
+          "FACIAL TISSUE & PAPER HANDKE": -18.747149,
+          "CLEANSING WIPES": -16.868967,
+          "BASIC PAPER PLATES": -7.585393
+        },
+        "lift_pct": 18.511931
+      },
+      {
+        "campaign_id": "13",
+        "baseline_weeks": [
+          25,
+          32
+        ],
+        "campaign_weeks": [
+          34,
+          39
+        ],
+        "tissue_change_pct": 5.454704,
+        "control_changes_pct": {
+          "BASIC PAPER PLATES": -14.081996
+        },
+        "lift_pct": 19.536701
+      }
+    ],
+    "excluded": [
+      {
+        "campaign_id": "27",
+        "reason": "incomplete baseline"
+      }
+    ]
+  }
 }

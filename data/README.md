@@ -42,6 +42,7 @@ python -m data.etl.download_raw
 python -m data.etl.pick_category
 python -m data.etl.build_tissue
 python -m data.etl.build_rival_prior
+python -m data.etl.build_engine_inputs
 ```
 
 The builder regenerates `personas.json`, `market.json`, `knob_ranges.json`,
@@ -129,6 +130,28 @@ inside this range, including either endpoint.
 and change. `actual.incremental_sales` is the raw sales increase of USD 447.57
 converted to THB 15,709.71 at the configured default rate of 35.1.
 The comparison is observational and other promotions can affect either group.
+
+`data.backtest.naive_benchmark()` reads the published historical prediction of
+**+19.02 percentage points**. Campaign 8 contributed +18.51 points using three
+coupon-free controls. Campaign 13 contributed +19.54 points using basic paper
+plates, its only eligible control. Campaign 27 lacked eight pre-launch weeks.
+Each comparison uses mean weekly net sales to account for the shorter campaign
+windows. Only complete active weeks count. The JSON records the windows, control
+changes and exclusions. The benchmark is zero when no campaign qualifies.
+
+`data.backtest.evaluate_backtest(simulated_lift_pct)` accepts percentage points.
+Both endpoints of [1.71, 6.24] count as calibrated. Outside the interval, a
+prediction is partially calibrated if its absolute error from the midpoint
+(3.975) is at most 9.06 points, twice the interval width. Larger errors are
+uncalibrated. Beating the naive planner requires a strictly smaller absolute
+error from the same midpoint. Both functions work with the checked-in data.
+
+`load_appeal_fallback()` returns 150 rows keyed by archetype, mechanic and message
+style. The rule weights persona profiles within each archetype and combines
+message affinity (60%) with mechanic affinity (40%) on a −1 to +1 scale. Every
+row is labelled `default`. `load_assumptions()` returns the values, units,
+provenance and consumers for the economic defaults, elasticity priors, rival
+blend and persona trait fallbacks, alongside the simulated-data notice.
 
 Each redemption must match a coupon-discounted purchase by the same household
 on the same recorded date for a product eligible under that campaign and UPC.

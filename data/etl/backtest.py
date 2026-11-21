@@ -4,7 +4,13 @@ from statistics import mean, median
 
 import pandas as pd
 
-from data.etl.config import BACKTEST_CAMPAIGN_ID, BACKTEST_END_WEEK, BACKTEST_START_WEEK, DEFAULTS
+from data.etl.config import (
+    BACKTEST_CAMPAIGN_ID,
+    BACKTEST_END_WEEK,
+    BACKTEST_START_WEEK,
+    DEFAULTS,
+    PRODUCT_PATH,
+)
 from data.loaders import load_category_products, load_raw_table
 
 BASELINE_WEEKS = 8
@@ -19,15 +25,16 @@ CONTROL_PRODUCT_TYPES = (
 EVENT_KEY = ["campaign_id", "coupon_upc", "household_id", "redemption_date"]
 
 
-def _period_sales(lines: pd.DataFrame, category: str) -> tuple[float, float, float]:
-    sales = lines.groupby("week")["sales_value"].sum()
-    if not set(BASELINE).union(CAMPAIGN).issubset(sales.index):
+def _period_sales(
+    sales: pd.Series, category: str, pre: range = BASELINE, active: range = CAMPAIGN
+) -> tuple[float, float, float]:
+    if not set(pre).union(active).issubset(sales.dropna().index):
         raise ValueError(f"Incomplete sales coverage for {category}")
-    baseline = float(sales.loc[list(BASELINE)].sum())
-    during = float(sales.loc[list(CAMPAIGN)].sum())
+    baseline = float(sales.loc[list(pre)].sum())
+    during = float(sales.loc[list(active)].sum())
     if baseline <= 0:
         raise ValueError(f"Backtest requires positive baseline sales for {category}")
-    return baseline, during, 100 * (during - baseline) / baseline
+    return baseline, during, 100 * ((during / len(active)) / (baseline / len(pre)) - 1)
 
 
 def _control_changes(
@@ -45,7 +52,8 @@ def _control_changes(
     controls = []
     for category in CONTROL_PRODUCT_TYPES:
         baseline, during, change = _period_sales(
-            sales.loc[sales["product_type"].eq(category)], category
+            sales.loc[sales["product_type"].eq(category)].groupby("week")["sales_value"].sum(),
+            category,
         )
         controls.append(
             {
@@ -58,6 +66,76 @@ def _control_changes(
     return controls
 
 
+def _historical_benchmark(
+    weekly: pd.DataFrame,
+    schedule: pd.DataFrame,
+    offered: pd.DataFrame,
+    week_one: pd.Timestamp,
+    first_full_week: int,
+) -> tuple[float, dict]:
+    """Score other coupon campaigns using only complete pre-holdout weeks."""
+    included = []
+    excluded = []
+    lifts = []
+    tissue = PRODUCT_PATH[-1]
+    weekly = weekly.reindex(columns=[tissue, *CONTROL_PRODUCT_TYPES])
+    tissue_offers = offered.loc[offered["product_type"].eq(tissue), "campaign_id"]
+    candidates = schedule.loc[schedule["campaign_id"].isin(tissue_offers)].sort_values("start_date")
+    for campaign in candidates.itertuples():
+        start = (campaign.start_date - week_one).days
+        end = (campaign.end_date - week_one).days
+        launch_week = start // 7 + 1
+        if campaign.campaign_id == BACKTEST_CAMPAIGN_ID or end // 7 + 1 >= BACKTEST_START_WEEK:
+            continue
+        pre = range(launch_week - BASELINE_WEEKS, launch_week)
+        # Round the start forward to Monday and the end back to Sunday.
+        active = range((start + 6) // 7 + 1, (end + 1) // 7 + 1)
+        promoted = set(offered.loc[offered["campaign_id"].eq(campaign.campaign_id), "product_type"])
+        controls = [name for name in CONTROL_PRODUCT_TYPES if name not in promoted]
+        if pre.start < first_full_week:
+            reason = "incomplete baseline"
+        elif not active:
+            reason = "no full campaign week"
+        elif not controls:
+            reason = "no coupon-free control"
+        else:
+            reason = None
+        if reason:
+            excluded.append({"campaign_id": str(campaign.campaign_id), "reason": reason})
+            continue
+        try:
+            _, _, raw = _period_sales(weekly[tissue], tissue, pre, active)
+            changes = {name: _period_sales(weekly[name], name, pre, active)[2] for name in controls}
+        except ValueError as error:
+            excluded.append({"campaign_id": str(campaign.campaign_id), "reason": str(error)})
+            continue
+        lift = raw - mean(changes.values())
+        lifts.append(lift)
+        included.append(
+            {
+                "campaign_id": str(campaign.campaign_id),
+                "baseline_weeks": [pre.start, pre.stop - 1],
+                "campaign_weeks": [active.start, active.stop - 1],
+                "tissue_change_pct": round(raw, 6),
+                "control_changes_pct": {name: round(change, 6) for name, change in changes.items()},
+                "lift_pct": round(lift, 6),
+            }
+        )
+    naive = round(mean(lifts), 2) if lifts else 0.0
+    return naive, {
+        "method": (
+            "Equal-weight mean of other toilet-tissue coupon campaign lifts wholly in weeks "
+            "1–44, or zero if none qualify. For each, compare mean weekly net retailer sales in "
+            "complete active weeks against the eight complete weeks before launch. Subtract "
+            "the unweighted mean percentage change of the holdout controls without coupons "
+            "in that campaign. Round only the final benchmark to two decimal places."
+        ),
+        "source": "data" if included else "default",
+        "campaigns": included,
+        "excluded": excluded,
+    }
+
+
 def _score(
     transactions: pd.DataFrame,
     coupons: pd.DataFrame,
@@ -68,7 +146,9 @@ def _score(
 ) -> dict:
     if len(calibration_weeks) == 0 or calibration_weeks.max() >= BACKTEST_START_WEEK:
         raise ValueError("Backtest requires calibration weeks strictly before campaign 18")
-    baseline_total, actual_sales, raw_change = _period_sales(transactions, "toilet tissue")
+    baseline_total, actual_sales, raw_change = _period_sales(
+        transactions.groupby("week")["sales_value"].sum(), "toilet tissue"
+    )
     changes = [item["change_pct"] for item in controls]
     control_change = mean(changes)
     control_median = median(changes)
@@ -182,7 +262,7 @@ def build_backtest(calibration_weeks: pd.Index) -> dict:
         "transactions",
         filters=[
             ("product_id", "in", products + control_products["product_id"].tolist()),
-            ("week", ">=", BASELINE.start),
+            ("week", ">=", 1),
             ("week", "<=", BACKTEST_END_WEEK),
         ],
     )
@@ -192,10 +272,25 @@ def build_backtest(calibration_weeks: pd.Index) -> dict:
         filters=[("coupon_upc", "in", coupons["coupon_upc"].unique().tolist())],
     )
     assigned = load_raw_table("campaigns", filters=[("campaign_id", "==", BACKTEST_CAMPAIGN_ID)])
-    campaign_coupons = load_raw_table(
-        "coupons", columns=["product_id"], filters=[("campaign_id", "==", BACKTEST_CAMPAIGN_ID)]
+    catalog = pd.concat(
+        [
+            control_products,
+            pd.DataFrame(
+                {
+                    "product_id": products,
+                    "product_type": PRODUCT_PATH[-1],
+                }
+            ),
+        ],
+        ignore_index=True,
     )
-    return _score(
+    offered = load_raw_table(
+        "coupons",
+        columns=["campaign_id", "product_id"],
+        filters=[("product_id", "in", catalog["product_id"].tolist())],
+    ).merge(catalog, on="product_id", validate="many_to_one")
+    campaign_coupons = offered.loc[offered["campaign_id"].eq(BACKTEST_CAMPAIGN_ID)]
+    result = _score(
         transactions.loc[transactions["product_id"].isin(products)],
         coupons,
         redemptions,
@@ -203,3 +298,26 @@ def build_backtest(calibration_weeks: pd.Index) -> dict:
         calibration_weeks,
         _control_changes(control_products, transactions, campaign_coupons["product_id"]),
     )
+    history = transactions.loc[transactions["week"].lt(BACKTEST_START_WEEK)]
+    first_week = int(history["week"].min())
+    first_day = (
+        history.loc[history["week"].eq(first_week), "transaction_timestamp"].min().normalize()
+    )
+    first_monday = first_day.to_period("W-SUN").start_time
+    week_one = first_monday - pd.Timedelta(weeks=first_week - 1)
+    weekly = (
+        history.merge(catalog, on="product_id", validate="many_to_one")
+        .groupby(["week", "product_type"])["sales_value"]
+        .sum()
+        .unstack()
+    )
+    naive, method = _historical_benchmark(
+        weekly,
+        load_raw_table("campaign_descriptions"),
+        offered,
+        week_one,
+        first_week + int(first_day != first_monday),
+    )
+    result["actual"]["naive_lift_pct"] = naive
+    result["naive_benchmark"] = method
+    return result
