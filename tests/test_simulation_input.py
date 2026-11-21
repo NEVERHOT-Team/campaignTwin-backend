@@ -14,16 +14,16 @@ def test_run_input_is_the_frozen_evaluator_call(tmp_path, monkeypatch, engine_fa
     monkeypatch.setenv("DB_MODE", "json")
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setattr(db, "RUNS_DIR", tmp_path / "runs")
-    evaluate = v1_runs.evaluate
+    evaluate = v1_runs.v1_arena.evaluate
     received = {}
 
-    def capture(run_id, approval_id, review):
+    def capture(run_id, approval_id, review, progress):
         received.update(run_id=run_id, approval_id=approval_id, review=review)
         if engine_failure:
             raise ValueError("Rejected at engine boundary")
-        return evaluate(run_id, approval_id, review)
+        return evaluate(run_id, approval_id, review, progress)
 
-    monkeypatch.setattr(v1_runs, "evaluate", capture)
+    monkeypatch.setattr(v1_runs.v1_arena, "evaluate", capture)
     with TestClient(app) as client:
         reviews = "/api/v1/campaign-reviews"
         operation = contract()["paths"][reviews]["post"]

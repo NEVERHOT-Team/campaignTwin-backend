@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 import db
 from agents.review import affirmative, extract, order_questions
-from api.v1_catalog import CHOICES, PRODUCT, resolve
+from api.v1_catalog import ARENA_PRODUCT, resolve, stage_product
 from api.v1_contract import V1Error, validate_request
 
 router = APIRouter(prefix="/api/v1/campaign-reviews")
@@ -21,14 +21,21 @@ def build_review(review_id, revision, facts, origins, candidates, agent):
         channel = facts["channel"].strip().lower()
         facts["channel"] = "tiktok_shop" if channel in {"tiktok shop", "tiktok-shop"} else channel
     channel_key = "/facts/channel"
-    if origins.get(channel_key) == "data":
+    if origins.get(channel_key) in {"data", "derived"}:
         facts.pop("channel", None)
         origins.pop(channel_key)
-    choice = CHOICES.get(facts.get("product_choice_id"))
+    choice_key = "/facts/product_choice_id"
+    if origins.get(choice_key) == "default":
+        facts.pop("product_choice_id", None)
+        origins.pop(choice_key)
+    choice = stage_product(facts)
+    if choice and "product_choice_id" not in facts:
+        facts["product_choice_id"] = choice["choice_id"]
+        origins[choice_key] = "default"
     if (choice and "channel" not in facts
             and not any(c["field"] == channel_key for c in candidates)):
         facts["channel"] = choice["channel"]
-        origins[channel_key] = "data"
+        origins[channel_key] = "derived"
     offer = facts.get("offer")
     eligibility_key = "/facts/offer/eligibility"
     if offer and origins.pop(eligibility_key, None) == "default":
@@ -56,6 +63,11 @@ def build_review(review_id, revision, facts, origins, candidates, agent):
     for candidate in candidates:
         field = candidate["field"].removeprefix("/facts/")
         proposed = candidate["value"]
+        # The legacy extractor uses its former listing ID even for the generic word "demo".
+        if (field == "product_choice_id" and proposed == "demo-tissue-12-shopee"
+                and candidate["brief_quote"].strip().casefold() == "demo"):
+            proposed = ARENA_PRODUCT["choice_id"]
+            candidate = {**candidate, "value": proposed}
         entered = facts.get(field)
         if isinstance(proposed, dict) and isinstance(entered, dict):
             if all(entered.get(key) == value for key, value in proposed.items()):
@@ -66,8 +78,7 @@ def build_review(review_id, revision, facts, origins, candidates, agent):
         block("conflicting_values" if field in facts else "missing_input", field,
               "Confirm the quoted suggestion or enter " + field.replace("_", " ") + ".")
     prompts = {
-        "product_choice_id": "Would you like to use the synthetic 12-roll toilet tissue listing "
-                             "on Shopee? Reply ‘use the demo’ to select it.",
+        "product_choice_id": "Would you like to use the Cellox reference pack on Shopee?",
         "channel": "Which sales channel should this campaign use?",
         "objective": "What outcome do you want to measure? This rehearsal supports "
                      "incremental profit.",
@@ -160,9 +171,9 @@ def revise_review(review_id: UUID, payload: dict):
             if len(matches) == 1 and "confirm" in question["prompt"].lower():
                 confirmations = matches
             elif not matches and question.get("field") == "/facts/product_choice_id" and (
-                "would you like to use the synthetic" in question["prompt"].lower()
+                "would you like to use the cellox" in question["prompt"].lower()
             ):
-                facts["product_choice_id"] = PRODUCT["choice_id"]
+                facts["product_choice_id"] = ARENA_PRODUCT["choice_id"]
                 origins["/facts/product_choice_id"] = "planner"
             else:
                 raise V1Error(422, "invalid_request", "Please give a value or select a suggestion.")

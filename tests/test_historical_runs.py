@@ -123,7 +123,7 @@ def test_before_snapshots_and_failed_or_unknown_runs(client, monkeypatch):
     def evaluation_failure(*args):
         raise RuntimeError("Test evaluator outage")
 
-    monkeypatch.setattr(v1_runs, "evaluate", evaluation_failure)
+    monkeypatch.setattr(v1_runs.v1_arena, "evaluate", evaluation_failure)
     failed = submit(client, {**body, "submission_id": str(uuid4())})
     for run, code, status in [(failed, "run_failed", 409), (RUNS + "/" + str(uuid4()),
                                                             "not_found", 404)]:

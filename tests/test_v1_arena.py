@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import db
 from agents import rival_policy
 from api import v1_arena
-from api.v1_catalog import ARENA_POLICY, ARENA_PRODUCT, resolve
+from api.v1_catalog import ARENA_POLICY, ARENA_PRODUCT, arena_costs, resolve
 from api.v1_contract import contract, validator
 from main import app
 
@@ -32,6 +32,16 @@ def test_catalog_resolves_the_arena_choice():
     assert ARENA_PRODUCT in context["supported_product_choices"]
 
 
+def test_catalog_reads_per_field_sources_without_upgrading_defaults():
+    from data.loaders import load_market
+
+    market = {**load_market(), "source": {"ref_price": "data", "unit_cost": "data"},
+              "source_notes": {"fields": {"ref_price": "default", "payment_fee_pct": "data"}}}
+    costs = arena_costs(market)
+    assert costs["regular_price"]["source"] == costs["cogs"]["source"] == "default"
+    assert costs["payment_fee"]["source"] == "data"
+
+
 @pytest.mark.parametrize(
     ("change", "code"),
     [
@@ -46,13 +56,14 @@ def test_catalog_blocks_unsupported_arena_terms(change, code):
     assert code in {blocker["code"] for blocker in resolve(facts)["blockers"]}
 
 
-def test_synthetic_choice_is_unchanged():
+def test_retired_synthetic_choice_is_unlisted_and_cannot_be_approved():
     facts = {**arena_fields(), "product_choice_id": "demo-tissue-12-shopee",
              "offer": {"kind": "voucher", "value": 10, "unit": "THB", "eligibility": "all"},
              "budget_thb": 1000, "start_date": "2026-12-01", "end_date": "2026-12-08"}
     context = resolve(facts)
-    assert context["data_versions"]["evaluation_policy"] != ARENA_POLICY
-    assert context["evaluation"]["scenarios"] == ["S1"]
+    assert context["supported_product_choices"] == [ARENA_PRODUCT]
+    assert not context["resolved_product"] and context["evaluation"] is None
+    assert any(b["code"] == "exact_product_required" for b in context["blockers"])
 
 
 @pytest.fixture
@@ -127,3 +138,29 @@ def test_running_state_matches_the_contract(client, monkeypatch):
     assert status["status"] == "queued" and status["poll_after_seconds"] == 2
     response = client.get(run["status_url"] + "/report")
     assert response.status_code == 409 and response.json()["code"] == "report_pending"
+
+
+def test_arena_outage_cannot_reprice_a_cellox_approval(client, monkeypatch):
+    from api import v1_runs
+
+    def outage(*args, **kwargs):
+        raise RuntimeError("arena unavailable")
+
+    tried = []
+    synthetic_evaluate = v1_runs.evaluate
+
+    def fallback(run_id, approval_id, review):
+        tried.append(review)
+        return synthetic_evaluate(run_id, approval_id, review)
+
+    monkeypatch.setattr(v1_arena.arena, "run", outage)
+    monkeypatch.setattr(v1_runs, "evaluate", fallback)
+    run = approved_run(client)
+    assert len(tried) == 1
+    frozen = client.get(run["status_url"] + "/input").json()["review"]
+    assert tried[0] == frozen
+    assert frozen["resolved_product"]["choice_id"] == "cellox-tissue-shopee"
+    assert frozen["costs"]["regular_price"]["source"] == "data"
+    status = client.get(run["status_url"]).json()
+    assert status["failure"]["retryable"] and status["status"] == "error"
+    assert client.get(run["status_url"] + "/report").status_code == 409

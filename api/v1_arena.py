@@ -17,8 +17,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from agents.strategist import propose
+from api.v1_report import arena_report_fields
 from contracts.campaign_spec import CampaignSpec
 from contracts.models import ContextPack, SimResult, SimulationPlan, Strategy
+from data.context import competitive_outlook
 from data.loaders import load_brands, load_market, load_personas
 from engine import arena
 from engine.evaluator import media_cost, plan_budget
@@ -41,6 +43,38 @@ def offer_pct(review: dict[str, Any]) -> float:
         return value
     price = float(review["costs"]["regular_price"]["value"])
     return 100 * value / price
+
+
+def field_sources(review: dict[str, Any]) -> dict[str, str]:
+    """Public provenance for the fields used to construct the approved arena spec."""
+    origins = review.get("fact_origins", {})
+    costs = review["costs"]
+    facts = review["facts"]
+
+    def fact(name: str, fallback: str = "default") -> str:
+        label = origins.get("/facts/" + name, fallback)
+        return "user" if label in {"planner", "planner_confirmed_extraction"} else label
+
+    eligibility_source = fact("offer") if "eligibility" in facts.get("offer", {}) else "default"
+    return {
+        "campaign_id": "derived", "name": "derived",
+        "brand": "data", "brand.name": "default",  # Illustrative display name in Gan's catalog.
+        "brand.price_tier": "derived", "objective": fact("objective"),
+        "audience": "default", "audience.description": fact("audience_hint"),
+        "audience.include_hints": "derived", "offer": fact("offer"),
+        "offer.mechanics.0.value": ("derived" if review["resolved_offer"]["discount"]["unit"]
+                                    != "pct" else fact("offer")),
+        "offer.mechanics.0.eligibility": fact("offer/eligibility", eligibility_source),
+        "budget": fact("budget_thb"),
+        "channels": fact("channels") if facts.get("channels") else fact("channel", "data"),
+        "timing": "default", "timing.start_date": fact("start_date"),
+        "timing.end_date": fact("end_date"), "timing.event": fact("event"),
+        "unit_economics": "derived",
+        "unit_economics.avg_price_thb": costs["regular_price"]["source"],
+        "unit_economics.margin_pct": "derived", "unit_economics.fee_pct": "derived",
+        "constraints": "default",
+        "constraints.margin_floor_pct": costs.get("margin_floor_pct", {}).get("source", "default"),
+    }
 
 
 def spec_from_review(review: dict[str, Any]) -> CampaignSpec:
@@ -78,23 +112,23 @@ def spec_from_review(review: dict[str, Any]) -> CampaignSpec:
         "offer": {"mechanics": [mechanic], "message": None},
         "budget": {"total_thb": float(facts["budget_thb"]), "split": None,
                    "max_discount_pct": None},
-        "channels": [review["resolved_product"]["channel"]],
+        "channels": list(facts.get("channels") or [review["resolved_product"]["channel"]]),
         "timing": {"start_date": facts["start_date"], "end_date": facts["end_date"],
-                   "event": None, "post_window_weeks": 2},
+                   "event": facts.get("event"), "post_window_weeks": 2},
         "unit_economics": {"avg_price_thb": price, "margin_pct": 100 * (price - cost) / price,
                            "fee_pct": fees},
-        "constraints": {"margin_floor_pct": None,
+        "constraints": {"margin_floor_pct": costs.get("margin_floor_pct", {}).get("value"),
                         "max_loss_prob": float(evaluation["max_loss_probability"]),
                         "must_avoid": [], "must_include": []},
         "strategist_bounds": None,
         "competitor_hints": [],
     }
-    meta = {"source": "user", "confidence": 1.0, "evidence": None}
+    # CampaignSpec v0.1 accepts only user/extracted/default. Preserve the precise
+    # catalog or derived label in its evidence and in the public report field_sources.
     raw["field_meta"] = {
-        key: dict(meta) for key in (
-            "campaign_id", "name", "brand", "objective", "audience", "offer", "budget",
-            "channels", "timing", "unit_economics", "constraints",
-        )
+        path: {"source": "user" if source == "user" else "default", "confidence": 1.0,
+               "evidence": source}
+        for path, source in field_sources(review).items()
     }
     return CampaignSpec.model_validate(raw)
 
@@ -147,15 +181,18 @@ def _unavailable(metric, unit, reason="undefined_denominator"):
 def plan_metrics(result: SimResult, strategy: Strategy) -> list[dict[str, Any]]:
     kpi = result.kpi
     spends = strategy.discount_pct > 0 or media_cost(strategy) > 0
-    leakage = {key: min(max(value, 0.0), 1.0) for key, value in _percentiles(kpi.leakage).items()}
+    leakage = ({key: min(max(value, 0.0), 1.0) for key, value in _percentiles(kpi.leakage).items()}
+               if kpi.leakage is not None else None)
     return [
         _available("incremental_profit", "THB", _percentiles(kpi.incr_profit)),
         _available("incremental_roas", "ratio", _percentiles(kpi.iroas))
         if spends else _unavailable("incremental_roas", "ratio"),
         _available("subsidy_leakage", "fraction", leakage)
-        if strategy.discount_pct > 0 else _unavailable("subsidy_leakage", "fraction"),
+        if strategy.discount_pct > 0 and leakage is not None
+        else _unavailable("subsidy_leakage", "fraction"),
         _available("incremental_new_buyers", "buyers", _percentiles(kpi.new_buyers)),
-        _available("probability_hit_target", "fraction", float(kpi.p_hit_target)),
+        _available("probability_hit_target", "fraction", float(kpi.p_hit_target))
+        if kpi.p_hit_target is not None else _unavailable("probability_hit_target", "fraction"),
         _available("probability_loss", "fraction", float(kpi.p_loss)),
     ]
 
@@ -246,7 +283,8 @@ def _decision(metrics: list[dict[str, Any]], evaluation: dict[str, Any]) -> tupl
     return ("proceed", "passed", "The original met its S1 median profit and loss-risk gates.")
 
 
-def _commentary(outcome: arena.ArenaResult, original: Strategy, best: Strategy | None) -> str:
+def _commentary(outcome: arena.ArenaResult, original: Strategy, best: Strategy | None,
+                events: dict) -> str:
     rows = outcome.summary[:3]
     ranking = "; ".join(
         f"#{r['rank']} {r['strategy_id']} EV {r['ev_incr_profit']:,.0f} THB" for r in rows
@@ -263,16 +301,20 @@ def _commentary(outcome: arena.ArenaResult, original: Strategy, best: Strategy |
     if best is not None:
         parts.append(f"Suggested alternative: {best.name} ({best.discount_pct:g}% "
                      f"{best.mechanic}).")
-    events = getattr(outcome, "events", {}) or {}
     if events:
-        sides = [e.get("side") for by_s in events.values() for rows in by_s.values() for e in rows]
-        parts.append(f"Adaptive loop: {sides.count('rival')} rival reactions and "
-                     f"{sides.count('us')} of our rule firings across plans (median seed).")
+        reactions = sum(count["rival_reactions"] for count in events.values())
+        firings = sum(count["own_rule_firings"] for count in events.values())
+        parts.append(f"Adaptive loop: {reactions} rival reactions and {firings} of our rule "
+                     "firings across plans (middle seed).")
     parts.append(f"Message appeal source: {outcome.appeal_source}.")
     return " ".join(parts)
 
 
 # ---------------------------------------------------------------- entry point
+
+
+class ArenaRunError(RuntimeError):
+    """Only a simulation failure can trigger the internal synthetic fallback."""
 
 
 def evaluate(
@@ -291,7 +333,10 @@ def evaluate(
         if progress is not None and total:
             progress(min(0.99, done / total))
 
-    outcome = arena.run(plan, progress=report_progress)
+    try:
+        outcome = arena.run(plan, progress=report_progress)
+    except Exception as exc:
+        raise ArenaRunError("The arena simulation failed.") from exc
     by_key = {(r.strategy_id, r.scenario): r for r in outcome.results}
     order = list(dict.fromkeys(evaluation["scenarios"]))
 
@@ -335,7 +380,21 @@ def evaluate(
 
     s1 = next((r for r in original_results if r["scenario"] == "S1"), original_results[0])
     status, reason, explanation = _decision(s1["metrics"], evaluation)
+    top = next(s for s in strategies if s.id == ranked[0])
+    report_fields = arena_report_fields(plan, outcome, profit_target=target)
+    user_outlook = {"plan_id": original.id, **competitive_outlook(spec, original)}
+    top_outlook = (user_outlook if top.id == original.id else
+                   {"plan_id": top.id, **competitive_outlook(spec, top)})
     return {
+        "evaluation_engine": "arena", "field_sources": field_sources(review),
+        **report_fields,
+        "competitive_outlook": {"user_plan": user_outlook, "top_ranked_plan": top_outlook},
+        "customer_voice": {
+            "status": "unavailable",
+            "reason": ("rule-based appeal table (label default)"
+                       if outcome.appeal_source == "appeal_fallback" else
+                       "SSR appeal scores supplied without customer quotations"),
+        },
         "run_id": run_id, "approval_id": approval_id, "review_id": review["review_id"],
         "revision": review["revision"], "data_versions": review["data_versions"],
         "comparator": "paired_no_campaign",
@@ -344,5 +403,5 @@ def evaluate(
         "scenario_results": original_results,
         "plan_results": plan_results,
         "decision": {"status": status, "reason_code": reason, "explanation": explanation},
-        "commentary": _commentary(outcome, original, best),
+        "commentary": _commentary(outcome, original, best, report_fields["events"]),
     }
