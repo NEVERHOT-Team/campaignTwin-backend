@@ -226,7 +226,9 @@ def plan_input(
         "subsidy_budget": max(0.0, float(budget)), "costs": review["costs"],
         "campaign_window": {"start_date": facts["start_date"], "end_date": facts["end_date"]},
         "segments": review["segments"], "target_segment_ids": targets,
-        "evaluation": review["evaluation"], "seeds": list(seeds), "contingency_rules": [],
+        "evaluation": review["evaluation"], "seeds": list(seeds),
+        # The adaptive arena applies these rules week by week, so they are part of the input.
+        "contingency_rules": list(strategy.contingency_rules) if strategy is not None else [],
     }
 
 
@@ -261,6 +263,11 @@ def _commentary(outcome: arena.ArenaResult, original: Strategy, best: Strategy |
     if best is not None:
         parts.append(f"Suggested alternative: {best.name} ({best.discount_pct:g}% "
                      f"{best.mechanic}).")
+    events = getattr(outcome, "events", {}) or {}
+    if events:
+        sides = [e.get("side") for by_s in events.values() for rows in by_s.values() for e in rows]
+        parts.append(f"Adaptive loop: {sides.count('rival')} rival reactions and "
+                     f"{sides.count('us')} of our rule firings across plans (median seed).")
     parts.append(f"Message appeal source: {outcome.appeal_source}.")
     return " ".join(parts)
 

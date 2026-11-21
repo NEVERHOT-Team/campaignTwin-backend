@@ -1320,7 +1320,10 @@ components:
         seeds:
           type: array
           items: {type: integer}
-        contingency_rules: {type: array, maxItems: 0}
+        contingency_rules:
+          type: array
+          description: Weekly if-then rules the plan applies in the adaptive arena. Empty for synthetic runs.
+          items: {$ref: '#/components/schemas/Text'}
     RunInput:
       type: object
       additionalProperties: false

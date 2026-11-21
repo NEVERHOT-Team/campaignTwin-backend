@@ -534,8 +534,23 @@ def simulate(
     rivals: list[RivalScenario] | None = None,
     appeal: dict[tuple[str, str], float] | None = None,
     params: ShopperParams | None = None,
+    *,
+    adaptive: bool = False,
+    reference: list[WeekStats] | None = None,
+    market: dict[str, Any] | None = None,
 ) -> list[WeekStats]:
-    """Run one plan for `weeks` weeks (campaign weeks first, then the post window)."""
+    """Run one plan for `weeks` weeks (campaign weeks first, then the post window).
+
+    adaptive=False keeps the scheduled rival windows of offer_from_strategy().
+    adaptive=True closes the loop: each week our contingency rules (engine.rules) react to
+    last week's observations, and rivals (engine.rival) react to our posted offer. Pass the
+    paired no-campaign run as `reference` so `end_early` can see incremental profit.
+    Adaptive runs record what happened in WeekStats.extra: events, our and rival posted
+    discounts.
+    """
+    if adaptive:
+        return _simulate_adaptive(population, strategy, weeks, campaign_weeks, seed, rivals,
+                                  appeal, params, reference, market)
     state = initial_state(population, seed)
     message = None if strategy.is_baseline else strategy.id
     vector = appeal_vector(population, appeal, message)
@@ -545,6 +560,100 @@ def simulate(
         offer = offer_from_strategy(strategy, week, campaign_weeks, rivals, reach)
         week_stats, state = step(population, state, offer, seed, week, params, vector)
         stats.append(week_stats)
+    return stats
+
+
+def _share_pp(stats: WeekStats) -> float | None:
+    total = stats.buyers_us + stats.buyers_rival + stats.buyers_other
+    return 100.0 * stats.buyers_us / total if total else None
+
+
+def _simulate_adaptive(
+    population: Population,
+    strategy: Strategy,
+    weeks: int,
+    campaign_weeks: int,
+    seed: int,
+    rivals: list[RivalScenario] | None,
+    appeal: dict[tuple[str, str], float] | None,
+    params: ShopperParams | None,
+    reference: list[WeekStats] | None,
+    market: dict[str, Any] | None,
+) -> list[WeekStats]:
+    from engine.rival import RivalBook
+    from engine.rules import Observation, PlanState, apply_rules, parse_rules
+
+    state = initial_state(population, seed)
+    message = None if strategy.is_baseline else strategy.id
+    vector = appeal_vector(population, appeal, message)
+    reach = media_reach(population, strategy, params)
+    rules = [] if strategy.is_baseline else parse_rules(strategy.contingency_rules)
+    plan = PlanState(tuple(strategy.target_segments), strategy.cap_per_user, reach)
+    book = RivalBook(None if strategy.is_baseline else rivals)
+    needs_profit = reference is not None and any(r.kind == "end_early" for r in rules)
+    market = market or (load_market() if needs_profit else None)
+    active_weeks = _active_weeks(strategy, campaign_weeks)
+    media = 0.0
+    if not strategy.is_baseline:
+        budget = (strategy.timing or {}).get("budget_thb")
+        share = (strategy.budget_split or {}).get("media", 0.0)
+        if isinstance(budget, (int, float)) and budget > 0:
+            media = float(budget) * float(share or 0.0)
+
+    obs = Observation(week=0)
+    first_share: float | None = None
+    share_gain: float | None = None
+    incr = 0.0
+    stats: list[WeekStats] = []
+    for week in range(1, weeks + 1):
+        # Rules only act while our offer is still live: after the campaign window (or an
+        # early stop) there is nothing left to adjust.
+        live = (offer_from_strategy(strategy, week, campaign_weeks).active
+                and not plan.stopped)
+        events = apply_rules(rules, plan, obs, week) if rules and live else []
+        if any(e.action == "shift_budget" for e in events):
+            shifted = strategy.model_copy(update={"target_segments": list(plan.target_segments)})
+            plan.reach = media_reach(population, shifted, params)
+        scheduled = offer_from_strategy(strategy, week, campaign_weeks, None, plan.reach)
+        on = scheduled.active and not plan.stopped
+        posted = scheduled.our_discount_pct if on else 0.0
+        rival_pct, non_price, rival_events = book.react(week, posted, share_gain,
+                                                        our_active=on)
+        offer = replace(
+            scheduled,
+            active=on,
+            target_segments=plan.target_segments,
+            cap_per_user=plan.cap_per_user,
+            rival_discount_pct=rival_pct,
+            rival_non_price=non_price,
+        )
+        week_stats, state = step(population, state, offer, seed, week, params, vector)
+        share = _share_pp(week_stats)
+        if week == 1:
+            first_share = share
+        base_share = (_share_pp(reference[week - 1])
+                      if reference is not None and week <= len(reference) else None)
+        share_gain = share - base_share if share is not None and base_share is not None else None
+        if needs_profit and market is not None and week <= len(reference):
+            incr += week_row(week, week_stats, market).profit
+            incr -= week_row(week, reference[week - 1], market).profit
+        spent = media * min(week, active_weeks) / active_weeks if active_weeks else 0.0
+        obs = Observation(
+            week=week,
+            our_discount_pct=posted,
+            rival_discount_pct=rival_pct,
+            our_share_pp=share,
+            first_share_pp=first_share,
+            incr_profit_to_date=(incr - spent) if needs_profit else None,
+        )
+        log = [e.as_dict() for e in events + rival_events]
+        stats.append(replace(week_stats, extra={
+            **week_stats.extra,
+            "events": log,
+            "our_discount_pct": posted,
+            "rival_discount_pct": rival_pct,
+            "rival_non_price": non_price,
+        }))
     return stats
 
 

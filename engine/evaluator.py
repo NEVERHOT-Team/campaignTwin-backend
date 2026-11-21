@@ -423,9 +423,27 @@ def sim_result(
     campaign_weeks: int,
     rivals: list[RivalScenario],
     target_profit: float = 0.0,
+    rival_weeks: set[int] | None = None,
 ) -> EvaluatedPlan:
-    """Arena aggregation with single-scenario attribution until S1 is available for comparison."""
-    return _aggregate(strategy, scenario, outcomes, campaign_weeks, target_profit)
+    """Arena aggregation with single-scenario attribution until S1 is available for comparison.
+
+    rival_weeks: weeks the rival actually discounted in an adaptive run (from the trace).
+    When given it replaces the scheduled windows of `rivals` for the breakpoint cause.
+    """
+    result = _aggregate(strategy, scenario, outcomes, campaign_weeks, target_profit)
+    week = result.breakpoint.week
+    if week is not None:
+        attacking = week in rival_weeks if rival_weeks is not None else _rival_attacking(
+            rivals, week)
+        if attacking:
+            cause = "rival_reaction"
+        elif week > campaign_weeks and result.post_campaign_profit_p50 < 0:
+            # A break inside the campaign window is discount cost, not the later dip.
+            cause = "post_campaign_dip"
+        else:
+            cause = "discount_cost"
+        result.breakpoint = Breakpoint(week=week, cause=cause, share=result.kpi.p_loss)
+    return result
 
 
 def _group_results(results: Sequence[SimResult]) -> dict[str, dict[str, SimResult]]:
