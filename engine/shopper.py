@@ -3,13 +3,15 @@
 Each simulated shopper is a weighted copy of one persona (data/processed/personas.json)
 with small jitter. Every week a shopper:
 
-1. decides whether to buy the category: weekly_buy_rate x need (weeks since the last
-   purchase relative to the purchase cycle) x price effect (best price ** elasticity)
-   x waiting (shoppers who have seen promotions hold back in weeks without one);
-2. if buying, picks a brand (us / top rival / other) with a logit on price,
+1. picks the brand they would buy (us / top rival / other) with a logit on price,
    loyalty to their usual brand, and the SSR appeal of our message (exposed shoppers only);
-3. buys more units when the price is low, which delays the next purchase (stockpiling),
-   so campaigns pull demand forward and a post-campaign dip appears.
+2. decides whether to buy: weekly_buy_rate x need (weeks since the last purchase relative
+   to the purchase cycle) x waiting (shoppers who have seen a promotion hold back in weeks
+   without one) x the chosen brand's price effect (price ** elasticity), so a rival's
+   discount only adds rival purchases;
+3. buys more units when the chosen brand is cheap, which delays the next purchase
+   (stockpiling), so campaigns pull demand forward and a post-campaign dip appears;
+4. may adopt the brand it bought as its new usual brand (habit x (1 - loyalty)).
 
 No LLM calls happen here. Plan and baseline runs that share a seed draw the same random
 numbers every week (common random numbers), so differences come only from the offer.
@@ -286,9 +288,6 @@ def step(
     p_rival = 1 - d_rival / 100
 
     need = np.clip(state.weeks_since / population.cycle_weeks, params.need_floor, params.need_cap)
-    best = np.minimum(np.minimum(p_us, p_rival), 1.0)
-    price_mult = np.clip(np.power(np.maximum(best, 1e-6), population.elasticity), 1.0,
-                         params.price_mult_cap)
     promo_now = (d_us > 0) | (d_rival > 0)
     # Having seen a promotion teaches a shopper to hold back in weeks without one. One
     # campaign is one lesson: the effect does not grow with each week of the same campaign.
@@ -300,9 +299,10 @@ def step(
     p_base = np.clip(
         population.weekly_buy_rate * need * waiting_factor, 0, params.max_weekly_prob
     )
-    p_buy = np.clip(p_base * price_mult, 0, params.max_weekly_prob)
-    buy = u_buy < p_buy
 
+    # The brand a shopper would pick this week is decided first; the purchase decision
+    # then uses that brand's price. So a rival's discount only adds rival purchases and
+    # never makes anyone buy (or stock up on) more of our product.
     loyal = params.beta_loyalty * population.loyalty
     price = params.beta_price * population.sensitivity
     u_us = (
@@ -323,14 +323,10 @@ def step(
     probs /= probs.sum(axis=1, keepdims=True)
     brand = (u_brand[:, None] > np.cumsum(probs, axis=1)).sum(axis=1).clip(0, 2)
 
-    # Price effects follow the brand actually bought. A purchase that only happened
-    # because some brand was on promotion (u_buy >= p_base) must be of a promoted brand,
-    # and only a promoted purchase is stockpiled. Without this, a rival's discount would
-    # make our loyal shoppers buy and stock up on our full-price product.
     chosen_price = np.where(brand == US, p_us, np.where(brand == RIVAL, p_rival, 1.0))
     chosen_mult = np.clip(np.power(np.maximum(chosen_price, 1e-6), population.elasticity), 1.0,
                           params.price_mult_cap)
-    buy &= (u_buy < p_base) | (chosen_mult > 1.0)
+    buy = u_buy < np.clip(p_base * chosen_mult, 0, params.max_weekly_prob)
     units = np.where(buy, population.avg_units * (1 + params.stockpile * (chosen_mult - 1)), 0.0)
     ours = buy & (brand == US)
     discounted = ours & (d_us > 0)
