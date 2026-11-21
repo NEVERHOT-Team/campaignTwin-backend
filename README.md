@@ -41,12 +41,15 @@ results while the engine is under development. The replay endpoint is immediate.
 2. Supply `OPENAI_API_KEY` in Render's secret prompt for live model calls. The app also
    runs with the key unset, using cached responses and local fallbacks. Select
    **Deploy Blueprint**.
-3. Copy the service's HTTPS URL from Render and check its health. The expected response
-   is `{"ok":true,"db_mode":"json"}`.
+3. Copy the service's HTTPS URL from Render and check both endpoints. The Docker
+   image serves the existing planner and the v2 seller API on the same port.
+   The health endpoint reports the database mode. Render checks the seller
+   discovery endpoint, which returns the v2 version and review URL.
 
    ```sh
    BACKEND_URL=https://your-service.onrender.com
    curl -fsS "$BACKEND_URL/api/health"
+   curl -fsS "$BACKEND_URL/api/v2"
    ```
 
 4. Set the frontend's `VITE_API_BASE_URL` to that service origin and rebuild the frontend.

@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     branch: dev
-    healthCheckPath: /api/health
+    healthCheckPath: /api/v2
     envVars:
       - key: DB_MODE
         value: json
