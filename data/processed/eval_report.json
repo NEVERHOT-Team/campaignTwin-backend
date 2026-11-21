@@ -1,0 +1,115 @@
+{
+  "status": "fail",
+  "check_counts": {
+    "pass": 3,
+    "fail": 8,
+    "skipped": 0
+  },
+  "source": "data",
+  "reference": {
+    "status": "available",
+    "households": 1417,
+    "weeks": 44
+  },
+  "persona_count": 60,
+  "targets": {
+    "ks_similarity_min": 0.9,
+    "sd_ratio_min": 0.8,
+    "correlation_gap_max": 0.1
+  },
+  "targets_source": "default",
+  "method": {
+    "reference": "Pre-holdout panel from the packaged simulated Complete Journey data.",
+    "weights": "Population weights for personas and equal weights for households.",
+    "marginal_fit": "One minus maximum empirical CDF distance at six-decimal precision.",
+    "variance_ratio": "Population SD of persona buy rate over household population SD.",
+    "over_correlation": "Absolute gap in mean absolute Pearson r over 15 distinct pairs.",
+    "direction_checks": "Weighted persona means. A more negative slope means greater price sensitivity. Annual income groups are below USD 35k and at least USD 75k. Observed slopes were fitted by archetype and assigned to personas.",
+    "confidence_inputs": "Coverage is the percentage of all assumptions labelled data. Rival evidence counts library rows with both a nonblank source URL and a known reaction type."
+  },
+  "marginal_fit": {
+    "weekly_buy_rate": {
+      "value": 0.7102426203976346,
+      "status": "fail"
+    },
+    "purchase_cycle_weeks": {
+      "value": 0.7102426203976346,
+      "status": "fail"
+    },
+    "avg_price_paid": {
+      "value": 0.7592240739735447,
+      "status": "fail"
+    },
+    "promo_share": {
+      "value": 0.6381926362154138,
+      "status": "fail"
+    },
+    "coupon_rate": {
+      "value": 0.6190474591481508,
+      "status": "fail"
+    },
+    "brand_loyalty": {
+      "value": 0.5136641277103157,
+      "status": "fail"
+    }
+  },
+  "variance_ratio": {
+    "persona_sd": 0.10203124190693616,
+    "household_sd": 0.1015706426358705,
+    "value": 1.0045347677154797,
+    "status": "pass"
+  },
+  "over_correlation": {
+    "persona_mean_abs_corr": 0.27731101382201295,
+    "household_mean_abs_corr": 0.18934305276729144,
+    "gap": 0.08796796105472152,
+    "status": "pass"
+  },
+  "direction_checks": {
+    "deal_hunter_vs_loyal": {
+      "field": "price_elasticity",
+      "source": "default",
+      "deal_hunter": -2.8,
+      "loyal": -0.8,
+      "status": "pass"
+    },
+    "income_observed": {
+      "field": "price_elasticity_observed",
+      "source": "data",
+      "low": -0.24816235250587526,
+      "high": -0.32621127040446635,
+      "status": "fail"
+    },
+    "income_prior": {
+      "field": "price_elasticity",
+      "source": "default",
+      "low": -1.3367207438670692,
+      "high": -1.8326915743366408,
+      "status": "fail"
+    }
+  },
+  "rival_evidence": {
+    "total_rows": 8,
+    "with_source_url": 0,
+    "with_known_reaction_type": 8,
+    "with_both": 0
+  },
+  "data_coverage": {
+    "total": 35,
+    "counts": {
+      "data": 7,
+      "default": 27,
+      "llm_estimate": 1
+    },
+    "shares_pct": {
+      "data": 20.0,
+      "default": 77.14285714285714,
+      "llm_estimate": 2.857142857142857
+    }
+  },
+  "confidence_inputs": {
+    "coverage_pct": 20.0,
+    "rival_evidence_n": 0,
+    "backtest_label": null
+  }
+}

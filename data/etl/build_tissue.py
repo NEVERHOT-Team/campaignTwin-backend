@@ -423,7 +423,9 @@ def _market_inputs(
 def _calibration(households: pd.DataFrame, weekly: pd.DataFrame, weeks: pd.Index) -> pd.DataFrame:
     grid = pd.MultiIndex.from_product([households.index, weeks], names=["household_id", "week"])
     panel = weekly.reindex(grid).reset_index()
-    panel = panel.join(households[["archetype", "segment"]], on="household_id")
+    # Mixed-brand weeks lose the runner-up's units in the weekly winner column.
+    # Carry the purchase-line loyalty measure for exact household-level evaluation.
+    panel = panel.join(households[["archetype", "segment", "brand_loyalty"]], on="household_id")
     local_keys = pd.Series(
         [f"tt-hh-{row:04d}" for row in range(1, len(households) + 1)],
         index=households.index,
@@ -452,6 +454,7 @@ def _calibration(households: pd.DataFrame, weekly: pd.DataFrame, weeks: pd.Index
             "in_mailer",
             "on_display",
             "brand",
+            "brand_loyalty",
         ]
     ]
 
