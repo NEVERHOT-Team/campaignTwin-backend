@@ -223,3 +223,14 @@ def test_optional_twin_csv_uses_numeric_public_export(monkeypatch, tmp_path):
         "risk_aversion": 0.0,
         "time_preference": 1.0,
     }
+
+
+def test_twin_response_loader_supports_wave_and_optional_columns(monkeypatch, tmp_path):
+    monkeypatch.setattr(loaders, "RAW", tmp_path)
+    assert loaders.load_twin_responses(columns=["QID32"]) is None
+    for wave in ("1_3", "4"):
+        path = loaders.source_asset_path(f"twin2k/wave{wave}_response.csv")
+        path.parent.mkdir(exist_ok=True, parents=True)
+        path.write_text(f"QID32,wave\n3,{wave}\n")
+        assert list(loaders.load_twin_responses(wave=wave)) == ["QID32", "wave"]
+    assert loaders.load_twin_responses(["QID32"]).to_dict("list") == {"QID32": [3]}

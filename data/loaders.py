@@ -54,20 +54,6 @@ def load_category_products() -> pd.DataFrame:
     )
 
 
-def load_twin_responses(columns: list[str]) -> pd.DataFrame | None:
-    filename = "wave1_3_response.csv"
-    response_directory = "question_catalog_and_human_response_csv"
-    candidates = (
-        RAW / filename,
-        RAW / response_directory / filename,
-        RAW / "Twin-2K-500" / response_directory / filename,
-    )
-    for path in candidates:
-        if path.is_file():
-            return pd.read_csv(path, usecols=columns)
-    return None
-
-
 def _require_keys(record, expected: str, location: str) -> None:
     missing = set(expected.split()).difference(record)
     if missing:
@@ -401,10 +387,28 @@ def normalize_completejourney(table: str, *, chunk_size: int = 1_000_000) -> dic
     return {"rows": rows, "columns": columns}
 
 
-def load_twin_responses(wave: str = "1_3") -> pd.DataFrame:
-    """US survey respondents, not a Thai population or an LLM prompt payload."""
+def load_twin_responses(
+    wave: str | list[str] = "1_3", *, columns: list[str] | None = None
+) -> pd.DataFrame | None:
+    """Read a registered survey wave, or optional local columns for persona fitting."""
+    if isinstance(wave, list):
+        if columns is not None:
+            raise TypeError("Pass columns only once")
+        columns, wave = wave, "1_3"
     filename = {"1_3": "wave1_3_response.csv", "4": "wave4_response.csv"}[wave]
-    return pd.read_csv(source_asset_path(f"twin2k/{filename}"), low_memory=False)
+    registered = source_asset_path(f"twin2k/{filename}")
+    if columns is None:
+        return pd.read_csv(registered, low_memory=False)
+    directory = "question_catalog_and_human_response_csv"
+    for path in (
+        RAW / filename,
+        RAW / directory / filename,
+        RAW / "Twin-2K-500" / directory / filename,
+        registered,
+    ):
+        if path.is_file():
+            return pd.read_csv(path, usecols=columns, low_memory=False)
+    return None
 
 
 def load_twin_catalog() -> Any:
