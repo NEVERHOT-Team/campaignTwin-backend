@@ -1,4 +1,5 @@
 import json
+import re
 from collections import Counter, defaultdict
 from datetime import date
 
@@ -148,15 +149,34 @@ def test_economics_anchors_and_backtest():
     assert economics["source"]["usd_thb"] == "default"
 
     anchors = loaders.load_anchors()
-    assert set(anchors) == {"sets", "test_responses"}
-    assert Counter(group["lang"] for group in anchors["sets"]) == {"th": 2, "en": 1}
-    texts = [anchor for group in anchors["sets"] for anchor in group["anchors"]]
-    assert all(len(group["anchors"]) == 5 for group in anchors["sets"])
-    assert len(set(texts)) == 15
-    responses = anchors["test_responses"]
-    assert len({row["text"] for row in responses}) == len(responses) == 10
-    assert Counter(row["expected"] for row in responses) == dict.fromkeys(range(1, 6), 2)
-    assert set(texts).isdisjoint(row["text"] for row in responses)
+    assert set(anchors) == {"sets", "test_responses", "test_responses_holdout"}
+    assert Counter(group["lang"] for group in anchors["sets"]) == {"th": 5, "en": 1}
+    thai_letter = re.compile("[ก-ฮ]")
+    anchor_texts = set()
+    for group in anchors["sets"]:
+        levels = group["anchors"]
+        assert len(levels) == 5
+        if group["lang"] == "th":
+            assert all(thai_letter.search(text) for text in levels)
+        else:
+            assert all(re.search("[a-zA-Z]", text) for text in levels)
+            assert not any(thai_letter.search(text) for text in levels)
+        anchor_texts.update(text.strip().casefold() for text in levels)
+    assert len(anchor_texts) == 30
+
+    seen = anchor_texts.copy()
+    for split in ("test_responses", "test_responses_holdout"):
+        responses = anchors[split]
+        labels = [row["expected"] for row in responses]
+        assert all(type(label) is int for label in labels)
+        assert Counter(labels) == dict.fromkeys(range(1, 6), 2)
+        texts = {row["text"].strip().casefold() for row in responses}
+        assert len(texts) == len(responses) == 10
+        assert all(texts)
+        assert seen.isdisjoint(texts)
+        if split == "test_responses_holdout":
+            assert all(thai_letter.search(text) for text in texts)
+        seen.update(texts)
 
     backtest = loaders.load_backtest()
     assert {"lift_pct", "redemption_rate", "incremental_sales"} <= set(backtest["actual"])
