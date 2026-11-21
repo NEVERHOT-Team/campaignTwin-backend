@@ -11,6 +11,23 @@ from data.etl.selection_bias import ks_similarity
 from engine import shopper
 
 
+def assert_close(fresh, published, path="report"):
+    """Structural equality with float tolerance: the published JSON and a fresh build can
+    differ in the last bits across machines (summation order, numpy builds)."""
+    if isinstance(published, dict):
+        assert isinstance(fresh, dict) and fresh.keys() == published.keys(), path
+        for key in published:
+            assert_close(fresh[key], published[key], f"{path}.{key}")
+    elif isinstance(published, (list, tuple)):
+        assert isinstance(fresh, (list, tuple)) and len(fresh) == len(published), path
+        for index, (left, right) in enumerate(zip(fresh, published, strict=True)):
+            assert_close(left, right, f"{path}[{index}]")
+    elif isinstance(published, float) and not isinstance(published, bool):
+        assert fresh == pytest.approx(published, rel=1e-9, abs=1e-12), path
+    else:
+        assert fresh == published, path
+
+
 @pytest.fixture
 def panel():
     # Household A buys two brands in the first week; the weekly leader alone loses one unit.
@@ -334,7 +351,7 @@ def test_published_report_thresholds_and_source_counts():
     )
     fresh = quality.build_eval_report()
     for key in ("direction_checks", "rival_evidence", "data_coverage", "confidence_inputs"):
-        assert fresh[key] == report[key]
+        assert_close(fresh[key], report[key], key)
     if report["reference"]["status"] == fresh["reference"]["status"] == "available":
         for attr in report["marginal_fit"]:
             for key in ("value", "profile_value"):
