@@ -2,7 +2,7 @@
 
 CampaignTwin stress-tests e-commerce campaigns against simulated shopper and rival behavior before launch.
 
-1. Stack and commands: `pip install -e .`, `uvicorn main:app --reload --host 0.0.0.0 --port 8000`, `pytest -q`, `ruff check .`.
+1. Stack and commands: `pip install -e ".[dev]"`, `uvicorn main:app --reload --host 0.0.0.0 --port 8000`, `pytest -q`, `ruff check .`.
 2. Folder owners: api/agents/contracts = Big, engine = Mic, data/db = Gan. Stay in your folder.
 3. `contracts/` is the API contract. Only Big edits it, and announces changes in team chat.
 4. Read data only via `data/loaders.py`. Never open `data/processed/` or `data/raw/` directly.

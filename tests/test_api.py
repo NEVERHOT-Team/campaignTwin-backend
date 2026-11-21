@@ -16,7 +16,7 @@ from contracts.models import (
     RunStatus,
     SimulationPlan,
 )
-from main import app
+from main import app, cors_origins
 from mocks import load_mock
 
 
@@ -115,6 +115,14 @@ def test_cors_preflight(client, origin):
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_configured_cors_origins_ignore_wildcard(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", " https://one.example, *, ,https://two.example ")
+    assert cors_origins() == [
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "https://one.example", "https://two.example",
+    ]
 
 
 def test_fixture_llm_cache(client, tmp_path, monkeypatch):
