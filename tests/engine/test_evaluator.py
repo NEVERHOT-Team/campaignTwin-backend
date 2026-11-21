@@ -37,7 +37,7 @@ def strategy(plan_id="offer", discount=10, **overrides):
     )
 
 
-def week(units, *, discounted=0, buyers=None, new=0):
+def week(units, *, discounted=0, would_buy=None, buyers=None, new=0):
     """Each full-price unit costs ฿100 and each discounted unit costs ฿90."""
     return WeekStats(
         buyers_us=units if buyers is None else buyers,
@@ -52,6 +52,7 @@ def week(units, *, discounted=0, buyers=None, new=0):
         exposed=discounted,
         holdout_buyers_us=0,
         holdout_size=0,
+        extra={} if would_buy is None else {"discounted_units_would_buy": would_buy},
     )
 
 
@@ -79,7 +80,8 @@ def test_one_seed_costs_and_net_returns():
     assert kpi.campaign_cost.p50 == 140
     assert kpi.iroas.p50 == (1080 - 800) / (120 + 20)
     assert kpi.iroi.p50 == pytest.approx(-12 / 140)
-    assert kpi.leakage.p50 == pytest.approx(8 / 12)
+    assert kpi.leakage is None
+    assert kpi.leakage_label == "unavailable"
     assert kpi.new_buyers.p50 == 2
     assert kpi.p_loss == 1
     assert kpi.p_hit_target == 0
@@ -101,10 +103,11 @@ def test_arena_and_evaluate_plan_publish_the_same_campaign_accounting():
     through_arena = evaluator.sim_result(plan, "S2", [seed_result], 2, [], target_profit=-240)
 
     # The weekly chart reports gross earnings. After the two ฿10 media installments,
-    # cumulative increments are +150, +120, -240; the downturn precedes the crossing.
+    # cumulative increments are +150, +120, -240.
     assert through_arena.weekly == direct.weekly
     assert [row.profit for row in through_arena.weekly] == [480, 300, 40]
-    assert through_arena.breakpoint.week == direct.breakpoint.week == 2
+    assert through_arena.breakpoint.week == direct.breakpoint.week == 3
+    assert through_arena.breakpoint.cause == direct.breakpoint.cause == "post_campaign_dip"
     assert through_arena.kpi == direct.kpi
     # Result persistence in api.routes uses this JSON-mode dump.
     payload = through_arena.model_dump(mode="json")
@@ -112,13 +115,15 @@ def test_arena_and_evaluate_plan_publish_the_same_campaign_accounting():
     assert payload["is_user_plan"]
     assert payload["scenario"] == "S2"
     assert payload["media_cost_label"] == "data"
+    assert payload["peak_week"] == 1
     metrics = payload["kpi"]
     assert metrics["incr_profit"]["p50"] == -240
     assert metrics["discount_cost"]["p50"] == 260
     assert metrics["media_cost"]["p50"] == 20
     assert metrics["campaign_cost"]["p50"] == 280
     assert metrics["iroi"]["p50"] == pytest.approx(-240 / 280)
-    assert metrics["leakage"]["p50"] == pytest.approx(16 / 26)
+    assert metrics["leakage"] is None
+    assert metrics["leakage_label"] == "unavailable"
     assert metrics["p_hit_target"] == 1
 
 
@@ -139,6 +144,8 @@ def test_thirty_satang_timing_difference_breaks_even():
     assert result.kpi.p_loss == 0
     assert result.kpi.p_hit_target == 1
     assert result.breakpoint.week is None
+    assert result.breakpoint.cause is None
+    assert result.peak_week == 1
 
 
 def test_seed_pairing_quantiles_and_weekly_medians():
@@ -162,25 +169,41 @@ def test_seed_pairing_quantiles_and_weekly_medians():
     }
 
 
-def test_leakage_aggregates_discounted_units_across_campaign_weeks():
+def test_leakage_aggregates_paired_shopper_units_across_campaign_weeks():
     result = evaluator.evaluate_plan(
-        {1: [week(20, discounted=20), week(5, discounted=5), week(10)]},
-        {1: [week(10), week(10), week(40)]},
+        {1: [week(20, discounted=20, would_buy=3), week(5, discounted=5, would_buy=4), week(10)]},
+        {1: [week(40), week(40), week(40)]},
         strategy(),
         "S1",
         market(campaign=2, post=1),
         100,
     )
-    # At most 10 of 20 subsidized units in week 1 and 5 of 5 in week 2 were organic.
-    assert result.kpi.leakage.p50 == pytest.approx(15 / 25)
+    # Both baseline weeks sold 40 units. Only 7 discounted units went to paired buyers.
+    assert result.kpi.leakage.p50 == pytest.approx(7 / 25)
+    assert result.kpi.leakage_label == "data"
     assert result.kpi.media_cost.p50 == 0
     assert result.media_cost_label == "default"
 
 
-def test_breakpoint_on_week_three_only_if_the_horizon_ends_negative():
+@pytest.mark.parametrize("missing_week", [False, True])
+def test_leakage_requires_counterfactuals_for_all_redeemed_units(missing_week):
+    measured = week(5, discounted=5, would_buy=0)
+    missing = week(5, discounted=5)
+    plan = {1: [measured, measured], 2: [measured, missing if missing_week else measured]}
+    base = {seed: [week(20), week(20)] for seed in plan}
+    result = evaluator.evaluate_plan(plan, base, strategy(), "S1", market(campaign=2), 0)
+    if missing_week:
+        assert result.kpi.leakage is None
+        assert result.kpi.leakage_label == "unavailable"
+    else:
+        assert result.kpi.leakage.p50 == 0
+        assert result.kpi.leakage_label == "data"
+
+
+def test_breakpoint_persists_after_recovery_to_a_higher_peak():
     plan = [week(12, discounted=12), week(12, discounted=12), week(5)]
     base = [week(8), week(8), week(10)]
-    # Cumulative increments are +40, +80, -120; a fourth week gains ฿200.
+    # Cumulative increments are +40, +80, -120. A fourth week takes profit to +120.
     broken = evaluator.evaluate_plan(
         {1: plan},
         {1: base},
@@ -190,15 +213,32 @@ def test_breakpoint_on_week_three_only_if_the_horizon_ends_negative():
         0,
     )
     recovered = evaluator.evaluate_plan(
-        {1: [*plan, week(15)]},
+        {1: [*plan, week(16)]},
         {1: [*base, week(10)]},
         strategy(),
         "S1",
         market(campaign=2, post=2),
         0,
     )
-    assert broken.breakpoint.week == 3
-    assert recovered.breakpoint.week is None
+    for result in [broken, recovered]:
+        assert result.breakpoint.week == 3
+        assert result.breakpoint.cause == "post_campaign_dip"
+        assert result.peak_week == 2
+
+
+@pytest.mark.parametrize("counts", [[10, 10, 10], [9, 11, 9]])
+def test_never_profitable_has_no_breakpoint_or_positive_peak(counts):
+    result = evaluator.evaluate_plan(
+        {1: [week(n) for n in counts]},
+        {1: [week(10)] * 3},
+        strategy(discount=0),
+        "S1",
+        market(campaign=2, post=1),
+        0,
+    )
+    assert result.breakpoint.week is None
+    assert result.breakpoint.cause == "never_profitable"
+    assert result.peak_week is None
 
 
 def test_breakpoint_uses_median_of_cumulative_paired_profits():
@@ -211,19 +251,22 @@ def test_breakpoint_uses_median_of_cumulative_paired_profits():
     base = {seed: [week(20)] * 3 for seed in plan}
     result = evaluator.evaluate_plan(plan, base, strategy(discount=0), "S1", market(campaign=3), 0)
     assert result.breakpoint.week == 3
+    assert result.peak_week == 2
 
 
-def test_breakpoint_marks_the_first_decline_before_crossing_zero():
-    # Cumulative paired increments +200, +160, -80.
+def test_breakpoint_requires_strict_loss_after_a_positive_week():
+    # Cumulative increments are -40, +160, 0, -40, -80.
     result = evaluator.evaluate_plan(
-        {1: [week(n) for n in [15, 9, 4]]},
-        {1: [week(10)] * 3},
+        {1: [week(n) for n in [9, 15, 6, 9, 9]]},
+        {1: [week(10)] * 5},
         strategy(discount=0),
         "S1",
-        market(campaign=3),
+        market(campaign=4, post=1),
         0,
     )
-    assert result.breakpoint.week == 2
+    assert result.breakpoint.week == 4
+    assert result.breakpoint.cause == "discount_cost"
+    assert result.peak_week == 2
 
 
 @pytest.mark.parametrize(
@@ -271,6 +314,15 @@ def test_named_smart_goal_uses_the_target_kpi():
     assert result.kpi.p_hit_target == 1
 
 
+def test_leakage_target_is_unavailable_without_paired_shopper_units():
+    goal = SmartGoal(metric="subsidy_leakage", target=0, unit="percent")
+    result = evaluator.evaluate_plan(
+        {1: [week(12, discounted=12)]}, {1: [week(10)]}, strategy(), "S1", market(), 0, goal
+    )
+    assert result.kpi.leakage is None
+    assert result.kpi.p_hit_target is None
+
+
 def test_iroi_percentage_target_uses_ratio_units():
     plan, base = {1: [week(12, discounted=12)]}, {1: [week(8)]}
     # Incremental profit is ฿40 on ฿120 spend, above the 30% target.
@@ -289,7 +341,7 @@ def test_iroi_percentage_target_uses_ratio_units():
         )
 
 
-def test_explanation_uses_paired_post_campaign_profit_and_calm_scenario():
+def test_explanation_compares_the_crossing_week_and_calm_scenario():
     plan = strategy()
     economics = market(post=1)
     baseline = {1: [week(8), week(10)]}
@@ -313,6 +365,10 @@ def test_explanation_uses_paired_post_campaign_profit_and_calm_scenario():
     assert quiet.breakpoint.week is None
     assert undercut.breakpoint.cause == "rival undercut"
     assert undercut.breakpoint.share == 1  # (+40 - (-160)) / 160 is capped at 1.
+    # Arena finalizes the scenario set through summarize() before returning the results.
+    arena_results = [calm.model_copy(deep=True), stress.model_copy(deep=True)]
+    evaluator.summarize(arena_results, {})
+    assert arena_results[1].breakpoint == undercut.breakpoint
 
     # Both scenarios break, despite positive absolute profit in the post week.
     calm_dip = evaluator.evaluate_plan(
@@ -324,7 +380,7 @@ def test_explanation_uses_paired_post_campaign_profit_and_calm_scenario():
         0,
     )
     dip, worse_dip = evaluator.explain_breakpoints([calm_dip, stress])
-    assert dip.breakpoint.cause == worse_dip.breakpoint.cause == "pull-forward / post-campaign dip"
+    assert dip.breakpoint.cause == worse_dip.breakpoint.cause == "post_campaign_dip"
     assert worse_dip.breakpoint.share == pytest.approx(0.75)  # (-40 - (-160)) / 160.
 
     campaign_loss = evaluator.evaluate_plan(
@@ -335,7 +391,7 @@ def test_explanation_uses_paired_post_campaign_profit_and_calm_scenario():
         economics,
         0,
     )
-    assert evaluator.explain_breakpoints([campaign_loss])[0].breakpoint.cause == "discount cost"
+    assert evaluator.explain_breakpoints([campaign_loss])[0].breakpoint.cause == "never_profitable"
 
 
 def test_weighted_ranking_and_loss_filter_keep_the_user_plan():
