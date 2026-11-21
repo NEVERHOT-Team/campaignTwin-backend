@@ -126,6 +126,23 @@ def test_red_team_keeps_its_designed_depth():
     assert book.react(1, 10.0)[0] == pytest.approx(33.0)
 
 
+def test_rival_does_not_start_a_price_war_against_an_ended_offer():
+    late = rival.RivalBook([row("S3", "undercut", depth=40.0, delay=3)])
+    late.react(1, 26.0)  # noticed while our offer ran
+    assert late.react(4, 0.0, our_active=False)[0] == 0  # we stopped in week 3
+    running = rival.RivalBook([row("S3", "undercut", depth=40.0, delay=0, duration=3)])
+    assert running.react(1, 20.0)[0] == pytest.approx(25.0)
+    assert running.react(2, 0.0, our_active=False)[0] == pytest.approx(25.0)  # keeps going
+
+
+def test_identical_rival_moves_are_one_event():
+    rows = [row("S2", "match", depth=30.0).model_copy(update={"rival": name})
+            for name in ("764", "595", "69")]
+    _, _, events = rival.RivalBook(rows).react(1, 20.0)
+    assert [e.action for e in events] == ["noticed", "match"]
+    assert events[0].detail.startswith("764, 595, 69 ")
+
+
 # ---------------------------------------------------------------- closed loop
 
 
@@ -170,3 +187,12 @@ def test_end_early_stops_discounted_sales(population):
     if stopped:  # a 60% discount loses money on these economics, so the rule should fire
         week = stopped[0]["week"]
         assert all(s.discounted_units_us == 0 for s in stats[week - 1:])
+
+
+def test_our_rules_stay_quiet_after_the_campaign(population):
+    # The rival keeps discounting into the post window; our rule must not fire there.
+    plan = make_strategy(20, rules_=["if rival_undercuts then shift_budget:loyal"])
+    stats = adaptive(population, plan,
+                     rivals=[row("S3", "undercut", depth=30.0, delay=CAMPAIGN - 1, duration=3)])
+    fired = [e["week"] for s in stats for e in s.extra["events"] if e["side"] == "us"]
+    assert all(week <= CAMPAIGN for week in fired)

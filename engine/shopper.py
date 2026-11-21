@@ -535,14 +535,19 @@ def _simulate_adaptive(
     incr = 0.0
     stats: list[WeekStats] = []
     for week in range(1, weeks + 1):
-        events = apply_rules(rules, plan, obs, week) if rules else []
+        # Rules only act while our offer is still live: after the campaign window (or an
+        # early stop) there is nothing left to adjust.
+        live = (offer_from_strategy(strategy, week, campaign_weeks).active
+                and not plan.stopped)
+        events = apply_rules(rules, plan, obs, week) if rules and live else []
         if any(e.action == "shift_budget" for e in events):
             shifted = strategy.model_copy(update={"target_segments": list(plan.target_segments)})
             plan.reach = media_reach(population, shifted, params)
         scheduled = offer_from_strategy(strategy, week, campaign_weeks, None, plan.reach)
         on = scheduled.active and not plan.stopped
         posted = scheduled.our_discount_pct if on else 0.0
-        rival_pct, non_price, rival_events = book.react(week, posted, share_gain)
+        rival_pct, non_price, rival_events = book.react(week, posted, share_gain,
+                                                        our_active=on)
         offer = replace(
             scheduled,
             active=on,

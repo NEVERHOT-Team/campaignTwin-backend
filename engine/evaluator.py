@@ -389,7 +389,8 @@ def sim_result(
             rivals, week)
         if attacking:
             cause = "rival_reaction"
-        elif result.post_campaign_profit_p50 < 0:
+        elif week > campaign_weeks and result.post_campaign_profit_p50 < 0:
+            # A break inside the campaign window is discount cost, not the later dip.
             cause = "post_campaign_dip"
         else:
             cause = "discount_cost"
