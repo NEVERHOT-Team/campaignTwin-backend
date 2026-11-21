@@ -176,6 +176,16 @@ def build_assumptions() -> list[dict]:
     )
     rationale = market["source_notes"]["pooled_price_elasticity"]["note"]
     elasticity_source = f"{settings} and data/etl/build_tissue.py: {rationale}"
+    income_adjustment = market["source_notes"]["income_elasticity_factors"]
+    add(
+        "income_elasticity_factors",
+        income_adjustment["value"],
+        "multiplier by annual USD income group",
+        income_adjustment["note"],
+        "personas.price_elasticity",
+        "market.segments.price_elasticity",
+        "segments.price_elasticity",
+    )
     add(
         "elasticity_prior_least_promo",
         config.ELASTICITY_PRIOR_LEAST_PROMO,
@@ -194,9 +204,8 @@ def build_assumptions() -> list[dict]:
         "price_elasticity_by_archetype",
         {s["archetype"]: s["price_elasticity"] for s in market["segments"]},
         "elasticity",
-        elasticity_source,
+        "data/etl/build_tissue.py: within-segment weighted mean of income-adjusted persona priors",
         "market.segments.price_elasticity",
-        "personas.price_elasticity",
         "segments.price_elasticity",
     )
     add(

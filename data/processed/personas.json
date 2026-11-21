@@ -94,7 +94,7 @@
     "promo_share": 0.041667,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.861111,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -132,7 +132,7 @@
     "promo_share": 0.055556,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.912037,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -246,7 +246,7 @@
     "promo_share": 0.873611,
     "coupon_rate": 0.027778,
     "brand_loyalty": 0.709722,
-    "price_elasticity": -1.8,
+    "price_elasticity": -1.53,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -284,7 +284,7 @@
     "promo_share": 0.083333,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.958333,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -322,7 +322,7 @@
     "promo_share": 0.623562,
     "coupon_rate": 0.052778,
     "brand_loyalty": 0.778125,
-    "price_elasticity": -1.3,
+    "price_elasticity": -1.56,
     "traits": {
       "impulsiveness": 0.32,
       "risk_aversion": 0.55,
@@ -436,7 +436,7 @@
     "promo_share": 0.930556,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.958333,
-    "price_elasticity": -2.3,
+    "price_elasticity": -1.955,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -474,7 +474,7 @@
     "promo_share": 0.875,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.783333,
-    "price_elasticity": -1.8,
+    "price_elasticity": -2.16,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -550,7 +550,7 @@
     "promo_share": 0.958333,
     "coupon_rate": 0.864583,
     "brand_loyalty": 0.916667,
-    "price_elasticity": -2.8,
+    "price_elasticity": -2.38,
     "traits": {
       "impulsiveness": 0.45,
       "risk_aversion": 0.55,
@@ -588,7 +588,7 @@
     "promo_share": 1.0,
     "coupon_rate": 0.878472,
     "brand_loyalty": 0.930556,
-    "price_elasticity": -2.8,
+    "price_elasticity": -2.38,
     "traits": {
       "impulsiveness": 0.45,
       "risk_aversion": 0.55,
@@ -778,7 +778,7 @@
     "promo_share": 1.0,
     "coupon_rate": 0.815972,
     "brand_loyalty": 0.810185,
-    "price_elasticity": -2.8,
+    "price_elasticity": -3.36,
     "traits": {
       "impulsiveness": 0.45,
       "risk_aversion": 0.55,
@@ -816,7 +816,7 @@
     "promo_share": 0.958333,
     "coupon_rate": 0.739583,
     "brand_loyalty": 0.868056,
-    "price_elasticity": -2.8,
+    "price_elasticity": -2.38,
     "traits": {
       "impulsiveness": 0.45,
       "risk_aversion": 0.55,
@@ -854,7 +854,7 @@
     "promo_share": 1.0,
     "coupon_rate": 0.813889,
     "brand_loyalty": 0.916667,
-    "price_elasticity": -2.8,
+    "price_elasticity": -3.36,
     "traits": {
       "impulsiveness": 0.45,
       "risk_aversion": 0.55,
@@ -930,7 +930,7 @@
     "promo_share": 0.45156,
     "coupon_rate": 0.092308,
     "brand_loyalty": 0.857095,
-    "price_elasticity": -1.3,
+    "price_elasticity": -1.105,
     "traits": {
       "impulsiveness": 0.32,
       "risk_aversion": 0.55,
@@ -1006,7 +1006,7 @@
     "promo_share": 0.758883,
     "coupon_rate": 0.033333,
     "brand_loyalty": 0.746146,
-    "price_elasticity": -1.3,
+    "price_elasticity": -1.105,
     "traits": {
       "impulsiveness": 0.32,
       "risk_aversion": 0.55,
@@ -1044,7 +1044,7 @@
     "promo_share": 0.432075,
     "coupon_rate": 0.157631,
     "brand_loyalty": 0.842167,
-    "price_elasticity": -1.3,
+    "price_elasticity": -1.105,
     "traits": {
       "impulsiveness": 0.32,
       "risk_aversion": 0.55,
@@ -1196,7 +1196,7 @@
     "promo_share": 0.822222,
     "coupon_rate": 0.016667,
     "brand_loyalty": 0.652778,
-    "price_elasticity": -1.8,
+    "price_elasticity": -1.53,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -1310,7 +1310,7 @@
     "promo_share": 0.776389,
     "coupon_rate": 0.016667,
     "brand_loyalty": 0.767526,
-    "price_elasticity": -1.8,
+    "price_elasticity": -2.16,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -1424,7 +1424,7 @@
     "promo_share": 0.883333,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.9,
-    "price_elasticity": -2.3,
+    "price_elasticity": -1.955,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -1462,7 +1462,7 @@
     "promo_share": 0.944444,
     "coupon_rate": 0.0,
     "brand_loyalty": 1.0,
-    "price_elasticity": -2.3,
+    "price_elasticity": -2.76,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -1538,7 +1538,7 @@
     "promo_share": 0.958333,
     "coupon_rate": 0.0,
     "brand_loyalty": 1.0,
-    "price_elasticity": -2.3,
+    "price_elasticity": -1.955,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -1576,7 +1576,7 @@
     "promo_share": 0.930556,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.972222,
-    "price_elasticity": -2.3,
+    "price_elasticity": -2.76,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -1690,7 +1690,7 @@
     "promo_share": 1.0,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.958333,
-    "price_elasticity": -2.3,
+    "price_elasticity": -2.76,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -1766,7 +1766,7 @@
     "promo_share": 0.083333,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.872222,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -1804,7 +1804,7 @@
     "promo_share": 0.041667,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.958333,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -1842,7 +1842,7 @@
     "promo_share": 0.083333,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.930556,
-    "price_elasticity": -0.8,
+    "price_elasticity": -0.96,
     "traits": {
       "impulsiveness": 0.35,
       "risk_aversion": 0.52,
@@ -1994,7 +1994,7 @@
     "promo_share": 0.930556,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.913889,
-    "price_elasticity": -2.3,
+    "price_elasticity": -2.76,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -2070,7 +2070,7 @@
     "promo_share": 0.868056,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.8,
-    "price_elasticity": -1.8,
+    "price_elasticity": -2.16,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -2108,7 +2108,7 @@
     "promo_share": 0.888889,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.958333,
-    "price_elasticity": -2.3,
+    "price_elasticity": -1.955,
     "traits": {
       "impulsiveness": 0.28,
       "risk_aversion": 0.68,
@@ -2146,7 +2146,7 @@
     "promo_share": 0.972222,
     "coupon_rate": 0.166667,
     "brand_loyalty": 0.805556,
-    "price_elasticity": -1.8,
+    "price_elasticity": -2.16,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,
@@ -2184,7 +2184,7 @@
     "promo_share": 0.7875,
     "coupon_rate": 0.0,
     "brand_loyalty": 0.6875,
-    "price_elasticity": -1.8,
+    "price_elasticity": -1.53,
     "traits": {
       "impulsiveness": 0.5,
       "risk_aversion": 0.4,

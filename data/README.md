@@ -78,8 +78,16 @@ last two clusters, and the other cluster receives the indifferent label.
 of log units per store visit against log paid price within product-store pairs
 with positive tracked sales. The model uses `price_elasticity`, a `default`
 prior ranked by mean promo share plus mean coupon rate, from −0.8 to −2.8 in
-steps of 0.5. The pooled default is the midpoint, −1.8. The rationale is
-“observational slope biased toward 0 by promo endogeneity.”
+steps of 0.5 before income adjustment. The pooled base default is the midpoint,
+−1.8. The rationale is “observational slope biased toward 0 by promo endogeneity.”
+
+Multiply the archetype base prior by 1.2 for annual household income below
+USD 35,000, by 1.0 from USD 35,000 to below USD 75,000, and by 0.85 from
+USD 75,000 upwards. The segment prior is the within-segment weighted mean of
+the adjusted persona priors. The three multipliers are modelling defaults.
+Maier et al. found lower purchase intent among respondents reporting budget
+pressure. That finding motivates the direction of this assumption.
+[Maier et al. (2025), §4.3](https://arxiv.org/html/2510.08338v2#S4.SS3)
 
 For optional survey traits, place the public numeric `wave1_3_response.csv`
 export in `data/raw/`, in its original CSV directory under `data/raw/`, or in
@@ -106,6 +114,13 @@ all units across purchase lines. Rebuild older panels with
 
 Persona weights apply to the empirical CDF, population SD, Pearson correlations
 and elasticity comparisons. KS treats ties at the published six-decimal precision.
+Each entry in `marginal_fit` records the 60-profile KS in `profile_value` as a
+diagnostic. The 0.90 target applies to `value`, the KS of 5,000 equally weighted
+agents drawn with replacement using the persona weights and seed 42. The evaluator
+multiplies each of the six attributes independently by a uniform draw from 0.9 to
+1.1. It clips rates and shares to [0, 1] and cycles to at least one week. This
+data-side evaluation uses bounded jitter across all six fields. The shopper engine
+uses Gaussian jitter on selected fields. SD and correlation use the weighted profiles.
 Correlation uses the 15 distinct pairs. Direction checks compare signed mean
 elasticities using annual income below USD 35,000 and at least USD 75,000.
 The observed elasticity field is fitted by archetype, so the income comparison

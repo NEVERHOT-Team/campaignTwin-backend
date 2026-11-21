@@ -170,6 +170,10 @@ def test_assumptions_cover_defaults_and_match_published_inputs():
         s["name"]: s["price_elasticity"] for s in market["segments"]
     }
     assert by_name["pooled_price_elasticity"]["value"] == -1.8
+    factors = by_name["income_elasticity_factors"]
+    assert factors["value"] == market["source_notes"]["income_elasticity_factors"]["value"]
+    assert factors["value"] == {"low": 1.2, "middle": 1.0, "high": 0.85}
+    assert factors["label"] == "default" and "Maier et al. (2025)" in factors["source"]
     assert by_name["rival_default_probabilities"]["value"] == {
         "none": 0.45,
         "match": 0.30,
