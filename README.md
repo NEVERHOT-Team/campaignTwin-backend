@@ -31,6 +31,22 @@ request `GET /api/runs/{run_id}/report`. A mock run takes about ten seconds.
 The submitted plan is validated and stored. Every run returns the same demo
 results while the engine is under development. The replay endpoint is immediate.
 
+## CampaignSpec v0.1
+
+The brief/context/run endpoints now use the nested CampaignSpec from the team's
+draft: brand, objective, audience, offer, budget, channels, timing, constraints,
+and per-field provenance. See [the contract and migration guide](docs/campaign-spec.md).
+The fixture example is `mocks/campaign_spec.json`; the published contract is
+`/openapi.json`. A run requires a spec with `status: "ready"` and no blocking
+questions. The parser and context endpoints still return synthetic fixtures.
+
+On Windows, use a Python 3.11+ virtual environment. If the default `python`
+points to an older interpreter, create `.venv` with an explicit supported Python
+path. Once it exists, use `.venv/Scripts/python.exe -m pip install -e .`,
+`.venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000`,
+`.venv/Scripts/python.exe -m pytest -q`, and
+`.venv/Scripts/python.exe -m ruff check .`.
+
 ## Use Postgres
 
 Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`. In `.env`, set

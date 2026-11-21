@@ -1,6 +1,8 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from contracts.campaign_spec import CampaignSpec as CampaignSpec
 
 Label = Literal["data", "llm_estimate", "default"]
 Scenario = Literal["S1", "S2", "S3", "S4"]
@@ -12,19 +14,6 @@ class Assumption(BaseModel):
     value: Any
     label: Label
     source: str | None
-
-
-class CampaignSpec(BaseModel):
-    goal: str
-    target_segments: list[str]
-    budget_thb: float | None
-    discount_pct: float | None
-    mechanic: str | None
-    channel: list[str]
-    start: str | None
-    end: str | None
-    kpi_target: str | None
-    missing_fields: list[str]
 
 
 class BriefParseRequest(BaseModel):
@@ -83,6 +72,12 @@ class SimulationPlan(BaseModel):
     seeds: int = 10
     n_agents: int = 5000
     weeks: int = 6
+
+    @model_validator(mode="after")
+    def require_ready_spec(self):
+        if self.spec.status != "ready":
+            raise ValueError("Resolve blocking questions and review CampaignSpec before running")
+        return self
 
 
 class Pct(BaseModel):

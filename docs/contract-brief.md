@@ -1,5 +1,11 @@
 # Frozen contract summary
 
+> Historical brief reference. The live backend contract is
+> `contracts/models.py` and `/openapi.json`. CampaignSpec has migrated to the
+> user's nested v0.1 draft; see [CampaignSpec v0.1](campaign-spec.md) for the
+> current fields, units, validation, and mapping from the old flat payload.
+> Endpoint names below belong to the historical brief, not the current router.
+
 This is the contract summary from Section 9 of the Campaign Rehearsal hackathon brief. It gives both repos a common reference during preparation. On build day, the backend owns the agreed schema and publishes the corresponding OpenAPI. Compare that schema with this summary before wiring the client and flag any discrepancy to the two repo owners.
 
 | Type | Fields from the brief |
