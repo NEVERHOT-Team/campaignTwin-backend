@@ -136,6 +136,27 @@ def _historical_benchmark(
     }
 
 
+def _markdown_split(lines: pd.DataFrame) -> dict:
+    """Value-weighted shopper markdowns against the same regular shelf-price basket."""
+    shelf_cut = float(lines["retail_disc"].abs().sum())
+    match = float(lines["coupon_match_disc"].abs().sum())
+    manufacturer = float(lines["coupon_disc"].abs().sum())
+    regular = float(lines["sales_value"].sum()) + shelf_cut + match
+    if regular <= 0:
+        raise ValueError("Campaign markdowns require positive aggregate shelf value")
+    coupon_cut = manufacturer + match
+    return {
+        "purchase_lines": len(lines),
+        "regular_shelf_value_usd": round(regular, 2),
+        "shelf_markdown_usd": round(shelf_cut, 2),
+        "manufacturer_coupon_usd": round(manufacturer, 2),
+        "retailer_coupon_match_usd": round(match, 2),
+        "shelf_depth_fraction": round(shelf_cut / regular, 8),
+        "coupon_depth_fraction": round(coupon_cut / regular, 8),
+        "combined_depth_fraction": round((shelf_cut + coupon_cut) / regular, 8),
+    }
+
+
 def _score(
     transactions: pd.DataFrame,
     coupons: pd.DataFrame,
@@ -204,6 +225,17 @@ def _score(
     if pd.isna(depth) or not 0 <= depth <= 1:
         raise ValueError("Invalid observed campaign discount")
 
+    purchases = transactions.loc[transactions["quantity"].gt(0)]
+    buyers = pd.Index(purchases.loc[
+        purchases["week"].isin(calibration_weeks), "household_id"
+    ].unique())
+    if buyers.empty:
+        raise ValueError("Campaign assignment share requires pre-launch tissue buyers")
+    assigned_buyers = len(buyers.intersection(recipients))
+    campaign_lines = purchases.loc[purchases["week"].isin(CAMPAIGN)]
+    redeeming_households = offer["household_id"].nunique()
+    redemption_rate = round(redeeming_households / len(recipients), 8)
+
     return {
         "campaign_id": str(BACKTEST_CAMPAIGN_ID),
         "description": (
@@ -218,6 +250,42 @@ def _score(
         "discount_depth": round(float(depth), 6),
         "target_segments": [],  # The campaign assignments contain no archetype targeting rule.
         "treated_households": len(recipients),
+        "mechanics": {
+            "all_tissue_purchases": _markdown_split(campaign_lines),
+            "matched_campaign_redemptions": _markdown_split(offer_lines),
+            "depth_basis": (
+                "Ratios of summed USD amounts on positive-quantity tissue purchase lines in "
+                "weeks 45–52. Regular shelf value = sales_value + abs(retail_disc) + "
+                "abs(coupon_match_disc). Shelf markdown = abs(retail_disc). Coupon markdown = "
+                "abs(coupon_disc) paid by the manufacturer + abs(coupon_match_disc) paid by the "
+                "retailer only upon coupon use. The two depths add on the same shelf denominator. "
+                "Retailer sales_value includes manufacturer reimbursement."
+            ),
+            "scope": (
+                "All tissue purchases include regular-price lines and overlapping promotions. "
+                "Only matched lines join a campaign 18 redemption by an assigned household to "
+                "a coupon-discounted eligible SKU purchased that day, counting each transaction "
+                "line once. Matched depths describe realized redemptions. The existing "
+                "discount_depth remains the median combined line depth on those purchases."
+            ),
+            "treated_share_basis": {
+                "category_buying_households": len(buyers),
+                "assigned_category_buying_households": assigned_buyers,
+                "weeks": [int(min(calibration_weeks)), int(max(calibration_weeks))],
+            },
+            "redemption_rate_basis": {
+                "assigned_households": len(recipients),
+                "assigned_households_with_matched_redemption": redeeming_households,
+            },
+            "shelf_reach_basis": (
+                "Default availability to all shoppers at a qualifying shelf. Actual store "
+                "visits and shelf impressions are unobserved."
+            ),
+        },
+        "treated_share": round(assigned_buyers / len(buyers), 8),
+        "shelf_reach": 1.0,
+        "observed_redemption_rate": redemption_rate,
+        "observed_redemption_rate_note": "use to validate, not as reach input",
         "actual": {
             "lift_pct": lift,
             "lift_pct_raw": round(raw_change, 2),
@@ -225,7 +293,7 @@ def _score(
             "control_change_pct_median": round(control_median, 2),
             "lift_pct_median": lift_median,
             "lift_range_pct": sorted([lift, lift_median]),
-            "redemption_rate": round(offer["household_id"].nunique() / len(recipients), 8),
+            "redemption_rate": redemption_rate,
             "incremental_sales": round((actual_sales - baseline_total) * DEFAULTS["usd_thb"], 2),
         },
         "seasonality_control": {

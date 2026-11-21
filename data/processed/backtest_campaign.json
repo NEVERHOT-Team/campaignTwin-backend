@@ -6,6 +6,47 @@
   "discount_depth": 0.222469,
   "target_segments": [],
   "treated_households": 1133,
+  "mechanics": {
+    "all_tissue_purchases": {
+      "purchase_lines": 1185,
+      "regular_shelf_value_usd": 6731.58,
+      "shelf_markdown_usd": 1055.31,
+      "manufacturer_coupon_usd": 65.1,
+      "retailer_coupon_match_usd": 7.2,
+      "shelf_depth_fraction": 0.15677003,
+      "coupon_depth_fraction": 0.01074042,
+      "combined_depth_fraction": 0.16751045
+    },
+    "matched_campaign_redemptions": {
+      "purchase_lines": 8,
+      "regular_shelf_value_usd": 71.92,
+      "shelf_markdown_usd": 14.0,
+      "manufacturer_coupon_usd": 8.0,
+      "retailer_coupon_match_usd": 0.0,
+      "shelf_depth_fraction": 0.19466073,
+      "coupon_depth_fraction": 0.11123471,
+      "combined_depth_fraction": 0.30589544
+    },
+    "depth_basis": "Ratios of summed USD amounts on positive-quantity tissue purchase lines in weeks 45–52. Regular shelf value = sales_value + abs(retail_disc) + abs(coupon_match_disc). Shelf markdown = abs(retail_disc). Coupon markdown = abs(coupon_disc) paid by the manufacturer + abs(coupon_match_disc) paid by the retailer only upon coupon use. The two depths add on the same shelf denominator. Retailer sales_value includes manufacturer reimbursement.",
+    "scope": "All tissue purchases include regular-price lines and overlapping promotions. Only matched lines join a campaign 18 redemption by an assigned household to a coupon-discounted eligible SKU purchased that day, counting each transaction line once. Matched depths describe realized redemptions. The existing discount_depth remains the median combined line depth on those purchases.",
+    "treated_share_basis": {
+      "category_buying_households": 1417,
+      "assigned_category_buying_households": 885,
+      "weeks": [
+        1,
+        44
+      ]
+    },
+    "redemption_rate_basis": {
+      "assigned_households": 1133,
+      "assigned_households_with_matched_redemption": 8
+    },
+    "shelf_reach_basis": "Default availability to all shoppers at a qualifying shelf. Actual store visits and shelf impressions are unobserved."
+  },
+  "treated_share": 0.62455893,
+  "shelf_reach": 1.0,
+  "observed_redemption_rate": 0.0070609,
+  "observed_redemption_rate_note": "use to validate, not as reach input",
   "actual": {
     "lift_pct": 1.71,
     "lift_pct_raw": 8.57,
