@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 from functools import cached_property, wraps
+from numbers import Real
 from pathlib import Path
 from time import perf_counter
 from unittest.mock import patch
@@ -182,6 +183,14 @@ def check_a4(a):
                    "by_plan": evidence}
 
 
+def finite_numeric_leaves(value):
+    if isinstance(value, dict):
+        return all(finite_numeric_leaves(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(finite_numeric_leaves(item) for item in value)
+    return not isinstance(value, Real) or math.isfinite(value)
+
+
 @check("A5", "Mic")
 def check_a5(a):
     plan = a.plan
@@ -206,10 +215,12 @@ def check_a5(a):
             a.baselines[seed] = rows
         for row in rows:
             fields = asdict(row)
-            extra = fields.pop("extra")
-            finite = all(math.isfinite(x) for x in (*fields.values(), *extra.values()))
+            extra = fields["extra"]
+            events = extra.pop("events", [])
+            valid_events = isinstance(events, list) and all(isinstance(e, dict) for e in events)
             overlap = extra.get("discounted_units_would_buy")
-            valid = finite and 0 <= row.discounted_units_us <= row.units_us
+            valid = (valid_events and finite_numeric_leaves(fields)
+                     and 0 <= row.discounted_units_us <= row.units_us)
             if overlap is not None:
                 valid &= 0 <= overlap <= row.discounted_units_us
             invalid_weeks += int(not valid)
