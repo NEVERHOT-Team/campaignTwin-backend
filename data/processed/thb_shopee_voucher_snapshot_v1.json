@@ -1,0 +1,255 @@
+{
+  "reference": {
+    "contract_version": 1,
+    "snapshot_id": "thb-shopee-voucher-fixture",
+    "snapshot_version": "1.0.0"
+  },
+  "capabilities": [
+    {
+      "capability_id": "fixture-th-shopee-rice-fixed-voucher",
+      "product": {
+        "product_id": "fixture-jasmine-rice",
+        "name": "Jasmine Rice",
+        "brand": "Example Pantry",
+        "category": "grocery_rice",
+        "selling_unit_id": "pouch-500g",
+        "pack_quantity": 500,
+        "pack_unit": "g",
+        "units_per_order": 1
+      },
+      "market_id": "TH",
+      "channel_id": "shopee",
+      "currency": "THB",
+      "timezone": "Asia/Bangkok",
+      "valid_from": "2026-12-01",
+      "valid_to_exclusive": "2027-01-01",
+      "voucher": {
+        "mechanic_id": "fixed_order_voucher",
+        "discount": 20,
+        "discount_unit": "thb_per_redeemed_order",
+        "minimum_spend": 120,
+        "minimum_spend_unit": "thb_per_order",
+        "minimum_spend_basis": "eligible_regular_merchandise_before_discount",
+        "eligibility": "all_focal_product_orders_meeting_minimum_spend",
+        "max_redemptions_per_order": 1,
+        "stacking": false,
+        "funder": "seller"
+      },
+      "evidence_ref": "fixture-capability"
+    }
+  ],
+  "economics": [
+    {
+      "economics_id": "fixture-rice-shopee-dec-2026",
+      "capability_id": "fixture-th-shopee-rice-fixed-voucher",
+      "effective_from": "2026-12-01",
+      "effective_to_exclusive": "2027-01-01",
+      "regular_price": {
+        "status": "confirmed",
+        "value": 120,
+        "unit": "thb_per_selling_unit",
+        "basis": "regular_merchandise_price",
+        "payer": "buyer",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "cogs": {
+        "status": "confirmed",
+        "value": 72,
+        "unit": "thb_per_selling_unit",
+        "basis": "one_pouch_500g",
+        "payer": "seller",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "channel_commission": {
+        "status": "confirmed",
+        "value": 5,
+        "unit": "pct",
+        "basis": "net_merchandise_after_voucher",
+        "payer": "seller",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "voucher_service_fee": {
+        "status": "confirmed",
+        "value": 0,
+        "unit": "thb_per_redeemed_order",
+        "basis": "per_redeemed_order",
+        "payer": "seller",
+        "evidence_ref": "fixture-voucher-fee-confirmation"
+      },
+      "fulfillment": {
+        "status": "confirmed",
+        "value": 8,
+        "unit": "thb_per_order",
+        "basis": "per_fulfilled_order",
+        "payer": "seller",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "paid_media": {
+        "status": "confirmed",
+        "value": 0,
+        "unit": "thb_per_campaign",
+        "basis": "no_paid_exposure",
+        "payer": "seller",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "platform_reimbursement": {
+        "status": "confirmed",
+        "value": 0,
+        "unit": "thb_per_redeemed_order",
+        "basis": "seller_funds_full_voucher",
+        "payer": "platform",
+        "evidence_ref": "fixture-cost-sheet"
+      },
+      "tax_and_returns": {
+        "tax_basis": "exclusive_of_tax",
+        "returns_basis": "completed_kept_orders_only",
+        "evidence_ref": "fixture-cost-sheet"
+      }
+    }
+  ],
+  "segment_candidates": [
+    {
+      "segment_id": "fixture-routine",
+      "profile_version": "1.0.0",
+      "capability_id": "fixture-th-shopee-rice-fixed-voucher",
+      "population_basis": "synthetic",
+      "population_count": {
+        "value": 120,
+        "unit": "synthetic_households"
+      },
+      "window_start": "2026-10-05",
+      "window_end_exclusive": "2026-11-02",
+      "metrics": {
+        "weekly_purchase_probability": {
+          "value": 0.25,
+          "unit": "fraction",
+          "numerator": {
+            "value": 120,
+            "unit": "buying_household_weeks"
+          },
+          "denominator": {
+            "value": 480,
+            "unit": "eligible_household_weeks"
+          },
+          "evidence_ref": "fixture-routine-profile"
+        }
+      },
+      "evidence_ref": "fixture-routine-profile"
+    },
+    {
+      "segment_id": "fixture-promotion-responsive",
+      "profile_version": "1.0.0",
+      "capability_id": "fixture-th-shopee-rice-fixed-voucher",
+      "population_basis": "synthetic",
+      "population_count": {
+        "value": 80,
+        "unit": "synthetic_households"
+      },
+      "window_start": "2026-10-05",
+      "window_end_exclusive": "2026-11-02",
+      "metrics": {
+        "weekly_purchase_probability": {
+          "value": 0.375,
+          "unit": "fraction",
+          "numerator": {
+            "value": 120,
+            "unit": "buying_household_weeks"
+          },
+          "denominator": {
+            "value": 320,
+            "unit": "eligible_household_weeks"
+          },
+          "evidence_ref": "fixture-promotion-responsive-profile"
+        }
+      },
+      "evidence_ref": "fixture-promotion-responsive-profile"
+    }
+  ],
+  "sources": [
+    {
+      "evidence_ref": "fixture-capability",
+      "source_id": "synthetic-voucher-catalog",
+      "source_version": "1.0.0",
+      "record_key": "fixture-th-shopee-rice-fixed-voucher",
+      "transformation_id": "catalog-mapping",
+      "transformation_version": "1.0.0",
+      "as_of": "2026-11-21",
+      "window_start": "2026-12-01",
+      "window_end_exclusive": "2027-01-01",
+      "scope": "Fictional Thai Shopee catalog entry for one 500 g rice pouch",
+      "grain": "product × selling unit × market × channel × mechanic",
+      "coverage": "One focal SKU, one selling unit per order and one seller-funded configuration",
+      "origin": "retrieved",
+      "evidence_class": "synthetic_fixture",
+      "label": "default"
+    },
+    {
+      "evidence_ref": "fixture-cost-sheet",
+      "source_id": "synthetic-seller-cost-sheet",
+      "source_version": "1.0.0",
+      "record_key": "fixture-rice-shopee-dec-2026",
+      "transformation_id": "normalize-seller-economics",
+      "transformation_version": "1.0.0",
+      "as_of": "2026-11-21",
+      "window_start": "2026-12-01",
+      "window_end_exclusive": "2027-01-01",
+      "scope": "Fictional seller on Thai Shopee, fixture rice pouch, THB",
+      "grain": "product × selling unit × channel × effective interval",
+      "coverage": "Regular price, COGS, sole commission, fulfillment, paid media, reimbursement and tax/returns basis for this configuration",
+      "origin": "retrieved",
+      "evidence_class": "synthetic_fixture",
+      "label": "default"
+    },
+    {
+      "evidence_ref": "fixture-voucher-fee-confirmation",
+      "source_id": "synthetic-voucher-fee-confirmation",
+      "source_version": "1.0.0",
+      "record_key": "dec-2026-fixed-voucher-service-fee",
+      "transformation_id": "normalize-seller-economics",
+      "transformation_version": "1.0.0",
+      "as_of": "2026-11-21",
+      "window_start": "2026-12-01",
+      "window_end_exclusive": "2027-01-01",
+      "scope": "Fictional seller on Thai Shopee, fixed order voucher, THB",
+      "grain": "configuration × charge type × effective interval",
+      "coverage": "Explicit zero service fee per redeemed order for this configuration",
+      "origin": "provided",
+      "evidence_class": "synthetic_fixture",
+      "label": "default"
+    },
+    {
+      "evidence_ref": "fixture-routine-profile",
+      "source_id": "synthetic-rice-segment-profiles",
+      "source_version": "1.0.0",
+      "record_key": "fixture-routine",
+      "transformation_id": "weekly-purchase-probability",
+      "transformation_version": "1.0.0",
+      "as_of": "2026-11-21",
+      "window_start": "2026-10-05",
+      "window_end_exclusive": "2026-11-02",
+      "scope": "Synthetic grocery behavior applied to the fixture rice voucher",
+      "grain": "segment × four-week pre-period",
+      "coverage": "Four complete modeled weeks per synthetic household, including eligible weeks without a purchase",
+      "origin": "calculated",
+      "evidence_class": "synthetic_fixture",
+      "label": "default"
+    },
+    {
+      "evidence_ref": "fixture-promotion-responsive-profile",
+      "source_id": "synthetic-rice-segment-profiles",
+      "source_version": "1.0.0",
+      "record_key": "fixture-promotion-responsive",
+      "transformation_id": "weekly-purchase-probability",
+      "transformation_version": "1.0.0",
+      "as_of": "2026-11-21",
+      "window_start": "2026-10-05",
+      "window_end_exclusive": "2026-11-02",
+      "scope": "Synthetic grocery behavior applied to the fixture rice voucher",
+      "grain": "segment × four-week pre-period",
+      "coverage": "Four complete modeled weeks per synthetic household, including eligible weeks without a purchase",
+      "origin": "calculated",
+      "evidence_class": "synthetic_fixture",
+      "label": "default"
+    }
+  ]
+}

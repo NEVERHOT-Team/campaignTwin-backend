@@ -200,31 +200,65 @@ def export_cache(directory: str | Path) -> int:
 
 
 @contextmanager
-def v1_transaction():
+def _workspace_transaction(table: str, version: str):
     """Serialize review and run admission together, committing only on normal exit."""
     empty = {"reviews": {}, "approvals": {}, "runs": {}, "submissions": {}}
     if get_mode() == "postgres":
         with _connect() as connection:
             connection.execute(
-                "INSERT INTO rehearsal_workspace (id, state) VALUES (1, %s) "
+                f"INSERT INTO {table} (id, state) VALUES (1, %s) "
                 "ON CONFLICT (id) DO NOTHING", (_jsonb(empty),)
             )
             state = connection.execute(
-                "SELECT state FROM rehearsal_workspace WHERE id = 1 FOR UPDATE"
+                f"SELECT state FROM {table} WHERE id = 1 FOR UPDATE"
             ).fetchone()["state"]
             before = json.dumps(state)
             yield state
             if json.dumps(state) != before:
                 connection.execute(
-                    "UPDATE rehearsal_workspace SET state = %s WHERE id = 1", (_jsonb(state),)
+                    f"UPDATE {table} SET state = %s WHERE id = 1", (_jsonb(state),)
                 )
         return
 
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
-    path = RUNS_DIR / "v1-workspace.json"
-    with FileLock(str(RUNS_DIR / ".v1.lock")):
+    path = RUNS_DIR / f"{version}-workspace.json"
+    with FileLock(str(RUNS_DIR / f".{version}.lock")):
         state = _read_json(path) or empty
         before = json.dumps(state)
         yield state
         if json.dumps(state) != before:
             _write_json(path, state)
+
+
+def v1_transaction():
+    return _workspace_transaction("rehearsal_workspace", "v1")
+
+
+def v2_transaction():
+    return _workspace_transaction("rehearsal_workspace_v2", "v2")
+
+
+@contextmanager
+def v2_run_worker(run_id: str):
+    """Single runner per admitted UUID. Process death releases either session lock."""
+    if get_mode() == "postgres":
+        with _connect() as connection:
+            connection.autocommit = True
+            row = connection.execute(
+                "SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS acquired",
+                (f"campaigntwin:v2:run:{run_id}",)
+            ).fetchone()
+            yield row["acquired"]
+        return
+    from filelock import Timeout
+
+    lock = FileLock(str(RUNS_DIR / f".v2-worker-{_safe_key(run_id)}.lock"))
+    try:
+        lock.acquire(timeout=0)
+    except Timeout:
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        lock.release()

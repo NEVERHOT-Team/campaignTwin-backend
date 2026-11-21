@@ -1,6 +1,7 @@
 """Load registered public sources, local calibration data and validated engine inputs."""
 
 import json
+import os
 from functools import lru_cache
 from hashlib import sha256
 from io import BytesIO
@@ -67,6 +68,19 @@ def _require_keys(record, expected: str, location: str) -> None:
 
 def _read_json(filename: str) -> Any:
     return json.loads((PROCESSED / filename).read_text(encoding="utf-8"))
+
+
+def load_campaign_evidence_snapshot() -> dict[str, Any]:
+    """Load an operator-configured aggregate seller catalog or the packaged fixture."""
+    configured = os.environ.get("CAMPAIGNTWIN_EVIDENCE_SNAPSHOT")
+    snapshot = (json.loads(Path(configured).read_text(encoding="utf-8")) if configured
+                else _read_json("thb_shopee_voucher_snapshot_v1.json"))
+    keys = "reference capabilities economics segment_candidates sources"
+    _require_keys(snapshot, keys, "catalog")
+    _require_keys(snapshot["reference"], "contract_version snapshot_id snapshot_version", "catalog")
+    if snapshot["reference"]["contract_version"] != 1:
+        raise ValueError("Unsupported campaign evidence contract version")
+    return snapshot
 
 
 class ShopperParameter(TypedDict):
