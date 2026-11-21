@@ -205,7 +205,8 @@ def get_rival_scenarios(spec: CampaignSpec) -> list[RivalScenario]:
             continue
         evidence = _evidence(spec, ours.category, library, rival.brand)
         alpha, neighbours, ids = _posterior(evidence, spec.discount_pct, prior)
-        for scenario, index in (("S1", 0), ("S2", int(alpha.argmax())), ("S3", UNDERCUT)):
+        modal_active_index = 1 + int(alpha[1:].argmax())
+        for scenario, index in (("S1", 0), ("S2", modal_active_index), ("S3", UNDERCUT)):
             reaction = REACTIONS[index]
             depth = delay = duration = 0
             if reaction != "none":

@@ -177,8 +177,10 @@ outcomes keep their relative odds and the posterior keeps its total weight.
 The 90% intervals use the resulting marginal beta distributions. Evidence IDs
 cover the voting campaigns, including any that set the undercut floor.
 
-S1 describes no response, S2 the most likely outcome, and S3 an undercut.
-S2 can repeat either of the other outcomes. Depth, delay, and duration use
+For a positive discount, S1 reports the probability of no response. S2 selects
+the most likely of match, undercut, and non-price. Its likelihood uses the
+total posterior weight across all four outcomes. S3 describes an undercut.
+Depth, delay, and duration use
 similarity-weighted observations for the selected reaction, with category
 estimates filling gaps. S2 uses median terms. S3 uses the 90th-percentile
 depth and earliest delay. Rival scenario depths, audit depths and prior depth

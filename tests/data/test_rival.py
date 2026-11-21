@@ -47,7 +47,25 @@ def test_top_three_evidence_intervals_and_plausibility(spec):
         assert [passive.scenario, modal.scenario, aggressive.scenario] == ["S1", "S2", "S3"]
         assert passive.reaction == "none" and passive.depth == 0
         assert aggressive.reaction == "undercut" and aggressive.depth <= spec.discount_pct + 10
-        assert modal.likelihood >= max(passive.likelihood, aggressive.likelihood)
+        assert modal.likelihood >= aggressive.likelihood
+
+
+@pytest.mark.parametrize("discount,active", [(0.1, "match"), (20, "undercut"), (100, "non_price")])
+def test_positive_discount_selects_most_likely_active_reaction(spec, monkeypatch, discount, active):
+    probabilities = {"none": 0.70, "match": 0.05, "undercut": 0.05, "non_price": 0.05}
+    probabilities[active] = 0.20
+    prior = {**rival.load_rival_prior(), "p": probabilities}
+    library = rival.load_library().iloc[:0]
+    monkeypatch.setattr(rival, "load_rival_prior", lambda: prior)
+    monkeypatch.setattr(rival, "load_library", lambda: library)
+
+    rows = rival.get_rival_scenarios(spec.model_copy(update={"discount_pct": discount}))
+    for scenario, expected in [("S1", "none"), ("S2", active)]:
+        selected = [row for row in rows if row.scenario == scenario]
+        assert {row.rival for row in selected} == {"764", "595", "69"}
+        for row in selected:
+            assert row.reaction == expected
+            assert row.likelihood == pytest.approx(probabilities[expected])
 
 
 @pytest.mark.parametrize("discount", [None, 0])
