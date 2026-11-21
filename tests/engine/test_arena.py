@@ -72,7 +72,10 @@ def test_results_match_the_contract_shape(outcome):
         kpi = result.kpi
         assert kpi.incr_profit.p10 <= kpi.incr_profit.p50 <= kpi.incr_profit.p90
         assert 0 <= kpi.p_loss <= 1 and 0 <= kpi.p_hit_target <= 1
-        assert 0 <= kpi.leakage.p50 <= 1
+        if kpi.leakage is None:
+            assert kpi.leakage_label == "unavailable"
+        else:
+            assert 0 <= kpi.leakage.p50 <= 1
 
 
 def test_arena_is_deterministic(plan, outcome):

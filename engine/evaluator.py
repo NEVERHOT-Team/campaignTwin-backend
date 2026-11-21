@@ -35,6 +35,9 @@ class EvaluatedKPI(KPI):
     discount_cost: Pct
     media_cost: Pct
     campaign_cost: Pct
+    leakage: Pct | None
+    leakage_label: Literal["data", "unavailable"]
+    p_hit_target: float | None
 
 
 class EvaluatedPlan(SimResult):
@@ -44,6 +47,8 @@ class EvaluatedPlan(SimResult):
     media_cost_label: Literal["data", "default"]
     is_baseline: bool
     is_user_plan: bool
+    peak_week: int | None
+    campaign_weeks: int
     post_campaign_profit_p50: float  # median of paired incremental post-campaign totals
 
 
@@ -128,7 +133,9 @@ def _ratio(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
     return np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator > 0)
 
 
-def _hit_probability(samples: dict[str, np.ndarray], target: float | SmartGoal | None) -> float:
+def _hit_probability(
+    samples: dict[str, np.ndarray | None], target: float | SmartGoal | None
+) -> float | None:
     if target is None:
         return 0.0
     metric, minimum = "incr_profit", target
@@ -155,7 +162,8 @@ def _hit_probability(samples: dict[str, np.ndarray], target: float | SmartGoal |
             raise ValueError(f"{metric} targets require THB")
     if metric not in samples or not math.isfinite(minimum):
         raise ValueError("Target must name a measured KPI and have a finite threshold")
-    return float(np.mean(samples[metric] >= minimum))
+    values = samples[metric]
+    return float(np.mean(values >= minimum)) if values is not None else None
 
 
 def median_rows(outcomes: Sequence[SeedOutcome]) -> list[WeekRow]:
@@ -199,9 +207,8 @@ def evaluate_plan(
     one-time media allocation evenly across offer weeks. Missing media share costs ฿0.
     A numeric target is incremental profit in THB. A SmartGoal names a full-horizon KPI.
 
-    Leakage is a proxy until per-shopper counterfactuals are available. Sum each offer
-    week's min(discounted plan units, baseline units), then divide by all discounted
-    units in those weeks. Percentiles summarize paired seed metrics, including ratios.
+    Leakage counts campaign units sold at a discount to shoppers who also bought us in
+    the paired baseline week. Percentiles summarize the per-seed ratios.
     """
     plan, base = _paired_runs(plan_runs, baseline_runs)
     campaign_weeks = market.get("weeks", {}).get("campaign", len(plan[0]))
@@ -226,6 +233,19 @@ def seed_outcome(
     return _seed_outcomes(
         plans, baselines, strategy, campaign_weeks, ref_price, market, plan_budget(strategy)
     )[0]
+
+
+def _campaign_leakage(weeks: Sequence[WeekStats], redeemed: float) -> float | None:
+    """Share of discounted units sold to shoppers who bought us in the paired baseline."""
+    overlap = 0.0
+    for week in weeks:
+        units = week.extra.get("discounted_units_would_buy")
+        if units is None:
+            return None
+        if not 0 <= units <= week.discounted_units_us:
+            raise ValueError("discounted_units_would_buy must be in [0, discounted_units_us]")
+        overlap += units
+    return float(overlap / redeemed) if redeemed else None
 
 
 def _seed_outcomes(
@@ -280,7 +300,6 @@ def _seed_outcomes(
     redeemed = discounted.sum(axis=1)
     discount_cost = redeemed * price * (strategy.discount_pct / 100)
     cost = discount_cost + float(media)
-    overlap = np.minimum(discounted, _column(base, "units_us")[:, active]).sum(axis=1)
     new_buyers = (_column(plan, "new_buyers_us") - _column(base, "new_buyers_us")).sum(axis=1)
     weekly_net = np.diff(net_curve, axis=1, prepend=0)
     post_profit = gross_delta_satang[:, ~active].sum(axis=1) / 100
@@ -290,7 +309,7 @@ def _seed_outcomes(
             incr_revenue=float(revenue[i]),
             campaign_cost=float(cost[i]),
             iroas=float(revenue[i] / cost[i]) if cost[i] else None,
-            leakage=float(overlap[i] / redeemed[i]) if redeemed[i] else None,
+            leakage=_campaign_leakage(plan[i][:campaign_weeks], redeemed[i]),
             new_buyers=float(new_buyers[i]),
             weekly_incr_profit=tuple(weekly_net[i]),
             plan_rows=tuple(plan_rows[i]),
@@ -301,6 +320,32 @@ def _seed_outcomes(
         )
         for i in range(len(plan))
     ]
+
+
+def _crossing_cause(week: int, campaign_weeks: int, calm: SimResult | None = None) -> str:
+    if calm is not None and calm.breakpoint.week is None:
+        return "rival undercut"
+    return "post_campaign_dip" if week > campaign_weeks else "discount_cost"
+
+
+def _breakpoint_and_peak(
+    outcomes: Sequence[SeedOutcome], campaign_weeks: int
+) -> tuple[Breakpoint, int | None]:
+    """Find the first loss after a positive peak on the median of the paired curves."""
+    curve = np.median(
+        [o.cumulative_incr_profit or np.cumsum(o.weekly_incr_profit) for o in outcomes], axis=0
+    )
+    if not np.isfinite(curve).all():
+        raise ValueError("Incremental profit curve must be finite")
+    peak, peak_week = 0.0, None
+    for week, profit in enumerate(curve, 1):
+        if profit > peak:
+            peak, peak_week = profit, week
+        elif profit < 0 and peak_week is not None:
+            cause = _crossing_cause(week, campaign_weeks)
+            return Breakpoint(week=week, cause=cause, share=None), peak_week
+    cause = "never_profitable" if peak_week is None else None
+    return Breakpoint(week=None, cause=cause, share=None), peak_week
 
 
 def _aggregate(
@@ -323,6 +368,7 @@ def _aggregate(
         o.campaign_cost - m if o.discount_cost is None else o.discount_cost
         for o, m in zip(outcomes, media, strict=True)
     ]
+    leakage = [o.leakage for o in outcomes]
     samples = {
         "incr_profit": profit,
         "incr_revenue": revenue,
@@ -331,12 +377,9 @@ def _aggregate(
         "campaign_cost": cost,
         "iroi": _ratio(profit, cost),
         "iroas": np.array([o.iroas or 0.0 for o in outcomes]),
-        "leakage": np.array([o.leakage or 0.0 for o in outcomes]),
+        "leakage": np.array(leakage, dtype=float) if None not in leakage else None,
         "new_buyers": np.array([o.new_buyers for o in outcomes]),
     }
-    median_curve = np.median(
-        [o.cumulative_incr_profit or np.cumsum(o.weekly_incr_profit) for o in outcomes], axis=0
-    )
     post_p50 = float(
         np.median(
             [
@@ -347,20 +390,25 @@ def _aggregate(
             ]
         )
     )
-    if not np.isfinite(median_curve).all() or not math.isfinite(post_p50):
-        raise ValueError("Incremental profit curve must be finite")
-    downturns = np.flatnonzero(np.diff(median_curve, prepend=0) < 0)
-    week = int(downturns[0] + 1) if median_curve[-1] < 0 and downturns.size else None
+    if not math.isfinite(post_p50):
+        raise ValueError("Post-campaign profit must be finite")
+    crossing, peak_week = _breakpoint_and_peak(outcomes, campaign_weeks)
     return EvaluatedPlan(
         strategy_id=strategy.id,
         scenario=scenario,
         weekly=median_rows(outcomes),
         kpi=EvaluatedKPI(
-            **{name: _pct(values) for name, values in samples.items()},
+            **{
+                name: _pct(values) if values is not None else None
+                for name, values in samples.items()
+            },
+            leakage_label="unavailable" if samples["leakage"] is None else "data",
             p_loss=float(np.mean(profit < 0)),
             p_hit_target=_hit_probability(samples, target),
         ),
-        breakpoint=Breakpoint(week=week, cause=None, share=None),
+        breakpoint=crossing,
+        peak_week=peak_week,
+        campaign_weeks=campaign_weeks,
         media_cost_label="data" if "media" in strategy.budget_split else "default",
         is_baseline=strategy.is_baseline,
         is_user_plan=strategy.is_user_plan,
@@ -377,17 +425,7 @@ def sim_result(
     target_profit: float = 0.0,
 ) -> EvaluatedPlan:
     """Arena aggregation with single-scenario attribution until S1 is available for comparison."""
-    result = _aggregate(strategy, scenario, outcomes, campaign_weeks, target_profit)
-    week = result.breakpoint.week
-    if week is not None:
-        if _rival_attacking(rivals, week):
-            cause = "rival_reaction"
-        elif result.post_campaign_profit_p50 < 0:
-            cause = "post_campaign_dip"
-        else:
-            cause = "discount_cost"
-        result.breakpoint = Breakpoint(week=week, cause=cause, share=result.kpi.p_loss)
-    return result
+    return _aggregate(strategy, scenario, outcomes, campaign_weeks, target_profit)
 
 
 def _group_results(results: Sequence[SimResult]) -> dict[str, dict[str, SimResult]]:
@@ -400,30 +438,25 @@ def _group_results(results: Sequence[SimResult]) -> dict[str, dict[str, SimResul
     return plans
 
 
-def explain_breakpoints(results: Sequence[EvaluatedPlan]) -> list[EvaluatedPlan]:
-    """Return results in input order with causes and clipped shares for detected breaks.
+def _explained_breakpoint(result: EvaluatedPlan, calm: SimResult | None) -> Breakpoint:
+    week = result.breakpoint.week
+    if week is None:
+        return result.breakpoint
+    cause = _crossing_cause(week, result.campaign_weeks, calm)
+    profit = result.kpi.incr_profit.p50
+    share = None
+    if calm is not None and profit < 0:
+        share = float(np.clip((calm.kpi.incr_profit.p50 - profit) / abs(profit), 0, 1))
+    return Breakpoint(week=week, cause=cause, share=share)
 
-    Without a matching S1 the comparative share is unavailable. The paired post-window
-    evidence and discount-cost fallback can still explain the plan's own downturn.
-    """
+
+def explain_breakpoints(results: Sequence[EvaluatedPlan]) -> list[EvaluatedPlan]:
+    """Return results in input order, comparing each crossing against the same plan's S1."""
     plans = _group_results(results)
     explained = []
     for result in results:
-        if result.breakpoint.week is None:
-            explained.append(result)
-            continue
         calm = plans[result.strategy_id].get("S1")
-        if result.scenario in ("S2", "S3") and calm is not None and calm.breakpoint.week is None:
-            cause = "rival undercut"
-        elif result.post_campaign_profit_p50 < 0:
-            cause = "pull-forward / post-campaign dip"
-        else:
-            cause = "discount cost"
-        profit = result.kpi.incr_profit.p50
-        share = None
-        if calm is not None and profit < 0:
-            share = float(np.clip((calm.kpi.incr_profit.p50 - profit) / abs(profit), 0, 1))
-        breakpoint = Breakpoint(week=result.breakpoint.week, cause=cause, share=share)
+        breakpoint = _explained_breakpoint(result, calm)
         explained.append(result.model_copy(update={"breakpoint": breakpoint}))
     return explained
 
@@ -560,19 +593,11 @@ def breakpoint(
     outcomes: list[SeedOutcome], campaign_weeks: int, rivals: list[RivalScenario]
 ) -> Breakpoint:
     p_loss = float(np.mean([o.incr_profit < 0 for o in outcomes])) if outcomes else 0.0
-    cumulative = np.median([np.cumsum(o.weekly_incr_profit) for o in outcomes], axis=0)
-    if cumulative[-1] >= 0:
-        return Breakpoint(week=None, cause=None, share=round(p_loss, 4))
-    week = len(cumulative)
-    while week > 1 and cumulative[week - 2] < 0:
-        week -= 1
-    if _rival_attacking(rivals, week):
-        cause = "rival_reaction"
-    elif week > campaign_weeks:
-        cause = "post_campaign_dip"
-    else:
-        cause = "discount_cost"
-    return Breakpoint(week=week, cause=cause, share=round(p_loss, 4))
+    crossing, _ = _breakpoint_and_peak(outcomes, campaign_weeks)
+    if crossing.week is not None and _rival_attacking(rivals, crossing.week):
+        crossing.cause = "rival_reaction"
+    crossing.share = round(p_loss, 4)
+    return crossing
 
 
 def scenario_weights(rivals_by_scenario: dict[str, list[RivalScenario]]) -> dict[str, float]:
@@ -593,12 +618,13 @@ def summarize(
     results: list[SimResult],
     weights_by_strategy: dict[str, dict[str, float]],
 ) -> list[dict[str, Any]]:
-    """Per strategy: likelihood-weighted EV of median profit, worst case, rank."""
-    by_strategy: dict[str, dict[str, SimResult]] = {}
-    for result in results:
-        by_strategy.setdefault(result.strategy_id, {})[result.scenario] = result
+    """Finalize arena breakpoint attribution in place and rank strategies by weighted EV."""
+    by_strategy = _group_results(results)
     rows = []
     for strategy_id, scenarios in by_strategy.items():
+        for result in scenarios.values():
+            if isinstance(result, EvaluatedPlan):
+                result.breakpoint = _explained_breakpoint(result, scenarios.get("S1"))
         weights = weights_by_strategy.get(strategy_id, {})
         weighted = [
             weights[s] * scenarios[s].kpi.incr_profit.p50 for s in weights if s in scenarios
