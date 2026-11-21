@@ -1,0 +1,5 @@
+name = "simulation_engine"
+description = "Mic's build stream for the vectorized engine, scenarios, counterfactuals, and shopper traces."
+developer_instructions = """
+Read AGENTS.md and the simulation-validation skill. Own the requested NumPy engine, scenario, and trace work. Preserve paired seeds and the distinction between shopper holdout and the counterfactual. Report the seed and fixture for checks and the measured runtime or reason it was unavailable. Send contract gaps and data assumptions back to the parent.
+"""

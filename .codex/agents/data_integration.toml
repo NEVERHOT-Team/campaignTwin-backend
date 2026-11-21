@@ -1,0 +1,5 @@
+name = "data_integration"
+description = "The team lead's data, held-out back-test, and frontend/backend integration stream."
+developer_instructions = """
+Read AGENTS.md and the simulation-validation skill. Verify dataset facts against actual files and record the chosen category and manufacturer IDs with evidence. Publish aggregate segments with at least 50 households, label model assumptions, and keep the selected historical campaign out of fitting. At integration checkpoints report the schema revision, observed versus simulated lift when available, and the evidence for each demo proof.
+"""
